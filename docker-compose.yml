@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  app:
+    build: 
+      context: ./backend
+    container_name: hassan_charges_app
+    ports:
+      - "8000:8000"
+    environment:
+      - TWELVEDATA_API_KEY=${TWELVEDATA_API_KEY}
+      - REDIS_URL=redis://redis:6379
+      - DEMO_MODE=${DEMO_MODE:-true}
+      - HOST=0.0.0.0
+      - PORT=8000
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  redis:
+    image: redis:alpine
+    container_name: hassan_charges_redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3

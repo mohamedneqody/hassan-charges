@@ -1,0 +1,167 @@
+=== PIPELINE: 259s | years 2021 -> 2022 | currency: ج.م ===
+--- EXTRACTION (2021 | 2022) ---
+revenue: 13196156088.0 | 16665919878.0
+cost_of_revenue: -11972033980.0 | -15033776899.0
+gross_profit: 1224122108.0 | 1632142979.0
+operating_expenses: None | None
+operating_income: None | None
+pretax_income: None | None
+income_tax_expense: -103480837.0 | -167901733.0
+net_income: 288152668.0 | 1056737086.0
+depreciation_amortization: None | None
+interest_expense: -483599424.0 | -771597390.0
+ebitda: None | None
+total_assets: 14614683997.0 | 15965646460.0
+current_assets: 2901399092.0 | 4248947378.0
+inventory: -128097446.0 | 283292828.0
+accounts_receivable: -477904109.0 | -78935425.0
+cash: 989899025.0 | 1794378809.0
+fixed_assets: 49252251.0 | 49044136.0
+accounts_payable: -258404016.0 | -151047202.0
+current_liabilities: 977079173.0 | 1947039603.0
+total_liabilities: 8250997672.0 | 9027315979.0
+short_term_debt: None | None
+long_term_debt: -93004128.0 | -201143687.0
+total_debt: 93004128.0 | 201143687.0
+equity: 6363686325.0 | 6938330481.0
+working_capital: 1924319919.0 | 2301907775.0
+operating_cash_flow: None | None
+investing_cash_flow: None | None
+financing_cash_flow: None | None
+capex: None | None
+free_cash_flow: None | None
+--- ALL 53 METRIC ROWS ---
+Growth & Income | Revenue: 13196156088.0 -> 16665919878.0 | 3469763790.0 (26.29374620049584%) | Positive Improving
+Growth & Income | Gross Profit: 1224122108.0 -> 1632142979.0 | 408020871.0 (33.33171326074931%) | Positive Improving
+Growth & Income | Operating Income: None -> None | None (None%) | N/A N/A [Operating Income data unavailable.]
+Growth & Income | Net Income: 288152668.0 -> 1056737086.0 | 768584418.0 (266.7281977066407%) | Positive Improving
+Growth & Income | Free Cash Flow: None -> None | None (None%) | N/A N/A [Free Cash Flow data unavailable.]
+Profitability | Gross Profit Margin: 9.27635365811687 -> 9.793296685378436 | 0.5169430272615667 (5.572696409749732%) | Positive Improving
+Profitability | Operating Margin: None -> None | None (None%) | N/A N/A [Operating Margin data unavailable.]
+Profitability | EBITDA Margin: None -> None | None (None%) | N/A N/A [EBITDA Margin data unavailable.]
+Profitability | Pretax Profit Margin: None -> None | None (None%) | N/A N/A [Pretax Profit Margin data unavailable.]
+Profitability | Net Profit Margin: 2.1836106369038273 -> 6.34070662607082 | 4.157095989166993 (190.37716335094422%) | Positive Improving
+Profitability | Return on Assets (ROA): 1.9716654021335662 -> 6.911220841683921 | 4.939555439550355 (250.52706378096374%) | Positive Improving
+Profitability | Return on Equity (ROE): 4.52807780402344 -> 15.888373942263383 | 11.360296138239942 (250.88562144726637%) | Positive Improving
+Profitability | ROIC: None -> None | None (None%) | N/A N/A [ROIC data unavailable.]
+Profitability | ROCE: None -> None | None (None%) | N/A N/A [ROCE data unavailable.]
+Liquidity | Current Ratio: 2.9694616077954206 -> 2.1822603769606017 | -0.7872012308348189 (-26.509897577670678%) | Negative Declining
+Liquidity | Quick Ratio: 3.100564029727814 -> 2.0367611135848067 | -1.0638029161430071 (-34.309980569451234%) | Negative Declining
+Liquidity | Cash Ratio: 1.0131205866978397 -> 0.9215933801424583 | -0.09152720655538138 (-9.034186824068467%) | Negative Declining
+Liquidity | Operating Cash Flow Ratio: None -> None | None (None%) | N/A N/A [Operating Cash Flow Ratio data unavailable.]
+Leverage | Debt to Equity: 0.014614819658006949 -> 0.02899021422384161 | 0.01437539456583466 (98.36176499077692%) | Negative Declining
+Leverage | Debt Ratio (Liabilities / Assets): 0.5645690097503105 -> 0.5654212625600129 | 0.0008522528097023585 (0.15095635697029858%) | Neutral Stable
+Leverage | Debt to Assets: 0.006363745396006594 -> 0.012598530695511843 | 0.006234785299505248 (97.97351891887014%) | Negative Declining
+Leverage | Liabilities to Equity: 1.2965751689528788 -> 1.3010789848826747 | 0.0045038159297958735 (0.34736250065880714%) | Neutral Stable
+Leverage | Equity Ratio: 0.4354309902496895 -> 0.43457873743998715 | -0.0008522528097023585 (-0.19572626404327598%) | Neutral Stable
+Leverage | Financial Leverage: 2.296575168952879 -> 2.3010789848826745 | 0.0045038159297954294 (0.19611010302131496%) | Neutral Stable
+Leverage | Interest Coverage: None -> None | None (None%) | N/A N/A [Interest Coverage data unavailable.]
+Efficiency | Asset Turnover: 0.902938174421617 -> 1.08997644099592 | 0.1870382665743031 (20.714404581920764%) | Positive Improving
+Efficiency | Fixed Asset Turnover: 267.9300096964096 -> 339.0952686389175 | 71.16525894250788 (26.561137747557627%) | Positive Improving
+Efficiency | Inventory Turnover: -93.46036438540703 -> 193.74000315292886 | 287.2003675383359 (307.29643461905823%) | Positive Improving
+Efficiency | Receivables Turnover: -27.612560426844958 -> -59.85896783686339 | -32.246407410018435 (-116.78166353116768%) | Negative Declining
+Efficiency | Payables Turnover: -46.33068078941931 -> -73.43378765574951 | -27.1031068663302 (-58.49926313303781%) | Negative Declining
+Days | DIO — Inventory Days: -3.905398854372446 -> 1.883968174150833 | 5.789367028523279 (148.2400964511361%) | Negative Declining
+Days | DSO — Days Sales Outstanding: -13.21862204582617 -> -6.097666117376974 | 7.120955928449195 (53.870637224987185%) | Negative Declining
+Days | DPO — Days Payables Outstanding: -7.878148859046255 -> -4.970464028235677 | 2.9076848308105783 (36.90822403630729%) | Positive Improving
+Days | Cash Conversion Cycle: -9.24587204115236 -> 0.7567660850095352 | 10.002638126161894 (108.18490761759682%) | Negative Declining
+Working Capital | Working Capital: 1924319919.0 -> 2301907775.0 | 377587856.0 (19.621885751524044%) | Positive Improving
+Working Capital | Operating Working Capital: -347597539.0 -> 355404605.0 | 703002144.0 (202.24600727106989%) | Positive Improving
+Working Capital | Working Capital Turnover: 6.857568722178778 -> 7.8869010780752316 | 1.0293323558964538 (15.010164645778652%) | Positive Improving
+Cash Flow | Operating Cash Flow: None -> None | None (None%) | N/A N/A [Operating Cash Flow data unavailable.]
+Cash Flow | Investing Cash Flow: None -> None | None (None%) | N/A N/A [Investing Cash Flow data unavailable.]
+Cash Flow | Financing Cash Flow: None -> None | None (None%) | N/A N/A [Financing Cash Flow data unavailable.]
+Cash Flow | Operating Cash Flow Margin: None -> None | None (None%) | N/A N/A [Operating Cash Flow Margin data unavailable.]
+Cash Flow | Free Cash Flow Margin: None -> None | None (None%) | N/A N/A [Free Cash Flow Margin data unavailable.]
+Cash Flow | Cash Flow to Net Income: None -> None | None (None%) | N/A N/A [Cash Flow to Net Income data unavailable.]
+Cash Flow | Cash Flow to Debt: None -> None | None (None%) | N/A N/A [Cash Flow to Debt data unavailable.]
+Cash Flow | Capex Coverage: None -> None | None (None%) | N/A N/A [Capex Coverage data unavailable.]
+Cash Flow | Cash Return on Assets: None -> None | None (None%) | N/A N/A [Cash Return on Assets data unavailable.]
+Cost Structure | COGS as % of Revenue: 90.72364634188314 -> 90.20670331462156 | -0.5169430272615756 (-0.5697996587499654%) | Neutral Stable
+Cost Structure | Operating Expenses as % of Revenue: None -> None | None (None%) | N/A N/A [Operating Expenses as % of Revenue data unavailable.]
+Cost Structure | Selling Expenses as % of Revenue: 0.3191944890550616 -> 0.2883299052903319 | -0.03086458376472967 (-9.669522759024037%) | Positive Improving
+Cost Structure | R&D as % of Revenue: None -> None | None (None%) | N/A N/A [R&D as % of Revenue data unavailable.]
+Cost Structure | Net Financing Costs as % of Revenue: 3.664699180390598 -> 4.629791788562203 | 0.9650926081716049 (26.334838431915752%) | Negative Declining
+Cost Structure | D&A as % of Revenue: None -> None | None (None%) | N/A N/A [D&A as % of Revenue data unavailable.]
+Cost Structure | Effective Tax Rate: None -> None | None (None%) | N/A N/A [Effective Tax Rate data unavailable.]
+--- GROWTH ---
+Revenue Growth: 26.29374620049584%
+Gross Profit Growth: 33.33171326074931%
+Operating Income Growth: None% [Operating Income data unavailable.]
+Net Profit Growth: 266.7281977066407%
+Assets Growth: 9.243870502279188%
+Equity Growth: 9.030051555848804%
+Operating Cash Flow Growth: None% [Operating Cash Flow data unavailable.]
+--- NOTES ---
+NOTE: Scanned PDF detected (no text layer) — pages were read with AI vision (OpenCV cleanup + Gemini), then validated by accounting identities.
+NOTE: Currency detected from the document: ج.م
+NOTE: Retrying 9 unread page(s): [1, 2, 3, 4, 25, 26, 27, 28, 29]…
+NOTE: Reconciled 'total_assets' in 2022 to 15,965,646,460 using the accounting identity (total_assets = total_liabilities + equity).
+NOTE: Reconciled 'total_assets' in 2021 to 14,614,683,997 using the accounting identity (total_assets = total_liabilities + equity).
+--- MISSING ---
+MISS: Operating Income: Operating Income data unavailable.
+MISS: Free Cash Flow: Free Cash Flow data unavailable.
+MISS: Operating Margin: Operating Margin data unavailable.
+MISS: EBITDA Margin: EBITDA Margin data unavailable.
+MISS: Pretax Profit Margin: Pretax Profit Margin data unavailable.
+MISS: ROIC: ROIC data unavailable.
+MISS: ROCE: ROCE data unavailable.
+MISS: Operating Cash Flow Ratio: Operating Cash Flow Ratio data unavailable.
+MISS: Interest Coverage: Interest Coverage data unavailable.
+MISS: Operating Cash Flow: Operating Cash Flow data unavailable.
+MISS: Investing Cash Flow: Investing Cash Flow data unavailable.
+MISS: Financing Cash Flow: Financing Cash Flow data unavailable.
+MISS: Operating Cash Flow Margin: Operating Cash Flow Margin data unavailable.
+MISS: Free Cash Flow Margin: Free Cash Flow Margin data unavailable.
+MISS: Cash Flow to Net Income: Cash Flow to Net Income data unavailable.
+MISS: Cash Flow to Debt: Cash Flow to Debt data unavailable.
+MISS: Capex Coverage: Capex Coverage data unavailable.
+MISS: Cash Return on Assets: Cash Return on Assets data unavailable.
+MISS: Operating Expenses as % of Revenue: Operating Expenses as % of Revenue data unavailable.
+MISS: R&D as % of Revenue: R&D as % of Revenue data unavailable.
+MISS: D&A as % of Revenue: D&A as % of Revenue data unavailable.
+MISS: Effective Tax Rate: Effective Tax Rate data unavailable.
+--- HEALTH: 82.7 قوي | {'liquidity': (100.0, 25), 'leverage': (71.0, 25), 'profitability': (78.1, 30), 'cash': (None, 20)}
+--- AI (live) ---
+AI ok=True model=gemini-3.7-flash comments=36 recs=4
+AI| Revenue Growth: ارتفع بنسبة +26.3%، مما يعكس توسعاً ملحوظاً في حجم المبيعات والنشاط التجاري للشركة.
+AI| Gross Profit Growth: ارتفع بنسبة +33.3%، وهو ما يشير إلى تحسن في الربحية الأساسية يفوق معدل نمو الإيرادات.
+AI| Net Profit Growth: ارتفع بنسبة قوية بلغت +266.7%، مما قد يعكس كفاءة تشغيلية أعلى أو تحقيق بنود دخل غير تشغيلية مواتية.
+AI| Assets Growth: ارتفع بنسبة +9.2%، مما يدل على استمرار نمو القاعدة الرأسمالية والاستثمار في الأصول.
+AI| Equity Growth: ارتفع بنسبة +9.0%، وهو ما يوضح تدعيم حقوق الملكية مدفوعة بالأرباح المحققة خلال العام.
+AI| Revenue: ارتفع من ج.م13.2B إلى ج.م16.67B، مما يعبر عن زيادة الطلب وحجم الأعمال المنفذة.
+AI| Gross Profit: ارتفع من ج.م1.22B إلى ج.م1.63B، وهو ما يعكس نمواً إيجابياً في مجمل الدخل التشغيلي.
+AI| Net Income: ارتفع من ج.م288.15M إلى ج.م1.06B، مما يبرز طفرة إيجابية ملحوظة في صافي الأرباح النهائية.
+AI| Gross Profit Margin: ارتفع من 9.3% إلى 9.8%، مما يشير إلى تحسن طفيف في كفاءة إدارة تكاليف الإنتاج المباشرة.
+AI| Net Profit Margin: ارتفع من 2.2% إلى 6.3%، وهو ما يعكس قفزة قوية في قدرة الشركة على تحويل الإيرادات إلى أرباح صافية.
+AI| Return on Assets (ROA): ارتفع من 2.0% إلى 6.9%، مما يدل على تحسن كبير في كفاءة استغلال أصول الشركة لتوليد العوائد.
+AI| Return on Equity (ROE): ارتفع من 4.5% إلى 15.9%، وهو ما يعكس عائداً استثمارياً أعلى بكثير لصالح المساهمين.
+AI| Current Ratio: تراجع من 2.97x إلى 2.18x، ورغم الانخفاض إلا أنه لا يزال يعكس مستوى مريحاً من التغطية قصيرة الأجل.
+AI| Quick Ratio: تراجع من 3.10x إلى 2.04x، مما قد يشير إلى انخفاض نسبي في السيولة السريعة مع بقائها عند مستويات آمنة.
+AI| Cash Ratio: تراجع من 1.01x إلى 0.92x، وهو ما يوضح انخفاضاً طفيفاً في النقدية المتاحة لتغطية الخصوم المتداولة فوراً.
+AI| Debt to Equity: ارتفع من 0.01x إلى 0.03x، ورغم الزيادة لا تزال الشركة تتمتع بهيكل تمويلي منخفض المديونية بدرجة كبيرة.
+AI| Debt Ratio (Liabilities / Assets): استقر تقريباً مع ارتفاع طفيف من 0.56x إلى 0.57x، مما يعكس ثبات نسبة تمويل الأصول عبر إجمالي الالتزامات.
+AI| Debt to Assets: ارتفع من 0.01x إلى 0.01x (بنسبة +98.0%)، ليبقى الاعتماد على الديون البنكية في تمويل الأصول محدوداً للغاية.
+AI| Liabilities to Equity: استقر عند 1.30x، مما يظهر ثباتاً في نسبة إجمالي الالتزامات مقارنة بقاعدة حقوق الملكية.
+AI| Equity Ratio: استقر تقريباً بتراجع هامشي من 0.44x إلى 0.43x، مما يشير إلى استقرار حصة المساهمين في تمويل الأصول.
+AI| Financial Leverage: استقر عند 2.30x، وهو ما يوضح ثبات الرافعة المالية وهيكل التمويل الإجمالي للشركة.
+AI| Asset Turnover: ارتفع من 0.90x إلى 1.09x، مما يعكس كفاءة تشغيلية أكبر في استغلال الأصول لتوليد المبيعات.
+AI| Fixed Asset Turnover: ارتفع من 267.93x إلى 339.10x، وهو ما قد يعبر عن كفاءة استثنائية في تدوير الأصول الثابتة وتوليد الإيرادات.
+AI| Inventory Turnover: ارتفع من -93.46x إلى 193.74x، مما يعكس تصحيحاً وتحسناً كبيراً في كفاءة حركة وتصريف المخزون.
+AI| Receivables Turnover: تراجع من -27.61x إلى -59.86x، والقيم السالبة قد تشير إلى تشوهات محاسبية أو أرصدة دائنة في الذمم المدينة.
+AI| Payables Turnover: تراجع من -46.33x إلى -73.43x، والناتج السالب قد يرتبط بطبيعة تسجيل أرصدة الموردين والتسويات المرتبطة بها.
+AI| DIO — Inventory Days: ارتفع من -4 days إلى 2 days، مما يوضح احتفاظاً طبيعياً ومحسوباً بالمخزون لدورة مدتها يومان فقط.
+AI| DSO — Days Sales Outstanding: ارتفع من -13 days إلى -6 days، واستمرار القيمة السالبة قد يعكس أرصدة غير اعتيادية أو مقدمات عملاء.
+AI| DPO — Days Payables Outstanding: ارتفع من -8 days إلى -5 days، ولا تزال الإشارة السالبة غير معتادة وقد تعكس قيوداً تسوية في حسابات الموردين.
+AI| Cash Conversion Cycle: ارتفع من -9 days إلى 1 days، مما يشير إلى تحول طفيف نحو دورة تشغيلية موجبة وسريعة للغاية.
+AI| Working Capital: ارتفع من ج.م1.92B إلى ج.م2.3B، مما يعزز الملاءة قصيرة الأجل وقدرة الشركة على تمويل التوسعات.
+AI| Operating Working Capital: ارتفع من ج.م-347.6M إلى ج.م355.4M، مما يدل على انتقال رأس المال العامل التشغيلي إلى النطاق الإيجابي السليم.
+AI| Working Capital Turnover: ارتفع من 6.86x إلى 7.89x، وهو ما يوضح كفاءة أعلى في استثمار رأس المال العامل لتوليد الإيرادات.
+AI| COGS as % of Revenue: تراجع من 90.7% إلى 90.2%، مما يعكس استقراراً ملحوظاً مع تحسن طفيف في ضبط تكلفة المبيعات.
+AI| Selling Expenses as % of Revenue: تراجع من 0.3% إلى 0.3% (بانخفاض -9.7%)، مما يشير إلى استمرار الانضباط في المصروفات البيعية مقارنة بالنمو.
+AI| Net Financing Costs as % of Revenue: ارتفع من 3.7% إلى 4.6%، مما قد يعكس زيادة في أعباء التمويل أو أسعار الفائدة مقارنة بالإيرادات.
+--- RECOMMENDATIONS ---
+REC1. مراجعة وتعديل مصادر التمويل لتقليل أعباء الفوائد التي تضغط على هامش الربحية.  [دليل: Net Financing Costs as % of Revenue: ارتفع من 3.7% إلى 4.6%؛ Debt to Equity: ارتفع من 0.01x إلى 0.03x.]
+REC2. التحقق المحاسبي من بنود حسابات العملاء والموردين لمعالجة الأرصدة السالبة في دورات التحصيل والسداد.  [دليل: Receivables Turnover: تغير من -27.61x إلى -59.86x؛ Payables Turnover: تغير من -46.33x إلى -73.43x؛ DSO: من -13 days إلى -6 days.]
+REC3. مواصلة ترشيد تكاليف الإنتاج لحماية التحسن المكتسب في هوامش الربحية.  [دليل: COGS as % of Revenue: من 90.7% إلى 90.2%؛ Gross Profit Margin: ارتفع من 9.3% إلى 9.8%.]
+REC4. مراقبة مستويات السيولة السريعة لضمان عدم استمرار التراجع في تغطية الالتزامات المتداولة.  [دليل: Current Ratio: تراجع من 2.97x إلى 2.18x؛ Quick Ratio: تراجع من 3.10x إلى 2.04x؛ Cash Ratio: تراجع من 1.01x إلى 0.92x.]

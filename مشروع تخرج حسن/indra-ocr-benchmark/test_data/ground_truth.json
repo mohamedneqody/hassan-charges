@@ -1,0 +1,650 @@
+{
+  "en_printed": {
+    "path": "test_data/images/en_printed.png",
+    "language": "en",
+    "pages": [
+      {
+        "lines": [
+          "The Industrial Revolution transformed manufacturing across Europe in the nineteenth",
+          "century, replacing manual labor with steam-powered machinery in almost every sector.",
+          "Modern factories now rely on automated systems and computer vision for quality control.",
+          "Financial statements must be audited carefully before the annual report is submitted",
+          "to shareholders and published on the official website of the stock exchange.",
+          "Accurate data extraction from documents remains a fundamental challenge for",
+          "enterprise software, and optical character recognition is at the center of it."
+        ],
+        "text": "The Industrial Revolution transformed manufacturing across Europe in the nineteenth\ncentury, replacing manual labor with steam-powered machinery in almost every sector.\nModern factories now rely on automated systems and computer vision for quality control.\nFinancial statements must be audited carefully before the annual report is submitted\nto shareholders and published on the official website of the stock exchange.\nAccurate data extraction from documents remains a fundamental challenge for\nenterprise software, and optical character recognition is at the center of it."
+      }
+    ]
+  },
+  "ar_printed": {
+    "path": "test_data/images/ar_printed.png",
+    "language": "ar",
+    "pages": [
+      {
+        "lines": [
+          "يشهد العالم اليوم تطورا سريعا في مجال الذكاء الاصطناعي وتقنيات معالجة اللغة الطبيعية.",
+          "تعتمد المؤسسات المالية على أنظمة حديثة لتحليل القوائم المالية واستخراج البيانات منها.",
+          "تسعى الشركات إلى أتمتة عمليات المراجعة والتدقيق لتوفير الوقت وتقليل الأخطاء البشرية.",
+          "تعتبر مدينة القاهرة من أكبر مدن العالم العربي من حيث عدد السكان والمساحة الكلية.",
+          "يجب على الموظف تسليم التقرير الشهري إلى المدير قبل نهاية الأسبوع الجاري على الأقل.",
+          "تساهم المعالجة الآلية للمستندات في تحسين جودة القرارات وتسريع إجراءات العمل اليومية.",
+          "يحتاج الباحثون إلى أدوات دقيقة لقراءة المخطوطات القديمة وحفظ النصوص في قواعد البيانات."
+        ],
+        "text": "يشهد العالم اليوم تطورا سريعا في مجال الذكاء الاصطناعي وتقنيات معالجة اللغة الطبيعية.\nتعتمد المؤسسات المالية على أنظمة حديثة لتحليل القوائم المالية واستخراج البيانات منها.\nتسعى الشركات إلى أتمتة عمليات المراجعة والتدقيق لتوفير الوقت وتقليل الأخطاء البشرية.\nتعتبر مدينة القاهرة من أكبر مدن العالم العربي من حيث عدد السكان والمساحة الكلية.\nيجب على الموظف تسليم التقرير الشهري إلى المدير قبل نهاية الأسبوع الجاري على الأقل.\nتساهم المعالجة الآلية للمستندات في تحسين جودة القرارات وتسريع إجراءات العمل اليومية.\nيحتاج الباحثون إلى أدوات دقيقة لقراءة المخطوطات القديمة وحفظ النصوص في قواعد البيانات."
+      }
+    ]
+  },
+  "mixed_ar_en": {
+    "path": "test_data/images/mixed_ar_en.png",
+    "language": "ar+en",
+    "pages": [
+      {
+        "lines": [
+          "Annual Financial Report 2024",
+          "التقرير المالي السنوي لعام 2024",
+          "Total Revenue: 1,250,000 USD",
+          "إجمالي الإيرادات: 1,250,000 دولار أمريكي",
+          "Contact us at info@example.com or call +20 100 555 1234",
+          "للتواصل والاستفسار يرجى زيارة مكتبنا في شارع التحرير، القاهرة",
+          "Page prepared by the Document Processing Team"
+        ],
+        "text": "Annual Financial Report 2024\nالتقرير المالي السنوي لعام 2024\nTotal Revenue: 1,250,000 USD\nإجمالي الإيرادات: 1,250,000 دولار أمريكي\nContact us at info@example.com or call +20 100 555 1234\nللتواصل والاستفسار يرجى زيارة مكتبنا في شارع التحرير، القاهرة\nPage prepared by the Document Processing Team"
+      }
+    ]
+  },
+  "table": {
+    "path": "test_data/images/table.png",
+    "language": "ar+en",
+    "header": [
+      "الصنف",
+      "الكمية",
+      "سعر الوحدة",
+      "الإجمالي"
+    ],
+    "rows": [
+      [
+        "قمح",
+        "120",
+        "350.50",
+        "42060.00"
+      ],
+      [
+        "شعير",
+        "80",
+        "275.00",
+        "22000.00"
+      ],
+      [
+        "Rice",
+        "60",
+        "410.25",
+        "24615.00"
+      ],
+      [
+        "زيت ذرة",
+        "45",
+        "520.75",
+        "23433.75"
+      ],
+      [
+        "سكر",
+        "200",
+        "48.90",
+        "9780.00"
+      ]
+    ],
+    "pages": [
+      {
+        "lines": [
+          "الصنف  |  الكمية  |  سعر الوحدة  |  الإجمالي",
+          "قمح  |  120  |  350.50  |  42060.00",
+          "شعير  |  80  |  275.00  |  22000.00",
+          "Rice  |  60  |  410.25  |  24615.00",
+          "زيت ذرة  |  45  |  520.75  |  23433.75",
+          "سكر  |  200  |  48.90  |  9780.00"
+        ],
+        "text": "الصنف  |  الكمية  |  سعر الوحدة  |  الإجمالي\nقمح  |  120  |  350.50  |  42060.00\nشعير  |  80  |  275.00  |  22000.00\nRice  |  60  |  410.25  |  24615.00\nزيت ذرة  |  45  |  520.75  |  23433.75\nسكر  |  200  |  48.90  |  9780.00"
+      }
+    ]
+  },
+  "searchable_pdf": {
+    "path": "test_data/pdfs/searchable.pdf",
+    "language": "en",
+    "pages": [
+      {
+        "lines": [
+          "The Industrial Revolution transformed manufacturing across Europe in the nineteenth",
+          "century, replacing manual labor with steam-powered machinery in almost every sector.",
+          "Modern factories now rely on automated systems and computer vision for quality control.",
+          "Financial statements must be audited carefully before the annual report is submitted"
+        ],
+        "text": "The Industrial Revolution transformed manufacturing across Europe in the nineteenth\ncentury, replacing manual labor with steam-powered machinery in almost every sector.\nModern factories now rely on automated systems and computer vision for quality control.\nFinancial statements must be audited carefully before the annual report is submitted"
+      },
+      {
+        "lines": [
+          "to shareholders and published on the official website of the stock exchange.",
+          "Accurate data extraction from documents remains a fundamental challenge for",
+          "enterprise software, and optical character recognition is at the center of it."
+        ],
+        "text": "to shareholders and published on the official website of the stock exchange.\nAccurate data extraction from documents remains a fundamental challenge for\nenterprise software, and optical character recognition is at the center of it."
+      }
+    ]
+  },
+  "scanned_pdf": {
+    "path": "test_data/pdfs/scanned.pdf",
+    "language": "en+ar",
+    "pages": [
+      {
+        "lines": [
+          "The Industrial Revolution transformed manufacturing across Europe in the nineteenth",
+          "century, replacing manual labor with steam-powered machinery in almost every sector.",
+          "Modern factories now rely on automated systems and computer vision for quality control.",
+          "Financial statements must be audited carefully before the annual report is submitted",
+          "to shareholders and published on the official website of the stock exchange.",
+          "Accurate data extraction from documents remains a fundamental challenge for",
+          "enterprise software, and optical character recognition is at the center of it."
+        ],
+        "text": "The Industrial Revolution transformed manufacturing across Europe in the nineteenth\ncentury, replacing manual labor with steam-powered machinery in almost every sector.\nModern factories now rely on automated systems and computer vision for quality control.\nFinancial statements must be audited carefully before the annual report is submitted\nto shareholders and published on the official website of the stock exchange.\nAccurate data extraction from documents remains a fundamental challenge for\nenterprise software, and optical character recognition is at the center of it."
+      },
+      {
+        "lines": [
+          "يشهد العالم اليوم تطورا سريعا في مجال الذكاء الاصطناعي وتقنيات معالجة اللغة الطبيعية.",
+          "تعتمد المؤسسات المالية على أنظمة حديثة لتحليل القوائم المالية واستخراج البيانات منها.",
+          "تسعى الشركات إلى أتمتة عمليات المراجعة والتدقيق لتوفير الوقت وتقليل الأخطاء البشرية.",
+          "تعتبر مدينة القاهرة من أكبر مدن العالم العربي من حيث عدد السكان والمساحة الكلية.",
+          "يجب على الموظف تسليم التقرير الشهري إلى المدير قبل نهاية الأسبوع الجاري على الأقل.",
+          "تساهم المعالجة الآلية للمستندات في تحسين جودة القرارات وتسريع إجراءات العمل اليومية.",
+          "يحتاج الباحثون إلى أدوات دقيقة لقراءة المخطوطات القديمة وحفظ النصوص في قواعد البيانات."
+        ],
+        "text": "يشهد العالم اليوم تطورا سريعا في مجال الذكاء الاصطناعي وتقنيات معالجة اللغة الطبيعية.\nتعتمد المؤسسات المالية على أنظمة حديثة لتحليل القوائم المالية واستخراج البيانات منها.\nتسعى الشركات إلى أتمتة عمليات المراجعة والتدقيق لتوفير الوقت وتقليل الأخطاء البشرية.\nتعتبر مدينة القاهرة من أكبر مدن العالم العربي من حيث عدد السكان والمساحة الكلية.\nيجب على الموظف تسليم التقرير الشهري إلى المدير قبل نهاية الأسبوع الجاري على الأقل.\nتساهم المعالجة الآلية للمستندات في تحسين جودة القرارات وتسريع إجراءات العمل اليومية.\nيحتاج الباحثون إلى أدوات دقيقة لقراءة المخطوطات القديمة وحفظ النصوص في قواعد البيانات."
+      }
+    ]
+  },
+  "bench_40p": {
+    "path": "test_data/pdfs/bench_40p.pdf",
+    "language": "en",
+    "pages": [
+      {
+        "lines": [
+          "The quarterly revenue increased by twelve percent following the launch of the new product line.",
+          "Automated document processing reduces manual data entry costs for large enterprises significantly.",
+          "Machine learning models require careful validation before deployment in production environments.",
+          "The supply chain disruption affected delivery schedules across three regional distribution centers.",
+          "Researchers published a detailed study on optical character recognition for historical archives.",
+          "Energy consumption in modern data centers continues to grow despite improvements in efficiency.",
+          "The city council approved the construction of a new public library near the central station."
+        ],
+        "text": "The quarterly revenue increased by twelve percent following the launch of the new product line.\nAutomated document processing reduces manual data entry costs for large enterprises significantly.\nMachine learning models require careful validation before deployment in production environments.\nThe supply chain disruption affected delivery schedules across three regional distribution centers.\nResearchers published a detailed study on optical character recognition for historical archives.\nEnergy consumption in modern data centers continues to grow despite improvements in efficiency.\nThe city council approved the construction of a new public library near the central station."
+      },
+      {
+        "lines": [
+          "The supply chain disruption affected delivery schedules across three regional distribution centers.",
+          "Researchers published a detailed study on optical character recognition for historical archives.",
+          "Energy consumption in modern data centers continues to grow despite improvements in efficiency.",
+          "The city council approved the construction of a new public library near the central station.",
+          "Investors reacted calmly to the announcement and the stock price remained stable all week.",
+          "Effective communication between departments improves overall productivity and employee morale.",
+          "The new encryption standard protects sensitive customer data against emerging cyber threats."
+        ],
+        "text": "The supply chain disruption affected delivery schedules across three regional distribution centers.\nResearchers published a detailed study on optical character recognition for historical archives.\nEnergy consumption in modern data centers continues to grow despite improvements in efficiency.\nThe city council approved the construction of a new public library near the central station.\nInvestors reacted calmly to the announcement and the stock price remained stable all week.\nEffective communication between departments improves overall productivity and employee morale.\nThe new encryption standard protects sensitive customer data against emerging cyber threats."
+      },
+      {
+        "lines": [
+          "The city council approved the construction of a new public library near the central station.",
+          "Investors reacted calmly to the announcement and the stock price remained stable all week.",
+          "Effective communication between departments improves overall productivity and employee morale.",
+          "The new encryption standard protects sensitive customer data against emerging cyber threats.",
+          "Agricultural exports from the region doubled after the irrigation project was completed.",
+          "Public health officials recommended regular exercise and balanced nutrition for all age groups.",
+          "The railway connection between the two cities shortened travel time by nearly two hours."
+        ],
+        "text": "The city council approved the construction of a new public library near the central station.\nInvestors reacted calmly to the announcement and the stock price remained stable all week.\nEffective communication between departments improves overall productivity and employee morale.\nThe new encryption standard protects sensitive customer data against emerging cyber threats.\nAgricultural exports from the region doubled after the irrigation project was completed.\nPublic health officials recommended regular exercise and balanced nutrition for all age groups.\nThe railway connection between the two cities shortened travel time by nearly two hours."
+      },
+      {
+        "lines": [
+          "The new encryption standard protects sensitive customer data against emerging cyber threats.",
+          "Agricultural exports from the region doubled after the irrigation project was completed.",
+          "Public health officials recommended regular exercise and balanced nutrition for all age groups.",
+          "The railway connection between the two cities shortened travel time by nearly two hours.",
+          "Software developers adopted new testing frameworks to catch critical bugs earlier in the cycle.",
+          "The quarterly revenue increased by twelve percent following the launch of the new product line.",
+          "Automated document processing reduces manual data entry costs for large enterprises significantly."
+        ],
+        "text": "The new encryption standard protects sensitive customer data against emerging cyber threats.\nAgricultural exports from the region doubled after the irrigation project was completed.\nPublic health officials recommended regular exercise and balanced nutrition for all age groups.\nThe railway connection between the two cities shortened travel time by nearly two hours.\nSoftware developers adopted new testing frameworks to catch critical bugs earlier in the cycle.\nThe quarterly revenue increased by twelve percent following the launch of the new product line.\nAutomated document processing reduces manual data entry costs for large enterprises significantly."
+      },
+      {
+        "lines": [
+          "The railway connection between the two cities shortened travel time by nearly two hours.",
+          "Software developers adopted new testing frameworks to catch critical bugs earlier in the cycle.",
+          "The quarterly revenue increased by twelve percent following the launch of the new product line.",
+          "Automated document processing reduces manual data entry costs for large enterprises significantly.",
+          "Machine learning models require careful validation before deployment in production environments.",
+          "The supply chain disruption affected delivery schedules across three regional distribution centers.",
+          "Researchers published a detailed study on optical character recognition for historical archives."
+        ],
+        "text": "The railway connection between the two cities shortened travel time by nearly two hours.\nSoftware developers adopted new testing frameworks to catch critical bugs earlier in the cycle.\nThe quarterly revenue increased by twelve percent following the launch of the new product line.\nAutomated document processing reduces manual data entry costs for large enterprises significantly.\nMachine learning models require careful validation before deployment in production environments.\nThe supply chain disruption affected delivery schedules across three regional distribution centers.\nResearchers published a detailed study on optical character recognition for historical archives."
+      },
+      {
+        "lines": [
+          "Automated document processing reduces manual data entry costs for large enterprises significantly.",
+          "Machine learning models require careful validation before deployment in production environments.",
+          "The supply chain disruption affected delivery schedules across three regional distribution centers.",
+          "Researchers published a detailed study on optical character recognition for historical archives.",
+          "Energy consumption in modern data centers continues to grow despite improvements in efficiency.",
+          "The city council approved the construction of a new public library near the central station.",
+          "Investors reacted calmly to the announcement and the stock price remained stable all week."
+        ],
+        "text": "Automated document processing reduces manual data entry costs for large enterprises significantly.\nMachine learning models require careful validation before deployment in production environments.\nThe supply chain disruption affected delivery schedules across three regional distribution centers.\nResearchers published a detailed study on optical character recognition for historical archives.\nEnergy consumption in modern data centers continues to grow despite improvements in efficiency.\nThe city council approved the construction of a new public library near the central station.\nInvestors reacted calmly to the announcement and the stock price remained stable all week."
+      },
+      {
+        "lines": [
+          "Researchers published a detailed study on optical character recognition for historical archives.",
+          "Energy consumption in modern data centers continues to grow despite improvements in efficiency.",
+          "The city council approved the construction of a new public library near the central station.",
+          "Investors reacted calmly to the announcement and the stock price remained stable all week.",
+          "Effective communication between departments improves overall productivity and employee morale.",
+          "The new encryption standard protects sensitive customer data against emerging cyber threats.",
+          "Agricultural exports from the region doubled after the irrigation project was completed."
+        ],
+        "text": "Researchers published a detailed study on optical character recognition for historical archives.\nEnergy consumption in modern data centers continues to grow despite improvements in efficiency.\nThe city council approved the construction of a new public library near the central station.\nInvestors reacted calmly to the announcement and the stock price remained stable all week.\nEffective communication between departments improves overall productivity and employee morale.\nThe new encryption standard protects sensitive customer data against emerging cyber threats.\nAgricultural exports from the region doubled after the irrigation project was completed."
+      },
+      {
+        "lines": [
+          "Investors reacted calmly to the announcement and the stock price remained stable all week.",
+          "Effective communication between departments improves overall productivity and employee morale.",
+          "The new encryption standard protects sensitive customer data against emerging cyber threats.",
+          "Agricultural exports from the region doubled after the irrigation project was completed.",
+          "Public health officials recommended regular exercise and balanced nutrition for all age groups.",
+          "The railway connection between the two cities shortened travel time by nearly two hours.",
+          "Software developers adopted new testing frameworks to catch critical bugs earlier in the cycle."
+        ],
+        "text": "Investors reacted calmly to the announcement and the stock price remained stable all week.\nEffective communication between departments improves overall productivity and employee morale.\nThe new encryption standard protects sensitive customer data against emerging cyber threats.\nAgricultural exports from the region doubled after the irrigation project was completed.\nPublic health officials recommended regular exercise and balanced nutrition for all age groups.\nThe railway connection between the two cities shortened travel time by nearly two hours.\nSoftware developers adopted new testing frameworks to catch critical bugs earlier in the cycle."
+      },
+      {
+        "lines": [
+          "Agricultural exports from the region doubled after the irrigation project was completed.",
+          "Public health officials recommended regular exercise and balanced nutrition for all age groups.",
+          "The railway connection between the two cities shortened travel time by nearly two hours.",
+          "Software developers adopted new testing frameworks to catch critical bugs earlier in the cycle.",
+          "The quarterly revenue increased by twelve percent following the launch of the new product line.",
+          "Automated document processing reduces manual data entry costs for large enterprises significantly.",
+          "Machine learning models require careful validation before deployment in production environments."
+        ],
+        "text": "Agricultural exports from the region doubled after the irrigation project was completed.\nPublic health officials recommended regular exercise and balanced nutrition for all age groups.\nThe railway connection between the two cities shortened travel time by nearly two hours.\nSoftware developers adopted new testing frameworks to catch critical bugs earlier in the cycle.\nThe quarterly revenue increased by twelve percent following the launch of the new product line.\nAutomated document processing reduces manual data entry costs for large enterprises significantly.\nMachine learning models require careful validation before deployment in production environments."
+      },
+      {
+        "lines": [
+          "Software developers adopted new testing frameworks to catch critical bugs earlier in the cycle.",
+          "The quarterly revenue increased by twelve percent following the launch of the new product line.",
+          "Automated document processing reduces manual data entry costs for large enterprises significantly.",
+          "Machine learning models require careful validation before deployment in production environments.",
+          "The supply chain disruption affected delivery schedules across three regional distribution centers.",
+          "Researchers published a detailed study on optical character recognition for historical archives.",
+          "Energy consumption in modern data centers continues to grow despite improvements in efficiency."
+        ],
+        "text": "Software developers adopted new testing frameworks to catch critical bugs earlier in the cycle.\nThe quarterly revenue increased by twelve percent following the launch of the new product line.\nAutomated document processing reduces manual data entry costs for large enterprises significantly.\nMachine learning models require careful validation before deployment in production environments.\nThe supply chain disruption affected delivery schedules across three regional distribution centers.\nResearchers published a detailed study on optical character recognition for historical archives.\nEnergy consumption in modern data centers continues to grow despite improvements in efficiency."
+      },
+      {
+        "lines": [
+          "Machine learning models require careful validation before deployment in production environments.",
+          "The supply chain disruption affected delivery schedules across three regional distribution centers.",
+          "Researchers published a detailed study on optical character recognition for historical archives.",
+          "Energy consumption in modern data centers continues to grow despite improvements in efficiency.",
+          "The city council approved the construction of a new public library near the central station.",
+          "Investors reacted calmly to the announcement and the stock price remained stable all week.",
+          "Effective communication between departments improves overall productivity and employee morale."
+        ],
+        "text": "Machine learning models require careful validation before deployment in production environments.\nThe supply chain disruption affected delivery schedules across three regional distribution centers.\nResearchers published a detailed study on optical character recognition for historical archives.\nEnergy consumption in modern data centers continues to grow despite improvements in efficiency.\nThe city council approved the construction of a new public library near the central station.\nInvestors reacted calmly to the announcement and the stock price remained stable all week.\nEffective communication between departments improves overall productivity and employee morale."
+      },
+      {
+        "lines": [
+          "Energy consumption in modern data centers continues to grow despite improvements in efficiency.",
+          "The city council approved the construction of a new public library near the central station.",
+          "Investors reacted calmly to the announcement and the stock price remained stable all week.",
+          "Effective communication between departments improves overall productivity and employee morale.",
+          "The new encryption standard protects sensitive customer data against emerging cyber threats.",
+          "Agricultural exports from the region doubled after the irrigation project was completed.",
+          "Public health officials recommended regular exercise and balanced nutrition for all age groups."
+        ],
+        "text": "Energy consumption in modern data centers continues to grow despite improvements in efficiency.\nThe city council approved the construction of a new public library near the central station.\nInvestors reacted calmly to the announcement and the stock price remained stable all week.\nEffective communication between departments improves overall productivity and employee morale.\nThe new encryption standard protects sensitive customer data against emerging cyber threats.\nAgricultural exports from the region doubled after the irrigation project was completed.\nPublic health officials recommended regular exercise and balanced nutrition for all age groups."
+      },
+      {
+        "lines": [
+          "Effective communication between departments improves overall productivity and employee morale.",
+          "The new encryption standard protects sensitive customer data against emerging cyber threats.",
+          "Agricultural exports from the region doubled after the irrigation project was completed.",
+          "Public health officials recommended regular exercise and balanced nutrition for all age groups.",
+          "The railway connection between the two cities shortened travel time by nearly two hours.",
+          "Software developers adopted new testing frameworks to catch critical bugs earlier in the cycle.",
+          "The quarterly revenue increased by twelve percent following the launch of the new product line."
+        ],
+        "text": "Effective communication between departments improves overall productivity and employee morale.\nThe new encryption standard protects sensitive customer data against emerging cyber threats.\nAgricultural exports from the region doubled after the irrigation project was completed.\nPublic health officials recommended regular exercise and balanced nutrition for all age groups.\nThe railway connection between the two cities shortened travel time by nearly two hours.\nSoftware developers adopted new testing frameworks to catch critical bugs earlier in the cycle.\nThe quarterly revenue increased by twelve percent following the launch of the new product line."
+      },
+      {
+        "lines": [
+          "Public health officials recommended regular exercise and balanced nutrition for all age groups.",
+          "The railway connection between the two cities shortened travel time by nearly two hours.",
+          "Software developers adopted new testing frameworks to catch critical bugs earlier in the cycle.",
+          "The quarterly revenue increased by twelve percent following the launch of the new product line.",
+          "Automated document processing reduces manual data entry costs for large enterprises significantly.",
+          "Machine learning models require careful validation before deployment in production environments.",
+          "The supply chain disruption affected delivery schedules across three regional distribution centers."
+        ],
+        "text": "Public health officials recommended regular exercise and balanced nutrition for all age groups.\nThe railway connection between the two cities shortened travel time by nearly two hours.\nSoftware developers adopted new testing frameworks to catch critical bugs earlier in the cycle.\nThe quarterly revenue increased by twelve percent following the launch of the new product line.\nAutomated document processing reduces manual data entry costs for large enterprises significantly.\nMachine learning models require careful validation before deployment in production environments.\nThe supply chain disruption affected delivery schedules across three regional distribution centers."
+      },
+      {
+        "lines": [
+          "The quarterly revenue increased by twelve percent following the launch of the new product line.",
+          "Automated document processing reduces manual data entry costs for large enterprises significantly.",
+          "Machine learning models require careful validation before deployment in production environments.",
+          "The supply chain disruption affected delivery schedules across three regional distribution centers.",
+          "Researchers published a detailed study on optical character recognition for historical archives.",
+          "Energy consumption in modern data centers continues to grow despite improvements in efficiency.",
+          "The city council approved the construction of a new public library near the central station."
+        ],
+        "text": "The quarterly revenue increased by twelve percent following the launch of the new product line.\nAutomated document processing reduces manual data entry costs for large enterprises significantly.\nMachine learning models require careful validation before deployment in production environments.\nThe supply chain disruption affected delivery schedules across three regional distribution centers.\nResearchers published a detailed study on optical character recognition for historical archives.\nEnergy consumption in modern data centers continues to grow despite improvements in efficiency.\nThe city council approved the construction of a new public library near the central station."
+      },
+      {
+        "lines": [
+          "The supply chain disruption affected delivery schedules across three regional distribution centers.",
+          "Researchers published a detailed study on optical character recognition for historical archives.",
+          "Energy consumption in modern data centers continues to grow despite improvements in efficiency.",
+          "The city council approved the construction of a new public library near the central station.",
+          "Investors reacted calmly to the announcement and the stock price remained stable all week.",
+          "Effective communication between departments improves overall productivity and employee morale.",
+          "The new encryption standard protects sensitive customer data against emerging cyber threats."
+        ],
+        "text": "The supply chain disruption affected delivery schedules across three regional distribution centers.\nResearchers published a detailed study on optical character recognition for historical archives.\nEnergy consumption in modern data centers continues to grow despite improvements in efficiency.\nThe city council approved the construction of a new public library near the central station.\nInvestors reacted calmly to the announcement and the stock price remained stable all week.\nEffective communication between departments improves overall productivity and employee morale.\nThe new encryption standard protects sensitive customer data against emerging cyber threats."
+      },
+      {
+        "lines": [
+          "The city council approved the construction of a new public library near the central station.",
+          "Investors reacted calmly to the announcement and the stock price remained stable all week.",
+          "Effective communication between departments improves overall productivity and employee morale.",
+          "The new encryption standard protects sensitive customer data against emerging cyber threats.",
+          "Agricultural exports from the region doubled after the irrigation project was completed.",
+          "Public health officials recommended regular exercise and balanced nutrition for all age groups.",
+          "The railway connection between the two cities shortened travel time by nearly two hours."
+        ],
+        "text": "The city council approved the construction of a new public library near the central station.\nInvestors reacted calmly to the announcement and the stock price remained stable all week.\nEffective communication between departments improves overall productivity and employee morale.\nThe new encryption standard protects sensitive customer data against emerging cyber threats.\nAgricultural exports from the region doubled after the irrigation project was completed.\nPublic health officials recommended regular exercise and balanced nutrition for all age groups.\nThe railway connection between the two cities shortened travel time by nearly two hours."
+      },
+      {
+        "lines": [
+          "The new encryption standard protects sensitive customer data against emerging cyber threats.",
+          "Agricultural exports from the region doubled after the irrigation project was completed.",
+          "Public health officials recommended regular exercise and balanced nutrition for all age groups.",
+          "The railway connection between the two cities shortened travel time by nearly two hours.",
+          "Software developers adopted new testing frameworks to catch critical bugs earlier in the cycle.",
+          "The quarterly revenue increased by twelve percent following the launch of the new product line.",
+          "Automated document processing reduces manual data entry costs for large enterprises significantly."
+        ],
+        "text": "The new encryption standard protects sensitive customer data against emerging cyber threats.\nAgricultural exports from the region doubled after the irrigation project was completed.\nPublic health officials recommended regular exercise and balanced nutrition for all age groups.\nThe railway connection between the two cities shortened travel time by nearly two hours.\nSoftware developers adopted new testing frameworks to catch critical bugs earlier in the cycle.\nThe quarterly revenue increased by twelve percent following the launch of the new product line.\nAutomated document processing reduces manual data entry costs for large enterprises significantly."
+      },
+      {
+        "lines": [
+          "The railway connection between the two cities shortened travel time by nearly two hours.",
+          "Software developers adopted new testing frameworks to catch critical bugs earlier in the cycle.",
+          "The quarterly revenue increased by twelve percent following the launch of the new product line.",
+          "Automated document processing reduces manual data entry costs for large enterprises significantly.",
+          "Machine learning models require careful validation before deployment in production environments.",
+          "The supply chain disruption affected delivery schedules across three regional distribution centers.",
+          "Researchers published a detailed study on optical character recognition for historical archives."
+        ],
+        "text": "The railway connection between the two cities shortened travel time by nearly two hours.\nSoftware developers adopted new testing frameworks to catch critical bugs earlier in the cycle.\nThe quarterly revenue increased by twelve percent following the launch of the new product line.\nAutomated document processing reduces manual data entry costs for large enterprises significantly.\nMachine learning models require careful validation before deployment in production environments.\nThe supply chain disruption affected delivery schedules across three regional distribution centers.\nResearchers published a detailed study on optical character recognition for historical archives."
+      },
+      {
+        "lines": [
+          "Automated document processing reduces manual data entry costs for large enterprises significantly.",
+          "Machine learning models require careful validation before deployment in production environments.",
+          "The supply chain disruption affected delivery schedules across three regional distribution centers.",
+          "Researchers published a detailed study on optical character recognition for historical archives.",
+          "Energy consumption in modern data centers continues to grow despite improvements in efficiency.",
+          "The city council approved the construction of a new public library near the central station.",
+          "Investors reacted calmly to the announcement and the stock price remained stable all week."
+        ],
+        "text": "Automated document processing reduces manual data entry costs for large enterprises significantly.\nMachine learning models require careful validation before deployment in production environments.\nThe supply chain disruption affected delivery schedules across three regional distribution centers.\nResearchers published a detailed study on optical character recognition for historical archives.\nEnergy consumption in modern data centers continues to grow despite improvements in efficiency.\nThe city council approved the construction of a new public library near the central station.\nInvestors reacted calmly to the announcement and the stock price remained stable all week."
+      },
+      {
+        "lines": [
+          "Researchers published a detailed study on optical character recognition for historical archives.",
+          "Energy consumption in modern data centers continues to grow despite improvements in efficiency.",
+          "The city council approved the construction of a new public library near the central station.",
+          "Investors reacted calmly to the announcement and the stock price remained stable all week.",
+          "Effective communication between departments improves overall productivity and employee morale.",
+          "The new encryption standard protects sensitive customer data against emerging cyber threats.",
+          "Agricultural exports from the region doubled after the irrigation project was completed."
+        ],
+        "text": "Researchers published a detailed study on optical character recognition for historical archives.\nEnergy consumption in modern data centers continues to grow despite improvements in efficiency.\nThe city council approved the construction of a new public library near the central station.\nInvestors reacted calmly to the announcement and the stock price remained stable all week.\nEffective communication between departments improves overall productivity and employee morale.\nThe new encryption standard protects sensitive customer data against emerging cyber threats.\nAgricultural exports from the region doubled after the irrigation project was completed."
+      },
+      {
+        "lines": [
+          "Investors reacted calmly to the announcement and the stock price remained stable all week.",
+          "Effective communication between departments improves overall productivity and employee morale.",
+          "The new encryption standard protects sensitive customer data against emerging cyber threats.",
+          "Agricultural exports from the region doubled after the irrigation project was completed.",
+          "Public health officials recommended regular exercise and balanced nutrition for all age groups.",
+          "The railway connection between the two cities shortened travel time by nearly two hours.",
+          "Software developers adopted new testing frameworks to catch critical bugs earlier in the cycle."
+        ],
+        "text": "Investors reacted calmly to the announcement and the stock price remained stable all week.\nEffective communication between departments improves overall productivity and employee morale.\nThe new encryption standard protects sensitive customer data against emerging cyber threats.\nAgricultural exports from the region doubled after the irrigation project was completed.\nPublic health officials recommended regular exercise and balanced nutrition for all age groups.\nThe railway connection between the two cities shortened travel time by nearly two hours.\nSoftware developers adopted new testing frameworks to catch critical bugs earlier in the cycle."
+      },
+      {
+        "lines": [
+          "Agricultural exports from the region doubled after the irrigation project was completed.",
+          "Public health officials recommended regular exercise and balanced nutrition for all age groups.",
+          "The railway connection between the two cities shortened travel time by nearly two hours.",
+          "Software developers adopted new testing frameworks to catch critical bugs earlier in the cycle.",
+          "The quarterly revenue increased by twelve percent following the launch of the new product line.",
+          "Automated document processing reduces manual data entry costs for large enterprises significantly.",
+          "Machine learning models require careful validation before deployment in production environments."
+        ],
+        "text": "Agricultural exports from the region doubled after the irrigation project was completed.\nPublic health officials recommended regular exercise and balanced nutrition for all age groups.\nThe railway connection between the two cities shortened travel time by nearly two hours.\nSoftware developers adopted new testing frameworks to catch critical bugs earlier in the cycle.\nThe quarterly revenue increased by twelve percent following the launch of the new product line.\nAutomated document processing reduces manual data entry costs for large enterprises significantly.\nMachine learning models require careful validation before deployment in production environments."
+      },
+      {
+        "lines": [
+          "Software developers adopted new testing frameworks to catch critical bugs earlier in the cycle.",
+          "The quarterly revenue increased by twelve percent following the launch of the new product line.",
+          "Automated document processing reduces manual data entry costs for large enterprises significantly.",
+          "Machine learning models require careful validation before deployment in production environments.",
+          "The supply chain disruption affected delivery schedules across three regional distribution centers.",
+          "Researchers published a detailed study on optical character recognition for historical archives.",
+          "Energy consumption in modern data centers continues to grow despite improvements in efficiency."
+        ],
+        "text": "Software developers adopted new testing frameworks to catch critical bugs earlier in the cycle.\nThe quarterly revenue increased by twelve percent following the launch of the new product line.\nAutomated document processing reduces manual data entry costs for large enterprises significantly.\nMachine learning models require careful validation before deployment in production environments.\nThe supply chain disruption affected delivery schedules across three regional distribution centers.\nResearchers published a detailed study on optical character recognition for historical archives.\nEnergy consumption in modern data centers continues to grow despite improvements in efficiency."
+      },
+      {
+        "lines": [
+          "Machine learning models require careful validation before deployment in production environments.",
+          "The supply chain disruption affected delivery schedules across three regional distribution centers.",
+          "Researchers published a detailed study on optical character recognition for historical archives.",
+          "Energy consumption in modern data centers continues to grow despite improvements in efficiency.",
+          "The city council approved the construction of a new public library near the central station.",
+          "Investors reacted calmly to the announcement and the stock price remained stable all week.",
+          "Effective communication between departments improves overall productivity and employee morale."
+        ],
+        "text": "Machine learning models require careful validation before deployment in production environments.\nThe supply chain disruption affected delivery schedules across three regional distribution centers.\nResearchers published a detailed study on optical character recognition for historical archives.\nEnergy consumption in modern data centers continues to grow despite improvements in efficiency.\nThe city council approved the construction of a new public library near the central station.\nInvestors reacted calmly to the announcement and the stock price remained stable all week.\nEffective communication between departments improves overall productivity and employee morale."
+      },
+      {
+        "lines": [
+          "Energy consumption in modern data centers continues to grow despite improvements in efficiency.",
+          "The city council approved the construction of a new public library near the central station.",
+          "Investors reacted calmly to the announcement and the stock price remained stable all week.",
+          "Effective communication between departments improves overall productivity and employee morale.",
+          "The new encryption standard protects sensitive customer data against emerging cyber threats.",
+          "Agricultural exports from the region doubled after the irrigation project was completed.",
+          "Public health officials recommended regular exercise and balanced nutrition for all age groups."
+        ],
+        "text": "Energy consumption in modern data centers continues to grow despite improvements in efficiency.\nThe city council approved the construction of a new public library near the central station.\nInvestors reacted calmly to the announcement and the stock price remained stable all week.\nEffective communication between departments improves overall productivity and employee morale.\nThe new encryption standard protects sensitive customer data against emerging cyber threats.\nAgricultural exports from the region doubled after the irrigation project was completed.\nPublic health officials recommended regular exercise and balanced nutrition for all age groups."
+      },
+      {
+        "lines": [
+          "Effective communication between departments improves overall productivity and employee morale.",
+          "The new encryption standard protects sensitive customer data against emerging cyber threats.",
+          "Agricultural exports from the region doubled after the irrigation project was completed.",
+          "Public health officials recommended regular exercise and balanced nutrition for all age groups.",
+          "The railway connection between the two cities shortened travel time by nearly two hours.",
+          "Software developers adopted new testing frameworks to catch critical bugs earlier in the cycle.",
+          "The quarterly revenue increased by twelve percent following the launch of the new product line."
+        ],
+        "text": "Effective communication between departments improves overall productivity and employee morale.\nThe new encryption standard protects sensitive customer data against emerging cyber threats.\nAgricultural exports from the region doubled after the irrigation project was completed.\nPublic health officials recommended regular exercise and balanced nutrition for all age groups.\nThe railway connection between the two cities shortened travel time by nearly two hours.\nSoftware developers adopted new testing frameworks to catch critical bugs earlier in the cycle.\nThe quarterly revenue increased by twelve percent following the launch of the new product line."
+      },
+      {
+        "lines": [
+          "Public health officials recommended regular exercise and balanced nutrition for all age groups.",
+          "The railway connection between the two cities shortened travel time by nearly two hours.",
+          "Software developers adopted new testing frameworks to catch critical bugs earlier in the cycle.",
+          "The quarterly revenue increased by twelve percent following the launch of the new product line.",
+          "Automated document processing reduces manual data entry costs for large enterprises significantly.",
+          "Machine learning models require careful validation before deployment in production environments.",
+          "The supply chain disruption affected delivery schedules across three regional distribution centers."
+        ],
+        "text": "Public health officials recommended regular exercise and balanced nutrition for all age groups.\nThe railway connection between the two cities shortened travel time by nearly two hours.\nSoftware developers adopted new testing frameworks to catch critical bugs earlier in the cycle.\nThe quarterly revenue increased by twelve percent following the launch of the new product line.\nAutomated document processing reduces manual data entry costs for large enterprises significantly.\nMachine learning models require careful validation before deployment in production environments.\nThe supply chain disruption affected delivery schedules across three regional distribution centers."
+      },
+      {
+        "lines": [
+          "The quarterly revenue increased by twelve percent following the launch of the new product line.",
+          "Automated document processing reduces manual data entry costs for large enterprises significantly.",
+          "Machine learning models require careful validation before deployment in production environments.",
+          "The supply chain disruption affected delivery schedules across three regional distribution centers.",
+          "Researchers published a detailed study on optical character recognition for historical archives.",
+          "Energy consumption in modern data centers continues to grow despite improvements in efficiency.",
+          "The city council approved the construction of a new public library near the central station."
+        ],
+        "text": "The quarterly revenue increased by twelve percent following the launch of the new product line.\nAutomated document processing reduces manual data entry costs for large enterprises significantly.\nMachine learning models require careful validation before deployment in production environments.\nThe supply chain disruption affected delivery schedules across three regional distribution centers.\nResearchers published a detailed study on optical character recognition for historical archives.\nEnergy consumption in modern data centers continues to grow despite improvements in efficiency.\nThe city council approved the construction of a new public library near the central station."
+      },
+      {
+        "lines": [
+          "The supply chain disruption affected delivery schedules across three regional distribution centers.",
+          "Researchers published a detailed study on optical character recognition for historical archives.",
+          "Energy consumption in modern data centers continues to grow despite improvements in efficiency.",
+          "The city council approved the construction of a new public library near the central station.",
+          "Investors reacted calmly to the announcement and the stock price remained stable all week.",
+          "Effective communication between departments improves overall productivity and employee morale.",
+          "The new encryption standard protects sensitive customer data against emerging cyber threats."
+        ],
+        "text": "The supply chain disruption affected delivery schedules across three regional distribution centers.\nResearchers published a detailed study on optical character recognition for historical archives.\nEnergy consumption in modern data centers continues to grow despite improvements in efficiency.\nThe city council approved the construction of a new public library near the central station.\nInvestors reacted calmly to the announcement and the stock price remained stable all week.\nEffective communication between departments improves overall productivity and employee morale.\nThe new encryption standard protects sensitive customer data against emerging cyber threats."
+      },
+      {
+        "lines": [
+          "The city council approved the construction of a new public library near the central station.",
+          "Investors reacted calmly to the announcement and the stock price remained stable all week.",
+          "Effective communication between departments improves overall productivity and employee morale.",
+          "The new encryption standard protects sensitive customer data against emerging cyber threats.",
+          "Agricultural exports from the region doubled after the irrigation project was completed.",
+          "Public health officials recommended regular exercise and balanced nutrition for all age groups.",
+          "The railway connection between the two cities shortened travel time by nearly two hours."
+        ],
+        "text": "The city council approved the construction of a new public library near the central station.\nInvestors reacted calmly to the announcement and the stock price remained stable all week.\nEffective communication between departments improves overall productivity and employee morale.\nThe new encryption standard protects sensitive customer data against emerging cyber threats.\nAgricultural exports from the region doubled after the irrigation project was completed.\nPublic health officials recommended regular exercise and balanced nutrition for all age groups.\nThe railway connection between the two cities shortened travel time by nearly two hours."
+      },
+      {
+        "lines": [
+          "The new encryption standard protects sensitive customer data against emerging cyber threats.",
+          "Agricultural exports from the region doubled after the irrigation project was completed.",
+          "Public health officials recommended regular exercise and balanced nutrition for all age groups.",
+          "The railway connection between the two cities shortened travel time by nearly two hours.",
+          "Software developers adopted new testing frameworks to catch critical bugs earlier in the cycle.",
+          "The quarterly revenue increased by twelve percent following the launch of the new product line.",
+          "Automated document processing reduces manual data entry costs for large enterprises significantly."
+        ],
+        "text": "The new encryption standard protects sensitive customer data against emerging cyber threats.\nAgricultural exports from the region doubled after the irrigation project was completed.\nPublic health officials recommended regular exercise and balanced nutrition for all age groups.\nThe railway connection between the two cities shortened travel time by nearly two hours.\nSoftware developers adopted new testing frameworks to catch critical bugs earlier in the cycle.\nThe quarterly revenue increased by twelve percent following the launch of the new product line.\nAutomated document processing reduces manual data entry costs for large enterprises significantly."
+      },
+      {
+        "lines": [
+          "The railway connection between the two cities shortened travel time by nearly two hours.",
+          "Software developers adopted new testing frameworks to catch critical bugs earlier in the cycle.",
+          "The quarterly revenue increased by twelve percent following the launch of the new product line.",
+          "Automated document processing reduces manual data entry costs for large enterprises significantly.",
+          "Machine learning models require careful validation before deployment in production environments.",
+          "The supply chain disruption affected delivery schedules across three regional distribution centers.",
+          "Researchers published a detailed study on optical character recognition for historical archives."
+        ],
+        "text": "The railway connection between the two cities shortened travel time by nearly two hours.\nSoftware developers adopted new testing frameworks to catch critical bugs earlier in the cycle.\nThe quarterly revenue increased by twelve percent following the launch of the new product line.\nAutomated document processing reduces manual data entry costs for large enterprises significantly.\nMachine learning models require careful validation before deployment in production environments.\nThe supply chain disruption affected delivery schedules across three regional distribution centers.\nResearchers published a detailed study on optical character recognition for historical archives."
+      },
+      {
+        "lines": [
+          "Automated document processing reduces manual data entry costs for large enterprises significantly.",
+          "Machine learning models require careful validation before deployment in production environments.",
+          "The supply chain disruption affected delivery schedules across three regional distribution centers.",
+          "Researchers published a detailed study on optical character recognition for historical archives.",
+          "Energy consumption in modern data centers continues to grow despite improvements in efficiency.",
+          "The city council approved the construction of a new public library near the central station.",
+          "Investors reacted calmly to the announcement and the stock price remained stable all week."
+        ],
+        "text": "Automated document processing reduces manual data entry costs for large enterprises significantly.\nMachine learning models require careful validation before deployment in production environments.\nThe supply chain disruption affected delivery schedules across three regional distribution centers.\nResearchers published a detailed study on optical character recognition for historical archives.\nEnergy consumption in modern data centers continues to grow despite improvements in efficiency.\nThe city council approved the construction of a new public library near the central station.\nInvestors reacted calmly to the announcement and the stock price remained stable all week."
+      },
+      {
+        "lines": [
+          "Researchers published a detailed study on optical character recognition for historical archives.",
+          "Energy consumption in modern data centers continues to grow despite improvements in efficiency.",
+          "The city council approved the construction of a new public library near the central station.",
+          "Investors reacted calmly to the announcement and the stock price remained stable all week.",
+          "Effective communication between departments improves overall productivity and employee morale.",
+          "The new encryption standard protects sensitive customer data against emerging cyber threats.",
+          "Agricultural exports from the region doubled after the irrigation project was completed."
+        ],
+        "text": "Researchers published a detailed study on optical character recognition for historical archives.\nEnergy consumption in modern data centers continues to grow despite improvements in efficiency.\nThe city council approved the construction of a new public library near the central station.\nInvestors reacted calmly to the announcement and the stock price remained stable all week.\nEffective communication between departments improves overall productivity and employee morale.\nThe new encryption standard protects sensitive customer data against emerging cyber threats.\nAgricultural exports from the region doubled after the irrigation project was completed."
+      },
+      {
+        "lines": [
+          "Investors reacted calmly to the announcement and the stock price remained stable all week.",
+          "Effective communication between departments improves overall productivity and employee morale.",
+          "The new encryption standard protects sensitive customer data against emerging cyber threats.",
+          "Agricultural exports from the region doubled after the irrigation project was completed.",
+          "Public health officials recommended regular exercise and balanced nutrition for all age groups.",
+          "The railway connection between the two cities shortened travel time by nearly two hours.",
+          "Software developers adopted new testing frameworks to catch critical bugs earlier in the cycle."
+        ],
+        "text": "Investors reacted calmly to the announcement and the stock price remained stable all week.\nEffective communication between departments improves overall productivity and employee morale.\nThe new encryption standard protects sensitive customer data against emerging cyber threats.\nAgricultural exports from the region doubled after the irrigation project was completed.\nPublic health officials recommended regular exercise and balanced nutrition for all age groups.\nThe railway connection between the two cities shortened travel time by nearly two hours.\nSoftware developers adopted new testing frameworks to catch critical bugs earlier in the cycle."
+      },
+      {
+        "lines": [
+          "Agricultural exports from the region doubled after the irrigation project was completed.",
+          "Public health officials recommended regular exercise and balanced nutrition for all age groups.",
+          "The railway connection between the two cities shortened travel time by nearly two hours.",
+          "Software developers adopted new testing frameworks to catch critical bugs earlier in the cycle.",
+          "The quarterly revenue increased by twelve percent following the launch of the new product line.",
+          "Automated document processing reduces manual data entry costs for large enterprises significantly.",
+          "Machine learning models require careful validation before deployment in production environments."
+        ],
+        "text": "Agricultural exports from the region doubled after the irrigation project was completed.\nPublic health officials recommended regular exercise and balanced nutrition for all age groups.\nThe railway connection between the two cities shortened travel time by nearly two hours.\nSoftware developers adopted new testing frameworks to catch critical bugs earlier in the cycle.\nThe quarterly revenue increased by twelve percent following the launch of the new product line.\nAutomated document processing reduces manual data entry costs for large enterprises significantly.\nMachine learning models require careful validation before deployment in production environments."
+      },
+      {
+        "lines": [
+          "Software developers adopted new testing frameworks to catch critical bugs earlier in the cycle.",
+          "The quarterly revenue increased by twelve percent following the launch of the new product line.",
+          "Automated document processing reduces manual data entry costs for large enterprises significantly.",
+          "Machine learning models require careful validation before deployment in production environments.",
+          "The supply chain disruption affected delivery schedules across three regional distribution centers.",
+          "Researchers published a detailed study on optical character recognition for historical archives.",
+          "Energy consumption in modern data centers continues to grow despite improvements in efficiency."
+        ],
+        "text": "Software developers adopted new testing frameworks to catch critical bugs earlier in the cycle.\nThe quarterly revenue increased by twelve percent following the launch of the new product line.\nAutomated document processing reduces manual data entry costs for large enterprises significantly.\nMachine learning models require careful validation before deployment in production environments.\nThe supply chain disruption affected delivery schedules across three regional distribution centers.\nResearchers published a detailed study on optical character recognition for historical archives.\nEnergy consumption in modern data centers continues to grow despite improvements in efficiency."
+      },
+      {
+        "lines": [
+          "Machine learning models require careful validation before deployment in production environments.",
+          "The supply chain disruption affected delivery schedules across three regional distribution centers.",
+          "Researchers published a detailed study on optical character recognition for historical archives.",
+          "Energy consumption in modern data centers continues to grow despite improvements in efficiency.",
+          "The city council approved the construction of a new public library near the central station.",
+          "Investors reacted calmly to the announcement and the stock price remained stable all week.",
+          "Effective communication between departments improves overall productivity and employee morale."
+        ],
+        "text": "Machine learning models require careful validation before deployment in production environments.\nThe supply chain disruption affected delivery schedules across three regional distribution centers.\nResearchers published a detailed study on optical character recognition for historical archives.\nEnergy consumption in modern data centers continues to grow despite improvements in efficiency.\nThe city council approved the construction of a new public library near the central station.\nInvestors reacted calmly to the announcement and the stock price remained stable all week.\nEffective communication between departments improves overall productivity and employee morale."
+      },
+      {
+        "lines": [
+          "Energy consumption in modern data centers continues to grow despite improvements in efficiency.",
+          "The city council approved the construction of a new public library near the central station.",
+          "Investors reacted calmly to the announcement and the stock price remained stable all week.",
+          "Effective communication between departments improves overall productivity and employee morale.",
+          "The new encryption standard protects sensitive customer data against emerging cyber threats.",
+          "Agricultural exports from the region doubled after the irrigation project was completed.",
+          "Public health officials recommended regular exercise and balanced nutrition for all age groups."
+        ],
+        "text": "Energy consumption in modern data centers continues to grow despite improvements in efficiency.\nThe city council approved the construction of a new public library near the central station.\nInvestors reacted calmly to the announcement and the stock price remained stable all week.\nEffective communication between departments improves overall productivity and employee morale.\nThe new encryption standard protects sensitive customer data against emerging cyber threats.\nAgricultural exports from the region doubled after the irrigation project was completed.\nPublic health officials recommended regular exercise and balanced nutrition for all age groups."
+      }
+    ]
+  }
+}

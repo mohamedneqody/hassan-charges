@@ -1,0 +1,541 @@
+"""Label normalization, number parsing, year detection, and table structuring.
+
+Turns raw tables (from CSV/XLSX/PDF) into a canonical structure:
+    {canonical_field: {year: value}}
+"""
+from __future__ import annotations
+
+import math
+import re
+import unicodedata
+from dataclasses import dataclass, field
+
+import pandas as pd
+
+from src.config import FIELD_ALIASES, FIELD_EXCLUSIONS
+
+_YEAR_RE = re.compile(r"(?:19|20)\d{2}")
+
+# Arabic-Indic digits -> ASCII, plus Arabic decimal/thousands separators.
+_ARABIC_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
+_ARABIC_SEPARATORS = str.maketrans({"٫": ".", "٬": "", "،": " "})
+
+_MISSINGS = {"", "-", "--", "—", "–", "na", "n a", "n/a", "nil", "none", "null", "."}
+
+
+# ---------------------------------------------------------------------------
+# Label normalization
+# ---------------------------------------------------------------------------
+
+def normalize_label(value: object) -> str:
+    """Normalize a label so matching is insensitive to case, spaces,
+    underscores, punctuation, and minor Arabic orthography variants."""
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return ""
+    s = str(value)
+    s = unicodedata.normalize("NFKC", s)
+    s = s.translate(_ARABIC_DIGITS).translate(_ARABIC_SEPARATORS)
+    s = s.replace("ـ", "")  # Arabic tatweel
+    s = s.lower()
+    # Any run of non-alphanumeric characters becomes a single space
+    # (covers spaces, underscores, punctuation, "&", "/", parentheses...).
+    s = re.sub(r"[^0-9a-z\u0600-\u06FF]+", " ", s)
+    s = re.sub(r"\s+", " ", s).strip()
+    # Light Arabic normalization: hamza forms -> alef, taa marbuta -> haa, alef maqsura -> yaa
+    s = s.replace("أ", "ا").replace("إ", "ا").replace("آ", "ا")
+    s = s.replace("ة", "ه").replace("ى", "ي").replace("ؤ", "و").replace("ئ", "ي")
+    return s
+
+
+# Pre-compute normalized alias lookup: normalized alias -> canonical field.
+_ALIAS_LOOKUP: dict[str, str] = {}
+for _canon, _aliases in FIELD_ALIASES.items():
+    _ALIAS_LOOKUP.setdefault(normalize_label(_canon), _canon)
+    for _a in _aliases:
+        _ALIAS_LOOKUP.setdefault(normalize_label(_a), _canon)
+
+# Longest aliases first, for substring fallback matching.
+_SORTED_ALIASES = sorted(_ALIAS_LOOKUP, key=len, reverse=True)
+
+# Whole-word tokens that mark a DERIVED line (margins, growth, per-share, ...).
+# Those are computed by the system itself, so source rows must not override them.
+_DERIVED_TOKENS = {
+    "growth", "margin", "ratio", "change", "increase", "decrease",
+    "percent", "percentage", "eps", "roe", "roa", "roi", "cagr",
+    "per", "share", "shares", "vs", "variance", "variation", "ebitda",
+    "end", "beginning", "closing", "opening",
+    "نمو", "هامش", "نسبه",
+}
+
+# Rows that MENTION a field's words but are a different line entirely. A real
+# run captured CFO = 1,794,378,809 from the cash-movement neighborhood of the
+# statement instead of the printed 1,214,507,829 — CF totals must never come
+# from cash-at-period-end / net-cash-movement rows (Arabic forms; the English
+# end/beginning tokens above never fire on Arabic documents).
+_CASH_MOVEMENT_PATTERNS = (
+    "نهايه الفتره", "نهايه العام", "نهايه المده", "نهايه السنه",
+    "بدايه الفتره", "بدايه العام", "بدايه المده", "بدايه السنه",
+    "الزياده في النقديه", "النقص في النقديه",
+    "صافي الزياده", "صافي النقص",
+    "التغير في النقديه", "التغيرات في النقديه",
+)
+
+# Rows that are structurally NOT a canonical field line, whichever field
+# their words may suggest: the CF bridge subtotal mentions الأصول المتداولة/
+# الالتزامات المتداولة/صافي الربح, the OCI adjustment row («ناتج تعديل تكلفة
+# الأصول») mentions الأصول AND الأرباح المرحلة, comprehensive-income lines
+# mention الدخل, NCI-share rows mention أرباح. One real run let
+# «ناتج تعديل تكلفة الأصول» feed total_assets and the CF bridge feed
+# current_liabilities — these never map, globally.
+_GLOBAL_NEGATIVE_PATTERNS = (
+    "غير المسيطره", "غير المسيطرين", "حصه غير",
+    "قبل التغير في", "قبل التغيرات في",
+    "الدخل الشامل", "الربح الشامل", "ناتج تعديل",
+)
+
+_FIELD_NEGATIVE_PATTERNS: dict[str, tuple[str, ...]] = {
+    "operating_cash_flow": _CASH_MOVEMENT_PATTERNS,
+    "investing_cash_flow": _CASH_MOVEMENT_PATTERNS,
+    "financing_cash_flow": _CASH_MOVEMENT_PATTERNS,
+    "cash": ("صافي الزياده", "صافي النقص",
+             "التغير في النقديه", "التغيرات في النقديه",
+             # «النقدية وما في حكمها في أول العام» holds the PRIOR year's
+             # ending balance — a live run shipped it as the reporting-year
+             # cash (595M) while the printed ending row was 1,804,894,141.
+             "في اول العام", "في اول الفتره", "في بدايه العام", "في بدايه الفتره"),
+}
+
+# A raw cell containing a percent sign is a ratio, never an absolute amount.
+_PERCENT_CHARS = ("%", "٪")
+
+
+def match_field(label: object) -> str | None:
+    """Map a raw line-item label to a canonical field, or None."""
+    norm = normalize_label(label)
+    if not norm or norm in FIELD_EXCLUSIONS:
+        return None
+    if any(pat in norm for pat in _GLOBAL_NEGATIVE_PATTERNS):
+        return None
+    if set(norm.split()) & _DERIVED_TOKENS:
+        return None
+    field = None
+    if norm in _ALIAS_LOOKUP:
+        field = _ALIAS_LOOKUP[norm]
+    else:
+        # Substring fallback: longest alias contained in the label.
+        for alias in _SORTED_ALIASES:
+            if len(alias) >= 4 and alias in norm:
+                field = _ALIAS_LOOKUP[alias]
+                break
+    # A "before tax" row is NEVER net income — however the OCR phrased it
+    # ("صافي ربح العام قبل ضريبة الدخل" / "قبل الضريبة" are pretax, not net).
+    if field == "net_income" and ("قبل الضريبه" in norm or "قبل ضريبه" in norm):
+        return None
+    # The Ezz-style statement prints BOTH a pre-financing subtotal
+    # («النقدية الناتجة من أنشطة التشغيل») AND the true net line
+    # («صافي النقدية الناتجة…») — first-capture-wins then shipped the
+    # SUBTOTAL as CFO (1,794M − 580M paid financing = the real 1,214M).
+    # Only the line carrying «صافي» is the operating total.
+    if field == "operating_cash_flow" and "صافي" not in norm and (
+        "النقديه الناتجه" in norm or "النقديه النائجه" in norm
+    ):
+        return None
+    # A row that mentions a field's words but is a different line (cash at
+    # period end, net cash movement) must never feed that field.
+    for pat in _FIELD_NEGATIVE_PATTERNS.get(field, ()):
+        if pat in norm:
+            return None
+    return field
+
+
+# ---------------------------------------------------------------------------
+# Number and year parsing
+# ---------------------------------------------------------------------------
+
+def parse_number(raw: object) -> float | None:
+    """Parse a financial cell value to float.
+
+    Handles thousands separators, currency symbols, parenthesized negatives,
+    percentages (value kept as the printed number), and dash/blank cells.
+    Returns None when the cell holds no usable number.
+    """
+    if raw is None:
+        return None
+    if isinstance(raw, bool):
+        return None
+    if isinstance(raw, (int, float)):
+        val = float(raw)
+        return val if math.isfinite(val) else None
+
+    s = str(raw).strip().translate(_ARABIC_DIGITS).translate(_ARABIC_SEPARATORS)
+    if normalize_label(s) in _MISSINGS:
+        return None
+
+    negative = False
+    if s.startswith("(") and s.endswith(")"):
+        negative = True
+        s = s[1:-1]
+    # Keep digits, dot and sign; drop currency symbols, letters, %, NBSP...
+    s = re.sub(r"[^0-9.\-]", "", s)
+    if not re.search(r"\d", s):
+        return None
+    try:
+        val = float(s)
+    except ValueError:
+        return None
+    return -abs(val) if negative else val
+
+
+def extract_year(raw: object) -> int | None:
+    """Extract a fiscal year (1990-2099) from a header cell like
+    '2025', 'FY2026', 'Dec 31, 2025', '٢٠٢٢/١٢/٣١' (Arabic-Indic digits),
+    or a datetime-like value."""
+    if raw is None:
+        return None
+    if hasattr(raw, "year"):  # datetime / Timestamp
+        y = int(raw.year)
+        return y if 1990 <= y <= 2099 else None
+    if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+        if not math.isfinite(float(raw)):  # NaN / inf empty cells
+            return None
+        y = int(raw)
+        return y if 1990 <= y <= 2099 else None
+    s = str(raw).translate(_ARABIC_DIGITS)  # ٢٠٢٢ → 2022
+    m = _YEAR_RE.search(s)
+    if m:
+        y = int(m.group(0))
+        return y if 1990 <= y <= 2099 else None
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Table structuring
+# ---------------------------------------------------------------------------
+
+@dataclass
+class FinancialData:
+    """Canonical financial values: field -> year -> value.
+
+    `candidates` keeps EVERY value captured for a field/year (with capture
+    order) so `reconcile()` can pick the accounting-identity-consistent one
+    instead of blindly trusting the first occurrence.
+    """
+    values: dict[str, dict[int, float]] = field(default_factory=dict)
+    candidates: dict[str, dict[int, list[tuple[float, int]]]] = field(default_factory=dict)
+    notes: list[str] = field(default_factory=list)
+    currency_hint: str | None = None
+    company_hint: str | None = None  # company name read from the document itself
+    # field -> year -> independent agreeing reads (1 = single capture,
+    # 2 = cross-statement vote or focused verify agree, 3 = 2-of-3 with local
+    # OCR). The audit-trail UI surfaces this as witness dots per figure.
+    confidence: dict[str, dict[int, int]] = field(default_factory=dict)
+
+    def bump_confidence(self, field_name: str, year: int, level: int) -> None:
+        if level > self.confidence.get(field_name, {}).get(year, 0):
+            self.confidence.setdefault(field_name, {})[year] = level
+
+    @property
+    def years(self) -> list[int]:
+        seen: set[int] = set()
+        for by_year in self.values.values():
+            seen.update(by_year)
+        return sorted(seen, reverse=True)
+
+    def latest_two_years(self) -> tuple[int, int] | None:
+        ys = self.years
+        return (ys[1], ys[0]) if len(ys) >= 2 else None  # (previous, current)
+
+    def get(self, field_name: str, year: int) -> float | None:
+        return self.values.get(field_name, {}).get(year)
+
+
+def _cell_is_number_like(cell: object) -> bool:
+    return parse_number(cell) is not None
+
+
+def _detect_transposed(df: pd.DataFrame) -> bool:
+    """True when years live in the first column or the index
+    (rows = years, columns = line items)."""
+    if sum(extract_year(c) is not None for c in df.columns) >= 2:
+        return False
+    if sum(extract_year(v) is not None for v in df.index) >= 2:
+        return True
+    first_col = df.iloc[:, 0]
+    return sum(extract_year(v) is not None for v in first_col) >= 2
+
+
+def _find_year_header(df: pd.DataFrame) -> tuple[int, dict[int, int]] | None:
+    """Locate the row index holding >= 2 year cells.
+
+    Returns (row_index, {column_position: year}) or None.
+    """
+    col_years = {i: extract_year(c) for i, c in enumerate(df.columns)}
+    if sum(y is not None for y in col_years.values()) >= 2:
+        # pandas already parsed the header; body starts at row 0.
+        return -1, {i: y for i, y in col_years.items() if y is not None}
+
+    scan = df.head(12)
+    for idx, row in scan.iterrows():
+        year_cells = {i: extract_year(v) for i, v in enumerate(row)}
+        if sum(y is not None for y in year_cells.values()) >= 2:
+            return idx, {i: y for i, y in year_cells.items() if y is not None}
+    return None
+
+
+def _row_label(row: pd.Series, year_cols: set[int]) -> str | None:
+    """First text cell containing actual letters (e.g. 'ضريبة الدخل (25%)')
+    in the first few columns = the label. Pure numbers never qualify, even
+    when mixed with digits or punctuation."""
+    for i, cell in enumerate(row):
+        if i in year_cols:
+            continue
+        if i > 3:
+            break
+        if (
+            isinstance(cell, str)
+            and cell.strip()
+            and extract_year(cell) is None
+            and re.search(r"[A-Za-z\u0600-\u06FF]", cell)
+        ):
+            return cell
+    return None
+
+
+def parse_table(df: pd.DataFrame) -> dict[int, dict[str, float]]:
+    """Parse one DataFrame into {year: {canonical_field: value}}.
+
+    Tables without a detectable two-year header return {}.
+    """
+    if df.empty:
+        return {}
+    if _detect_transposed(df):
+        # Rotate years-in-first-column/index layouts into the wide shape.
+        df = df.T
+
+    found = _find_year_header(df)
+    if found is None:
+        return {}
+    header_idx, year_cols_map = found
+    year_cols = set(year_cols_map)
+
+    result: dict[int, dict[str, float]] = {}
+    body = df if header_idx == -1 else df.iloc[header_idx + 1:]
+    for _, row in body.iterrows():
+        label = _row_label(row, year_cols)
+        if label is None:
+            continue
+        canonical = match_field(label)
+        if canonical is None:
+            continue
+        for col_pos, year in year_cols_map.items():
+            raw_cell = row.iloc[col_pos] if col_pos < len(row) else None
+            # Percentage cells are ratios, not absolute amounts — skip them.
+            if isinstance(raw_cell, str) and any(c in raw_cell for c in _PERCENT_CHARS):
+                continue
+            value = parse_number(raw_cell)
+            if value is None:
+                continue
+            result.setdefault(year, {}).setdefault(canonical, value)
+    return result
+
+
+def merge_parsed(parts: list[dict[int, dict[str, float]]], notes: list[str]) -> FinancialData:
+    """Merge per-table parses, keeping every candidate for reconciliation."""
+    data = FinancialData(notes=notes)
+    order = 0
+    for part in parts:
+        for year, fields in part.items():
+            for canonical, value in fields.items():
+                if canonical in _ABSOLUTE_FIELDS and value is not None:
+                    value = abs(value)  # balance-sheet items are magnitudes
+                by_year = data.candidates.setdefault(canonical, {})
+                by_year.setdefault(year, []).append((value, order))
+                order += 1
+                # first-wins base; reconcile() may override with better values
+                data.values.setdefault(canonical, {}).setdefault(year, value)
+    return data
+
+
+# Accounting identities used to pick the right value when a field was captured
+# more than once (e.g. "total assets" vs "total NON-CURRENT assets"):
+# target = sum(sign * |component|)
+_IDENTITY_GROUPS: list[tuple[str, tuple[tuple[str, int], ...]]] = [
+    ("total_assets", (("total_liabilities", 1), ("equity", 1))),
+    ("gross_profit", (("revenue", 1), ("cost_of_revenue", -1))),
+    ("operating_income", (("gross_profit", 1), ("operating_expenses", -1))),
+    ("net_income", (("pretax_income", 1), ("income_tax_expense", -1))),
+    ("total_debt", (("short_term_debt", 1), ("long_term_debt", 1))),
+]
+
+_TOLERANCE = 0.005  # identities must hold within 0.5%
+_MAX_CANDIDATES = 4
+# By-DEFINITION income identities: when the captured value violates them and
+# all components exist, the identity value REPLACES the capture. Balance-sheet
+# totals (total_assets) are NOT force-derived: OCR errors in a component
+# (e.g. capturing non-current liabilities as total liabilities) would corrupt
+# a correct capture — instead the violation is flagged for the user.
+# net_income was REMOVED (2026-10-31) after a live misfire: a hijacked
+# pretax capture (wrong row) plus a wrong tax row overwrote a CORRECT
+# 1,056,737,086 with a derived 1,208,469,355. Net income is printed on THREE
+# statements and the cross-statement vote already polices it — the identity
+# now only FLAGS (⚠) a disagreement.
+_DERIVE_IF_FAILS = {"gross_profit"}
+
+# Balance-sheet items are magnitudes — OCR sometimes flips their sign
+# (inventory -128M, receivables -478M...). Normalize to positive.
+_ABSOLUTE_FIELDS = {
+    "total_assets", "current_assets", "inventory", "accounts_receivable",
+    "cash", "fixed_assets", "accounts_payable", "current_liabilities",
+    "total_liabilities", "short_term_debt", "long_term_debt",
+    "total_debt", "equity",
+}
+
+
+def _digit_close(a: float, b: float) -> bool:
+    """Near-exact agreement (OCR digit identity, not a percentage band)."""
+    return abs(a - b) <= max(1.0, 1e-6 * max(abs(a), abs(b)))
+
+
+def _majority_vote(data: FinancialData) -> None:
+    """Cross-statement voting: a figure printed on several statements (net
+    income appears on the income statement, the equity statement AND the
+    first line of the cash-flow statement) is captured several times. When
+    ≥2 independent captures agree digit-exactly, they outvote a disagreeing
+    minority capture — free verification with zero extra API calls."""
+    for field, by_year in data.candidates.items():
+        for year, cands in list(by_year.items()):
+            vals = [v for v, _ in cands if v is not None]
+            if len(vals) < 2:
+                continue
+            best_val, best_count = None, 1
+            for v in vals:
+                count = sum(1 for w in vals if _digit_close(v, w))
+                if count > best_count:
+                    best_val, best_count = v, count
+            if best_val is None or best_count < 2:
+                continue  # no agreement — keep first-capture semantics
+            current = data.values.get(field, {}).get(year)
+            if current is not None and not _digit_close(current, best_val):
+                data.values.setdefault(field, {})[year] = best_val
+                data.notes.append(
+                    f"Cross-statement majority vote: '{field}' in {year} set to "
+                    f"{best_val:,.0f} ({best_count} agreeing captures) — replaced "
+                    f"a disagreeing capture of {current:,.0f}."
+                )
+            data.bump_confidence(field, year, min(best_count, 3))
+            # downstream identity groups should see the winner only
+            data.candidates[field][year] = [(best_val, 0)]
+
+
+def reconcile(data: FinancialData) -> None:
+    """Choose the value for each disputed field that satisfies the most
+    accounting identities. Statements legitimately violate identities
+    (other income, discontinued ops), so identities are SCORED, never forced:
+    the combo satisfying the most wins, ties keep first-occurrence order."""
+    import itertools
+
+    _majority_vote(data)
+
+    # Tax bridge (جسر الضريبة): net income and pretax income are the two most
+    # verified figures in the system (NI prints on three statements and is
+    # re-read by the verify layers). Their difference IS the income tax — a
+    # live run captured the PARTIAL «ضريبة الدخل» row (−167.9M) while the
+    # printed «إجمالي ضريبة الدخل عن العام» was −179.6M. Appending the implied
+    # value as a free extra candidate lets the identity scoring prefer it over
+    # garbled OCR of the tax rows — but ONLY anchored on a net income that at
+    # least two independent captures/verifies agree on.
+    for year in list(data.years):
+        ni = data.get("net_income", year)
+        pretax = data.get("pretax_income", year)
+        if ni is None or pretax is None:
+            continue
+        if (data.confidence.get("net_income", {}) or {}).get(year, 0) < 2:
+            continue
+        implied = ni - pretax
+        cands = data.candidates.setdefault("income_tax_expense", {}).setdefault(year, [])
+        if not any(_digit_close(v, implied) for v, _ in cands):
+            cands.append((implied, 10 ** 9))
+
+    for target, comps in _IDENTITY_GROUPS:
+        group_fields = (target,) + tuple(c[0] for c in comps)
+        for year in list(data.years):
+            cand_lists = {
+                f: data.candidates.get(f, {}).get(year, [])[:_MAX_CANDIDATES]
+                for f in group_fields
+            }
+            if not cand_lists[target]:
+                continue  # nothing captured for the target field this year
+            best_assignment: dict[str, float] | None = None
+            best_key = (-1, None)
+            for combo in itertools.product(*(cand_lists[f] for f in group_fields)):
+                assignment = {f: v for f, (v, _) in zip(group_fields, combo)}
+                order_sum = sum(o for _, o in combo)
+                t = assignment[target]
+                components = sum(
+                    sign * abs(assignment[c]) for c, sign in comps
+                )
+                residual = abs(t - components)
+                scale = max(abs(t), components, 1.0)
+                score = 1 if residual <= _TOLERANCE * scale else 0
+                key = (score, -order_sum)
+                if best_assignment is None or key > best_key:
+                    best_assignment, best_key = assignment, key
+            if best_assignment is None:
+                continue
+            t = best_assignment[target]
+            components = sum(sign * abs(best_assignment[c]) for c, sign in comps)
+            residual = abs(t - components)
+            scale = max(abs(t), components, 1.0)
+            if residual > _TOLERANCE * scale:
+                if target in _DERIVE_IF_FAILS and all(
+                    best_assignment[c] is not None for c, _ in comps
+                ):
+                    derived = components
+                    data.notes.append(
+                        f"Replaced captured '{target}' in {year} ({t:,.0f}) with the "
+                        f"identity value ({derived:,.0f} = "
+                        + " + ".join(
+                            (f"|{c}|" if s == 1 else f"-|{c}|") for c, s in comps
+                        ) + ")."
+                    )
+                    best_assignment[target] = derived
+                else:
+                    # Balance-sheet totals: never force-derive — flag instead.
+                    first_captured = cand_lists[target][0][0]
+                    best_assignment[target] = first_captured
+                    data.notes.append(
+                        f"⚠ Accounting identity check FAILED for {target} in {year}: "
+                        f"captured {first_captured:,.0f} but "
+                        + " + ".join(c for c, _ in comps)
+                        + f" = {components:,.0f}. The captured value was kept — "
+                        "verify the source page (possible extraction/OCR error)."
+                    )
+            for f, value in best_assignment.items():
+                if data.values.get(f, {}).get(year) != value:
+                    if data.values.get(f, {}).get(year) is not None:
+                        data.notes.append(
+                            f"Reconciled '{f}' in {year} to {value:,.0f} using the "
+                            f"accounting identity ({target} = "
+                            + " + ".join(c for c, _ in comps) + ")."
+                        )
+                    data.values.setdefault(f, {})[year] = value
+                # downstream groups should see the reconciled value only
+                data.candidates[f][year] = [(value, 0)]
+
+    # Sanity cross-checks: a detail item can never exceed its total.
+    for year in list(data.years):
+        cl = data.get("current_liabilities", year)
+        tl = data.get("total_liabilities", year)
+        if cl is not None and tl is not None and cl > tl:
+            data.notes.append(
+                f"⚠ Sanity check: current liabilities ({cl:,.0f}) exceed total "
+                f"liabilities ({tl:,.0f}) in {year} — the current-liabilities "
+                "capture is likely wrong; verify the source page."
+            )
+        ca = data.get("current_assets", year)
+        ta = data.get("total_assets", year)
+        if ca is not None and ta is not None and ca > ta:
+            data.notes.append(
+                f"⚠ Sanity check: current assets ({ca:,.0f}) exceed total assets "
+                f"({ta:,.0f}) in {year} — verify the source page."
+            )

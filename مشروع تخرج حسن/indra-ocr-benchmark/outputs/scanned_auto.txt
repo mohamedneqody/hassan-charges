@@ -1,0 +1,15 @@
+The Industrial Revolution transformed manufacturing across Europe in the nineteenth
+century, replacing manual labor with steam-powered machinery in almost every sector.
+Modern factories now rely on automated systems and computer vision for quality control.
+Financial statements must be audited carefully before the annual report is submitted
+to shareholders and published on the official website of the stock exchange.
+Accurate data extraction from documents remains a fundamental challenge for
+enterprise software, and optical character recognition is at the center of it.
+
+يشهد العالم اليوم تطورا سريعا في مجال الذكاء الاصطناعي وتقنيات معالجة اللغة الطبيعية.
+تعتمد المؤسسات المالية على أنظمة حديثة لتحليل القوائم المالية واستخراج البيانات منها.
+تسعى الشركات إلى أتمتة عمليات المراجعة والتدقيق لتوفير الوقت وتقليل الأخطاء البشرية.
+تعتبر مدينة القاهرة من أكبر مدن العالم العربي من حيث عدد السكان والمساحة الكلية.
+يجب على الموظف تسليم التقرير الشهري إلى المدير قبل نهاية الأسبوع الجاري على الأقل.
+تساهم المعالجة الآلية للمستندات في تحسين جودة القرارات وتسريع إجراءات العمل اليومية.
+يحتاج الباحثون إلى أدوات دقيقة لقراءة المخطوطات القديمة وحفظ النصوص في قواعد البيانات.

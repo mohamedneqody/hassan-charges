@@ -1,0 +1,46 @@
+{
+  "ts": "2026-10-24T17:23:14.691155+00:00",
+  "boot_wall_t": 1792862580.385539,
+  "cores_arg": 8,
+  "affinity_cores": 16,
+  "mode": "ocr",
+  "import_s": 0.2055,
+  "load_s": 1.6052,
+  "warmup_s": 0.3362,
+  "run1": {
+    "wall_s": 5.3513,
+    "pages_total": 40,
+    "pages_ok": 40,
+    "page_sources": {
+      "ocr": 40
+    },
+    "page_ms_mean": 609.0,
+    "page_ms_median": 594.1,
+    "page_ms_p95": 676.6,
+    "page_ms_sum_s": 24.359,
+    "pps_wall": 7.475
+  },
+  "run2": {
+    "wall_s": 4.8798,
+    "pages_total": 40,
+    "pages_ok": 40,
+    "page_sources": {
+      "ocr": 40
+    },
+    "page_ms_mean": 647.9,
+    "page_ms_median": 642.4,
+    "page_ms_p95": 772.2,
+    "page_ms_sum_s": 25.916,
+    "pps_wall": 8.197
+  },
+  "resources_infer": {
+    "cpu_sys_avg_pct": 57.3,
+    "cpu_tree_avg_pct": 26.9,
+    "rss_peak_mb": 4018.7
+  },
+  "resources_whole": {
+    "cpu_sys_avg_pct": null,
+    "cpu_tree_avg_pct": null,
+    "rss_peak_mb": null
+  }
+}

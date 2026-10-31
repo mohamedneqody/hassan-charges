@@ -1,0 +1,126 @@
+"""Academic early-warning models: exact arithmetic on known fixtures.
+
+Healthy and distressed companies with hand-computed expected scores, the
+DuPont product identity, and the None-safety contract (missing data →
+missing list, never a guessed number).
+"""
+from __future__ import annotations
+
+import pytest
+
+from src.analysis.academic_models import (
+    academic_models,
+    altman_z_prime,
+    dupont_analysis,
+    springate_score,
+    zmijewski_score,
+)
+from src.analysis.calculator import YearMetrics
+
+
+def healthy() -> YearMetrics:
+    return YearMetrics(
+        year=2024,
+        revenue=1_000_000.0,
+        operating_income=150_000.0,
+        pretax_income=130_000.0,
+        net_income=100_000.0,
+        total_assets=600_000.0,
+        current_assets=300_000.0,
+        current_liabilities=150_000.0,
+        total_liabilities=320_000.0,
+        equity=280_000.0,
+        retained_earnings=200_000.0,
+        working_capital=150_000.0,
+    )
+
+
+def distressed() -> YearMetrics:
+    return YearMetrics(
+        year=2024,
+        revenue=400_000.0,
+        operating_income=10_000.0,
+        pretax_income=-20_000.0,
+        net_income=-30_000.0,
+        total_assets=500_000.0,
+        current_assets=150_000.0,
+        current_liabilities=200_000.0,
+        total_liabilities=450_000.0,
+        equity=50_000.0,
+        retained_earnings=-50_000.0,
+        working_capital=-100_000.0,
+    )
+
+
+def test_altman_healthy_is_safe():
+    m = altman_z_prime(healthy())
+    assert m.value == pytest.approx(3.269, abs=0.01)
+    assert m.zone == "safe"
+    assert m.missing == []
+    assert m.components["X1"] == pytest.approx(0.25, abs=1e-4)
+
+
+def test_altman_distressed_is_distress():
+    m = altman_z_prime(distressed())
+    assert m.value == pytest.approx(0.679, abs=0.01)
+    assert m.zone == "distress"
+
+
+def test_springate_healthy_above_cutoff():
+    m = springate_score(healthy())
+    assert m.value == pytest.approx(2.502, abs=0.01)
+    assert m.zone == "safe"
+
+
+def test_springate_distressed_below_cutoff():
+    m = springate_score(distressed())
+    assert m.value == pytest.approx(0.270, abs=0.01)
+    assert m.zone == "distress"
+
+
+def test_zmijewski_healthy_below_zero():
+    m = zmijewski_score(healthy())
+    assert m.value == pytest.approx(-2.057, abs=0.01)
+    assert m.zone == "risk_low"
+
+
+def test_zmijewski_distressed_above_zero():
+    m = zmijewski_score(distressed())
+    assert m.value == pytest.approx(1.052, abs=0.01)
+    assert m.zone == "risk_high"
+
+
+def test_dupont_product_identity():
+    """The three factors must reconstruct ROE = NI / Equity exactly."""
+    m = dupont_analysis(healthy())
+    rebuilt = m.components["ROE_rebuilt"]
+    assert rebuilt == pytest.approx(35.71, abs=0.01)
+    direct = healthy().net_income / healthy().equity * 100
+    assert rebuilt == pytest.approx(direct, abs=0.01)  # 2-decimal rounding
+    assert m.components["AssetTurnover"] == pytest.approx(1.667, abs=0.001)
+    assert m.components["EquityMultiplier"] == pytest.approx(2.143, abs=0.001)
+    assert m.components["EBITMargin"] == pytest.approx(15.0, abs=0.01)
+
+
+def test_dupont_leverage_warning_when_debt_driven():
+    """High equity multiplier is called out in the verdict."""
+    m = dupont_analysis(distressed())
+    assert "الرافعة المالية" in m.verdict_ar or "Watch" in m.verdict_en
+
+
+def test_missing_data_yields_missing_lists_not_guesses():
+    sparse = YearMetrics(year=2024, revenue=100.0, net_income=10.0)
+    results = academic_models(sparse)
+    assert [m.key for m in results] == ["altman", "springate", "zmijewski", "dupont"]
+    for m in results:
+        assert m.value is None
+        assert m.missing, f"{m.key} should report missing components"
+        assert m.components == {}
+
+
+def test_aggregator_order_and_bilingual_names():
+    results = academic_models(healthy())
+    keys = [m.key for m in results]
+    assert keys == ["altman", "springate", "zmijewski", "dupont"]
+    assert all(m.name for m in results)  # name resolves in the current language
+    assert all(m.verdict for m in results)

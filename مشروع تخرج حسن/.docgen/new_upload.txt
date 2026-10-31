@@ -1,0 +1,96 @@
+def upload_screen() -> None:
+    """Landing: centered hero + upload card + features + how-it-works + stats."""
+    st.markdown(
+        theme.hero(
+            "📊 <span class='grad-text'>محلل القوائم المالية</span>",
+            "ارفع القوائم المالية — استخراج تلقائي، حساب النسب لسنتين، وتقرير تحليلي بالذكاء الاصطناعي.",
+            ["PDF", "CSV", "XLSX", "XLS", f'<span class="live-dot"></span>&nbsp;مدعوم بـ {GEMINI_MODEL}'],
+        ),
+        unsafe_allow_html=True,
+    )
+    st.write("")
+
+    # بطاقة الرفع في المنتصف
+    _l, mid, _r = st.columns([1, 2.4, 1])
+    with mid:
+        uploaded = st.file_uploader(
+            "ارفع القوائم المالية (يمكن اختيار عدة ملفات)",
+            type=sorted(ext.lstrip(".") for ext in SUPPORTED_EXTENSIONS),
+            accept_multiple_files=True,
+            help=f"الحد الأقصى: {MAX_UPLOAD_MB} م.ب لكل ملف — عدة ملفات تُحلَّل واحدًا وراء الآخر.",
+        )
+        st.text_input(
+            "نطاق صفحات القوائم — للملفات الممسوحة الكبيرة (اختياري)",
+            placeholder="مثال: 1-12",
+            key="page_range",
+            help="اتركه فارغاً لقراءة كل الصفحات. حدد النطاق لتسريع القراءة وتوفير الحصة.",
+        )
+        if st.button(
+            "🔍 حلّل القوائم المالية",
+            type="primary",
+            use_container_width=True,
+            disabled=uploaded is None,
+        ):
+            process_upload(uploaded)
+        st.markdown("<p class='or-line'>أو</p>", unsafe_allow_html=True)
+        if st.button("🧪 جرّب بملف العينة الجاهز", use_container_width=True):
+            if SAMPLE_FILE.exists():
+
+                class _SampleUpload:
+                    """Minimal file-like handle so the sample flows through the
+                    exact same validated path as a real upload."""
+
+                    name = SAMPLE_FILE.name
+                    size = SAMPLE_FILE.stat().st_size
+
+                    @staticmethod
+                    def getvalue() -> bytes:
+                        return SAMPLE_FILE.read_bytes()
+
+                process_upload([_SampleUpload()])
+            else:
+                st.error("ملف العينة غير موجود في sample_data/.")
+
+    # صف المميزات — 4 بطاقات متساوية
+    st.write("")
+    st.markdown('<div class="sec-label">لماذا هذا المحلل؟</div>')
+    feats = st.columns(4)
+    feat_data = [
+        ("📑", "أي تنسيق", "PDF وCSV وExcel — جداول عريضة أو مقلوبة تُدمج تلقائياً."),
+        ("🧮", "نسب حتمية", "ربحية وسيولة ومديونية وكفاءة — تُحسب دائماً بـ Python."),
+        ("📈", "اتجاهات سنتين", "تحسّن / تراجع / استقرار لكل مؤشر مع نسبة التغير."),
+        ("🤖", "تقرير بالذكاء الاصطناعي", "تعليق لكل مؤشر وتوصيات مسنودة بالأدلة."),
+    ]
+    for i, (col, (icon, title, body)) in enumerate(zip(feats, feat_data)):
+        col.markdown(theme.feature(icon, title, body, i * 90), unsafe_allow_html=True)
+
+    # شريط كيف يعمل
+    st.write("")
+    st.markdown('<div class="sec-label">كيف يعمل؟</div>')
+    steps = st.columns(4)
+    step_data = [
+        ("1", "📤", "ارفع الملف", "PDF أو Excel أو CSV"),
+        ("2", "🔍", "استخراج ذكي", "قراءة الجداول والصور الممسوحة"),
+        ("3", "🧮", "حساب حتمي", "53 مؤشراً بـ Python"),
+        ("4", "📊", "تقرير كامل", "تعليقات وتوصيات بالأدلة"),
+    ]
+    for col, (num, icon, title, body) in zip(steps, step_data):
+        col.markdown(
+            '<div class="step-card"><div class="step-num">' + num + "</div>"
+            '<div class="step-ico">' + icon + "</div><b>" + title + "</b><br><span>" + body + "</span></div>",
+            unsafe_allow_html=True,
+        )
+
+    # شريط إحصائيات
+    st.write("")
+    st.markdown(
+        '<div class="stat-band">'
+        "<span>📊 <b>53</b> مؤشراً مالياً</span>"
+        "<span>📄 <b>PDF</b> مسحوب ضوئياً يُقرأ بالذكاء الاصطناعي</span>"
+        "<span>🌍 <b>عربي</b> بالكامل</span>"
+        "<span>✅ <b>55</b> اختباراً ناجحاً</span>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+

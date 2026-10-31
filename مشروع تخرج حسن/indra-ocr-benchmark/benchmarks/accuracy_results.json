@@ -1,0 +1,114 @@
+[
+  {
+    "label": "en_printed_ocr",
+    "gt_chars": 573,
+    "hyp_chars": 573,
+    "cer": 0.0,
+    "wer": 0.0,
+    "line_match_in_order": 1.0,
+    "line_match_sorted": 1.0,
+    "examples": []
+  },
+  {
+    "label": "ar_printed_ocr",
+    "gt_chars": 592,
+    "hyp_chars": 592,
+    "cer": 0.0,
+    "wer": 0.0,
+    "line_match_in_order": 1.0,
+    "line_match_sorted": 1.0,
+    "examples": []
+  },
+  {
+    "label": "mixed_ar_en_ocr",
+    "gt_chars": 294,
+    "hyp_chars": 294,
+    "cer": 0.0,
+    "wer": 0.0,
+    "line_match_in_order": 1.0,
+    "line_match_sorted": 1.0,
+    "examples": []
+  },
+  {
+    "label": "table_ocr",
+    "gt_chars": 189,
+    "hyp_chars": 153,
+    "cer": 0.6032,
+    "wer": 0.8182,
+    "line_match_in_order": 0.0,
+    "line_match_sorted": 0.0,
+    "examples": [
+      {
+        "tag": "replace",
+        "ref": "ال[صنف | ]",
+        "hyp": "ال[إجم]"
+      },
+      {
+        "tag": "delete",
+        "ref": "الصنف | ال[كم]",
+        "hyp": "الإجمال[]"
+      },
+      {
+        "tag": "delete",
+        "ref": "الصنف | الكمي[ة |]",
+        "hyp": "الإجمالي[]"
+      },
+      {
+        "tag": "replace",
+        "ref": "الكمية | سعر الوحدة [|]",
+        "hyp": "الإجمالي سعر الوحدة [الكمية]"
+      },
+      {
+        "tag": "replace",
+        "ref": "ية | سعر الوحدة | ال[إجمالي قمح | 120 | 350.50 |]",
+        "hyp": "سعر الوحدة الكمية ال[صنف]"
+      },
+      {
+        "tag": "replace",
+        "ref": "| 350.50 | 42060.00 [شعير | 8]",
+        "hyp": "كمية الصنف 42060.00 [350.5]"
+      }
+    ],
+    "cell_recall": 0.958
+  },
+  {
+    "label": "searchable_auto (text layer)",
+    "gt_chars": 573,
+    "hyp_chars": 573,
+    "cer": 0.0,
+    "wer": 0.0,
+    "line_match_in_order": 0.211,
+    "line_match_sorted": 0.211,
+    "examples": []
+  },
+  {
+    "label": "searchable_ocr (real OCR)",
+    "gt_chars": 573,
+    "hyp_chars": 573,
+    "cer": 0.0,
+    "wer": 0.0,
+    "line_match_in_order": 0.211,
+    "line_match_sorted": 0.211,
+    "examples": []
+  },
+  {
+    "label": "scanned_auto (real OCR, no layer)",
+    "gt_chars": 1166,
+    "hyp_chars": 1166,
+    "cer": 0.0,
+    "wer": 0.0,
+    "line_match_in_order": 1.0,
+    "line_match_sorted": 1.0,
+    "examples": []
+  },
+  {
+    "label": "scanned_ocr (real OCR, no layer)",
+    "gt_chars": 1166,
+    "hyp_chars": 1166,
+    "cer": 0.0,
+    "wer": 0.0,
+    "line_match_in_order": 1.0,
+    "line_match_sorted": 1.0,
+    "examples": []
+  }
+]

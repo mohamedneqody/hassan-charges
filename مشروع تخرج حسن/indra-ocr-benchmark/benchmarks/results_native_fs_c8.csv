@@ -1,0 +1,2 @@
+affinity_cores,boot_s,cores,cpu_sys_avg_pct,cpu_tree_avg_pct,import_s,infer2_wall_s,infer_wall_s,kind,load_s,page_ms_mean,page_ms_median,page_ms_p95,pages_ok,pps_wall,pps_wall_warm,process_wall_s,repeat,rss_peak_mb,status,ts,warmup_s
+16,0.119,8,60.5,16.0,0.3725,10.0085,8.6745,api,1.8674,1051.3,975.5,1502.3,40,4.611,3.997,22.627,1,4024.9,ok,2026-10-24T17:29:28.257955+00:00,0.3739

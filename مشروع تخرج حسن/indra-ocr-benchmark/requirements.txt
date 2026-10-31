@@ -1,0 +1,15 @@
+# Indra OCR benchmark project (WSL2 Ubuntu, Python 3.12 venv)
+# Core OCR engine - CPU only via ONNX Runtime, no PyTorch/GPU
+indra-ocr==1.1.2
+
+# Test-data generation & evaluation helpers
+pillow>=10.0
+numpy>=1.26
+arabic-reshaper>=3.0
+python-bidi>=0.4
+fpdf2>=2.7
+img2pdf>=0.5
+
+# Benchmarking & accuracy metrics
+psutil>=5.9
+jiwer>=3.0

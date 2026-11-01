@@ -229,6 +229,9 @@ class FinancialData:
     # 2 = cross-statement vote or focused verify agree, 3 = 2-of-3 with local
     # OCR). The audit-trail UI surfaces this as witness dots per figure.
     confidence: dict[str, dict[int, int]] = field(default_factory=dict)
+    # page -> local Indra text of EVERY page (esp. الإيضاحات المتممة) — feeds
+    # the notes RAG (search/Q&A) which the table-only sweep never kept.
+    notes_text: dict[int, str] = field(default_factory=dict)
 
     def bump_confidence(self, field_name: str, year: int, level: int) -> None:
         if level > self.confidence.get(field_name, {}).get(year, 0):
@@ -503,13 +506,35 @@ def reconcile(data: FinancialData) -> None:
                     # Balance-sheet totals: never force-derive — flag instead.
                     first_captured = cand_lists[target][0][0]
                     best_assignment[target] = first_captured
-                    data.notes.append(
-                        f"⚠ Accounting identity check FAILED for {target} in {year}: "
-                        f"captured {first_captured:,.0f} but "
-                        + " + ".join(c for c, _ in comps)
-                        + f" = {components:,.0f}. The captured value was kept — "
-                        "verify the source page (possible extraction/OCR error)."
-                    )
+                    derived_tax_note = None
+                    if (target == "net_income"
+                            and best_assignment.get("income_tax_expense") is not None
+                            and best_assignment.get("pretax_income") is not None):
+                        # Tax fallback (الضريبة المشتقة): a live run garbled the
+                        # printed tax row (−205.4M vs −179.6M). NI and pretax are
+                        # the two most-verified anchors — their difference IS the
+                        # tax. Derived transparently with its own ⚠ note, never
+                        # silently, and only when it actually differs.
+                        implied_tax = (best_assignment["net_income"]
+                                       - best_assignment["pretax_income"])
+                        if not _digit_close(best_assignment["income_tax_expense"], implied_tax):
+                            derived_tax_note = (
+                                f"⚠ income_tax_expense in {year} derived from the "
+                                f"identity (NI − pretax = {implied_tax:,.0f}) — the "
+                                "printed tax row was garbled; verify against the "
+                                "إجمالي ضريبة الدخل line of the notes."
+                            )
+                            best_assignment["income_tax_expense"] = implied_tax
+                    if derived_tax_note:
+                        data.notes.append(derived_tax_note)
+                    else:
+                        data.notes.append(
+                            f"⚠ Accounting identity check FAILED for {target} in {year}: "
+                            f"captured {first_captured:,.0f} but "
+                            + " + ".join(c for c, _ in comps)
+                            + f" = {components:,.0f}. The captured value was kept — "
+                            "verify the source page (possible extraction/OCR error)."
+                        )
             for f, value in best_assignment.items():
                 if data.values.get(f, {}).get(year) != value:
                     if data.values.get(f, {}).get(year) is not None:

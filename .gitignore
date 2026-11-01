@@ -5,3 +5,12 @@ __pycache__/
 .venv
 venv/
 env/
+
+# FS Analysis Agent (graduation project)
+cache/
+logs/
+*.log
+*.mp4
+eval_pages/
+node_modules/
+.package-lock.json

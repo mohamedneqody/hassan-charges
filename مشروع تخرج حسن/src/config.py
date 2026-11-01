@@ -121,8 +121,14 @@ FIELD_ALIASES: dict[str, list[str]] = {
     ],
     "short_term_debt": [
         "short term debt", "short term borrowings", "short term loans",
+        "bank facilities", "bank borrowings",
         # Arabic
         "قروض قصيره الاجل", "ديون قصيره الاجل",
+        # البنود المطبوعة فعليًا في القوائم المصرية (وُجدت في وثيقة 2022):
+        "بنوك تسهيلات إنتمانية", "بنوك تسهيلات ائتمانية", "تسهيلات بنكية",
+        "تسهيلات بنكيه", "تسهيلات ائتمانية", "سحب على المكشوف",
+        # الجزء المتداول من القروض طويلة الأجل — بند مستقل مطبوع
+        "أقساط قروض طويلة الأجل", "اقساط قروض طويله الاجل",
     ],
     "long_term_debt": [
         "long term debt", "long term borrowings", "long term loans",

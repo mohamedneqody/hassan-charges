@@ -74,9 +74,14 @@ def _render_pages(raw: bytes, max_pages: int, notes: list[str], indices: list[in
     return pages
 
 
-def preprocess_image(png: bytes, max_side: int | None = None) -> bytes:
+def preprocess_image(png: bytes, max_side: int | None = None, binarize: bool = False) -> bytes:
     """OpenCV cleanup for better machine reading: grayscale, cap resolution,
     deskew (small angles only), CLAHE contrast, light denoise, border crop.
+
+    binarize=True adds an adaptive-threshold pass (the second preprocessing
+    variant sent alongside the standard one in verification reads — faded
+    digits that survive CLAHE often vanish in, or only appear under, the
+    adaptive threshold; reading BOTH in one call breaks repeated misreads).
     Any failure returns the original image — never raises."""
     try:
         import cv2
@@ -117,6 +122,13 @@ def preprocess_image(png: bytes, max_side: int | None = None) -> bytes:
             pad = 15
             x0, y0 = max(0, x - pad), max(0, y - pad)
             img = img[y0 : min(img.shape[0], y + h2 + pad), x0 : min(img.shape[1], x + w2 + pad)]
+
+        if binarize:
+            # second preprocessing variant: adaptive threshold isolates printed
+            # digits from scan shading that CLAHE alone cannot flatten
+            img = cv2.adaptiveThreshold(
+                img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 31, 10
+            )
 
         ok, jpeg = cv2.imencode(".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY])
         return jpeg.tobytes() if ok else png
@@ -383,13 +395,24 @@ exactly as printed, for EACH year column shown:
 - إجمالي حقوق الملكية (total equity)
 - المبيعات / الإيرادات (revenue)
 - صافي أرباح العام (net income)
+- صافي أرباح العام قبل ضريبة الدخل (pretax income) — يُطبع أيضًا أول قائمة التدفقات
+- المخزون (inventory)
+- العملاء وأوراق القبض / الذمم المدينة (accounts receivable)
+- الموردون / الذمم الدائنة (accounts payable)
+- النقدية وما في حكمها (cash)
 
 Return ONLY JSON:
 {{"years": [2021, 2022],
   "totals": {{"current_liabilities": [v1, v2], "total_liabilities": [v1, v2],
               "total_assets": [v1, v2], "equity": [v1, v2],
-              "revenue": [v1, v2], "net_income": [v1, v2]}}}}
+              "revenue": [v1, v2], "net_income": [v1, v2],
+              "pretax_income": [v1, v2],
+              "inventory": [v1, v2], "accounts_receivable": [v1, v2],
+              "accounts_payable": [v1, v2], "cash": [v1, v2]}}}}
 Use null for any value not on the page. Parentheses = negative. Copy digits exactly.
+If TWO images of the same page are attached (standard cleanup + adaptive-threshold
+variant), cross-check between them and read from whichever shows the digits more
+clearly — faded or shaded cells often resolve in only one of the two variants.
 """
 
 
@@ -457,7 +480,11 @@ def _verify_core_fields(
     core = [
         f for f in (
             "total_assets", "total_liabilities", "current_liabilities", "equity",
-            "revenue", "net_income",
+            "revenue", "net_income", "pretax_income",
+            # detail balances: a real run shipped inventory/AR from CF change
+            # rows because the BS detail rows were never verified — same page,
+            # same call, zero extra quota.
+            "inventory", "accounts_receivable", "accounts_payable", "cash",
         )
         if f in field_sources and any(data.get(f, y) is not None for y in data.years)
     ]
@@ -508,13 +535,19 @@ def _verify_core_fields(
     for page_number in pages_needed:
         # Higher resolution than the sweep: faded digits (the hard 2021
         # column) resolve at 2200px where the 1600px cap blurs them.
-        img = preprocess_image(pages_png[selected.index(page_number)], max_side=2200)
+        # TWO preprocessing variants of the same page go in ONE call: the
+        # standard cleanup + an adaptive-threshold binarization. Repeated
+        # misreads survive identical preprocessing; cross-variant agreement
+        # breaks them. Same quota cost as a single-image call.
+        src_png = pages_png[selected.index(page_number)]
+        img = preprocess_image(src_png, max_side=2200)
+        img_bin = preprocess_image(src_png, max_side=2200, binarize=True)
         prompt = VERIFY_PROMPT
         try:
             raw_text = (
-                caller("k", "m", prompt, [img])
+                caller("k", "m", prompt, [img, img_bin])
                 if caller is not None
-                else _call_with_rotation(pool, prompt, [img])
+                else _call_with_rotation(pool, prompt, [img, img_bin])
             )
             verified = _parse_verify_json(raw_text)
         except Exception as exc:
@@ -843,12 +876,18 @@ def _verify_cf_fields(
         if deadline is not None and _time.time() > deadline:
             notes.append("Cash-flow verification stopped — time budget exhausted.")
             break
-        img = preprocess_image(pages_png[selected.index(page_number)], max_side=2200)
+        # Dual-variant protocol (same as the core verify): standard cleanup +
+        # adaptive-threshold binarization of the same page in ONE call — a
+        # live run misread the CF net row (1,914,507,839 vs printed
+        # 1,214,507,829) from a single-variant image.
+        src_png = pages_png[selected.index(page_number)]
+        img = preprocess_image(src_png, max_side=2200)
+        img_bin = preprocess_image(src_png, max_side=2200, binarize=True)
         try:
             raw_text = (
-                caller("k", "m", VERIFY_CF_PROMPT, [img])
+                caller("k", "m", VERIFY_CF_PROMPT, [img, img_bin])
                 if caller is not None
-                else _call_with_rotation(pool, VERIFY_CF_PROMPT, [img])
+                else _call_with_rotation(pool, VERIFY_CF_PROMPT, [img, img_bin])
             )
             verified = _parse_verify_cf_json(raw_text)
         except Exception as exc:
@@ -1227,8 +1266,30 @@ def extract_via_vision(
             ),
             encoding="utf-8",
         )
+    # Provenance: which page each field was captured from — surfaces in the
+    # UI and lets the pipeline flag balance fields sourced from notes pages.
+    data.field_sources = field_sources
     data.currency_hint = currency_holder.get("hint")
     data.company_hint = company_holder.get("name") or None
+    if LOCAL_OCR_ENABLED and caller is None:
+        # Notes text capture (الإيضاحات المتممة): a free LOCAL Indra read of
+        # every page so the explanatory prose (accounting policies, loan
+        # terms, aging, contingencies) becomes searchable — the table-only
+        # sweep sees these pages but keeps none of their prose.
+        from .local_ocr import capture_notes_text
+
+        notes_pages = capture_notes_text(raw)
+        if notes_pages:
+            data.notes_text = notes_pages
+            data.notes.append(
+                f"Notes text captured locally for {len(notes_pages)} pages "
+                "(الإيضاحات صارت قابلة للسؤال في تاب الإيضاحات)."
+            )
+        else:
+            data.notes.append(
+                "Notes text capture skipped (local OCR unavailable or failed) — "
+                "the notes RAG tab needs a re-analysis."
+            )
     return data
 
 

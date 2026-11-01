@@ -1588,8 +1588,8 @@ def dashboard_screen() -> None:
                 for item in r["missing"]:
                     st.markdown(f"- {item}")
 
-    tab_overview, tab_profit, tab_liq, tab_eff, tab_size, tab_table, tab_cmp, tab_ai = st.tabs(
-        ["🏠 نظرة عامة", "📈 الربحية", "💧 السيولة والمديونية", "⚙️ الكفاءة", "🧮 الحجم المشترك", "📋 جدول المؤشرات", "🏢 مقارنة الشركات", "🤖 تحليل الذكاء الاصطناعي"]
+    tab_overview, tab_profit, tab_liq, tab_eff, tab_size, tab_table, tab_cmp, tab_ai, tab_notes = st.tabs(
+        ["🏠 نظرة عامة", "📈 الربحية", "💧 السيولة والمديونية", "⚙️ الكفاءة", "🧮 الحجم المشترك", "📋 جدول المؤشرات", "🏢 مقارنة الشركات", "🤖 تحليل الذكاء الاصطناعي", "📖 الإيضاحات المتممة"]
     )
     with tab_overview:
         overview_screen(r)
@@ -1607,6 +1607,78 @@ def dashboard_screen() -> None:
         comparison_screen()
     with tab_ai:
         ai_screen(r, analysis)
+    with tab_notes:
+        notes_screen(r)
+
+
+def notes_screen(r) -> None:
+    """تاب الإيضاحات المتممة: قراءة نصوص الإيضاحات + سؤال/جواب محلي (RAG)."""
+    st.subheader("📖 الإيضاحات المتممة — اقرأها واسألها")
+    notes_text = r.get("notes_text") or {}
+    if not notes_text:
+        st.caption(
+            "لا توجد نصوص إيضاحات محفوظة لهذا الملف. أعد تحليل الملف (أو امسح "
+            "الكاش المحلي ثم أعد الرفع) لتلتقط قراءة محلية مجانية نصوص كل الصفحات."
+        )
+        return
+    from src.analysis.notes_rag import NotesIndex, formulate_answer
+
+    idx = NotesIndex.from_pages(notes_text)
+    stt = idx.stats()
+    if not stt["chunks"]:
+        st.caption("نصوص الإيضاحات فارغة.")
+        return
+    st.caption(
+        f"مُفهرسة {stt['chunks']} مقطعًا من {len(stt['pages'])} صفحة إيضاحات "
+        f"(الصفحات: {', '.join(map(str, stt['pages']))}) — البحث محلي مجاني، "
+        "والإجابة تُصاغ من المقاطع مع ذكر الصفحة المصدر."
+    )
+
+    # ── حاكمية المصادر: من أي صفحة التُقط كل رقم ──
+    fs = r.get("field_sources") or {}
+    if fs:
+        ta_pages = set(fs.get("total_assets") or [])  # صفحات الميزانية المعروفة
+        from src.analysis.comparison import LABELS_AR as _SRC_LBL
+
+        st.markdown("**🔍 حاكمية المصادر — من أي صفحة التُقط كل رقم:**")
+        src_rows = []
+        balance_only_notes = []
+        for f in sorted(fs):
+            pages = sorted(set(fs[f]))
+            lbl = _SRC_LBL.get(f, f)
+            if any(p in ta_pages for p in pages):
+                src = "قوائم أساسية"
+            elif pages:
+                src = "⚠ من صفحات إيضاحات فقط — تعامل معها كمؤشر"
+                if f in ("inventory", "accounts_receivable", "accounts_payable", "cash"):
+                    balance_only_notes.append(lbl)
+            else:
+                src = "—"
+            src_rows.append(f"- **{lbl}** ({f}): صفحات {', '.join(map(str, pages))} — {src}")
+        with st.expander("أصل الأرقام الكامل (حاكمية المصادر)"):
+            st.markdown("\n".join(src_rows))
+        if balance_only_notes:
+            st.warning(
+                "⚠ هذه أرصدة تفصيلية التُقطت من صفحات الإيضاحات فقط (وليس من صفحة "
+                "الميزانية) — تعامل معها كمؤشر استرشادي: " + "، ".join(balance_only_notes)
+            )
+
+    q = st.text_input("اسأل سؤالًا عن الإيضاحات — مثال: ما سياسة الإهلاك المستخدمة؟")
+    if not q.strip():
+        st.info("اكتب سؤالك أعلاه ليعمل البحث في نصوص الإيضاحات.")
+        return
+    chunks = idx.search(q, top_k=5)
+    if not chunks:
+        st.warning("لا توجد مقاطع مطابقة — جرّب كلمات مختلفة أو أقرب مصطلح محاسبي.")
+        return
+    with st.spinner("جارٍ صياغة الإجابة من مقاطع الإيضاحات…"):
+        answer = formulate_answer(q, chunks, r.get("company", ""))
+    if answer:
+        st.markdown(answer)
+    st.markdown("**المقاطع المصدر (بالترتيب حسب التطابق):**")
+    for c in chunks:
+        with st.expander(f"📄 صفحة {c.page} — درجة تطابق {c.score:.3f}"):
+            st.markdown(c.text)
 
 
 def main() -> None:

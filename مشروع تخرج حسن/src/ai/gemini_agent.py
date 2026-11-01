@@ -88,14 +88,20 @@ def build_payload(
     metrics: list[dict],
     missing_data: list[str],
     extraction_notes: list[str],
+    notes_highlights: list[dict] | None = None,
 ) -> dict:
-    """Assemble the compact payload sent to Gemini (pre-formatted values)."""
+    """Assemble the compact payload sent to Gemini (pre-formatted values).
+
+    notes_highlights: finance-relevant excerpts from the notes pages
+    (الإيضاحات المتممة) with their source page numbers — the model may use
+    them to STRENGTHEN a comment/recommendation and must cite the page."""
     return {
         "company": company,
         "analysis_period": {"previous_year": prev_year, "current_year": curr_year},
         "metrics": metrics,
         "missing_data": missing_data,
         "extraction_notes": extraction_notes,
+        "notes_highlights": notes_highlights or [],
         "instructions": (
             "All values, the numeric direction (rose/fell/stable) and the assessment "
             "(improving/declining/stable) were computed in Python — do not recalculate. "
@@ -427,7 +433,22 @@ def analyze_financials(
         + "\n".join(metrics_lines)
         + f"\n\nMissing data (do not comment on these):\n"
         + json.dumps(payload["missing_data"], ensure_ascii=False, indent=2)
-        + "\n\nProvide the structured JSON now: one short comment per metric, "
+    )
+    notes_highlights = payload.get("notes_highlights") or []
+    if notes_highlights:
+        hl_lines = [f"[صفحة {h['page']}] {h['text']}" for h in notes_highlights]
+        user_prompt += (
+            "\n\nNotes highlights (الإيضاحات المتممة — explanatory notes read from "
+            "the same document, each tagged with its source page):\n"
+            + "\n".join(hl_lines)
+            + "\n\nUse a note ONLY where it genuinely strengthens a comment or a "
+            "recommendation (e.g. the depreciation policy vs the DEPI component, "
+            "loan terms vs the leverage/interest comments). When you use one, cite "
+            "its page number inside the comment (e.g. «وفق الإيضاح صفحة 21»). Do "
+            "not invent anything beyond these excerpts, and do not force them in."
+        )
+    user_prompt += (
+        "\n\nProvide the structured JSON now: one short comment per metric, "
         "then the recommendations section."
     )
     config = _build_config()

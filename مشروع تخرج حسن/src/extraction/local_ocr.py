@@ -129,3 +129,57 @@ def confirms(reads: dict[int, LocalPageRead] | None, page: int, value: float) ->
     if lr is None:
         return False
     return f"{abs(value):.0f}" in lr.digits
+
+
+def capture_notes_text(raw: bytes, workers: int = 4) -> dict[int, str] | None:
+    """Read every page's TEXT locally with Indra (free) — feeds the notes RAG.
+
+    Called AFTER the vision sweep so it never competes for quota: pure local
+    CPU. Pages are rendered here in the main thread (pdfium is not
+    thread-safe) then read in parallel workers with thread-local converters.
+    Returns {page_number: markdown} or None on any failure.
+    """
+    if not indra_available():
+        return None
+    try:
+        import io
+        import threading
+        from concurrent.futures import ThreadPoolExecutor
+
+        import pypdfium2 as pdfium
+        import indra_ocr
+
+        doc = pdfium.PdfDocument(io.BytesIO(raw))
+        total = len(doc)
+        if total == 0:
+            return None
+        pngs: dict[int, bytes] = {}
+        for page in range(1, total + 1):
+            buf = io.BytesIO()
+            doc[page - 1].render(scale=1.6).to_pil().save(buf, format="PNG")
+            pngs[page] = buf.getvalue()
+        doc.close()
+
+        tls = threading.local()
+
+        def _conv():
+            conv = getattr(tls, "conv", None)
+            if conv is None:
+                conv = indra_ocr.load()
+                tls.conv = conv
+            return conv
+
+        items = list(pngs.items())
+
+        def _one(item: tuple[int, bytes]):
+            page, png = item
+            return page, _page_markdown(_conv(), png)
+
+        out: dict[int, str] = {}
+        with ThreadPoolExecutor(max_workers=max(1, min(workers, len(items)))) as ex:
+            for page, md in ex.map(_one, items):
+                if md and md.strip():
+                    out[page] = md
+        return out or None
+    except Exception:
+        return None

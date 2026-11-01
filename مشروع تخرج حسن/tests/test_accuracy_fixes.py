@@ -139,13 +139,40 @@ def test_tax_bridge_appends_implied_tax_and_identity_picks_it():
     assert data.get("net_income", 2022) == pytest.approx(1_056_737_086.0, abs=1.0)
 
 
-def test_tax_bridge_requires_verified_net_income():
+def test_tax_derived_from_identity_when_rows_garbled():
+    """New policy (analyst-grade): when the net_income identity fails, the tax
+    is DERIVED from the two verified anchors (NI − pretax) and FLAGGED —
+    better than keeping a garbled row, worse than hiding the problem."""
     data = _tax_bridge_data(ni_conf=0)
     reconcile(data)
-    # without a multiply-verified NI the garbled capture is honestly kept
-    assert data.get("income_tax_expense", 2022) == pytest.approx(-167_901_733.0, abs=1.0)
+    tax = data.get("income_tax_expense", 2022)
+    assert tax == pytest.approx(-179_626_127.0, abs=1.0)
+    assert any("derived from the identity" in n for n in data.notes)
+
+
+def test_tax_bridge_gate_now_only_governs_candidate_append():
+    # the bridge (candidate append) respects the confidence gate, but the
+    # fallback derivation still corrects the value in the low-confidence case
+    data = _tax_bridge_data(ni_conf=0)
+    reconcile(data)
+    assert data.get("income_tax_expense", 2022) == pytest.approx(-179_626_127.0, abs=1.0)
 
 
 def test_cash_beginning_of_year_row_rejected():
     assert match_field("النقدية وما في حكمها في أول العام") is None
     assert match_field("النقدية وما في حكمها في نهاية الفترة") == "cash"
+
+
+# --- debt definition (audit phase 4: بنوك تسهيلات إنتمانية were missing) --- #
+
+def test_bank_facilities_row_maps_to_short_term_debt():
+    """The BS prints «بنوك تسهيلات إنتمانية ٤,٠٦٣,٤٠٠,١٦٧» — missing this alias
+    shipped Debt/Equity ≈ 0.03 (nonsense) because ST debt captured as None."""
+    assert match_field("بنوك تسهيلات إنتمانية") == "short_term_debt"
+    assert match_field("تسهيلات بنكية") == "short_term_debt"
+
+
+def test_current_portion_of_lt_loans_maps_to_short_term():
+    assert match_field("أقساط قروض طويلة الأجل مستحقة السداد خلال عام") == "short_term_debt"
+    # while the LT loans row itself stays long-term
+    assert match_field("قروض طويلة الأجل") == "long_term_debt"

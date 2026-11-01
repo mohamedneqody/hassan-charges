@@ -84,7 +84,9 @@ def run_pipeline(file_name: str, raw: bytes, company: str, progress_cb=None, pag
             company_hint=cached.get("company_hint"),
             confidence={f: {int(y): int(l) for y, l in by_year.items()}
                         for f, by_year in (cached.get("confidence") or {}).items()},
+            notes_text={int(k): v for k, v in (cached.get("notes_text") or {}).items()},
         )
+        data.field_sources = cached.get("field_sources") or {}
         data.notes.append(
             "⚡ Loaded from the local cache — no API calls were spent. "
             "(Use «مسح الكاش المحلي» in the sidebar to re-extract fresh.)"
@@ -101,9 +103,14 @@ def run_pipeline(file_name: str, raw: bytes, company: str, progress_cb=None, pag
                 "currency_hint": data.currency_hint,
                 "company_hint": data.company_hint,
                 "confidence": data.confidence,
+                "notes_text": data.notes_text,
+                "field_sources": getattr(data, "field_sources", {}),
             })
-        except Exception:
-            pass  # caching must never break the pipeline
+        except Exception as exc:
+            # caching must never break the pipeline — but the failure is no
+            # longer silent (a 2022 cache file was once missing for sessions
+            # without any clue why).
+            data.notes.append(f"cache store skipped: {type(exc).__name__}: {exc}")
 
     # The name printed inside the document beats the file name (the applied
     # study needs the real company identity: شركة … as the disclosure prints it).
@@ -159,6 +166,8 @@ def run_pipeline(file_name: str, raw: bytes, company: str, progress_cb=None, pag
         "metric_years_available": data.years,
         "currency_hint": data.currency_hint,
         "confidence": data.confidence,
+        "notes_text": data.notes_text,
+        "field_sources": getattr(data, "field_sources", {}),
     }
 
 
@@ -167,6 +176,10 @@ def build_gemini_payload(results: dict, currency: str = "$") -> dict:
     notes = list(results["notes"])
     for m in (results["prev_metrics"], results["curr_metrics"]):
         notes.extend(m.notes.values())
+
+    from src.analysis.notes_rag import build_notes_digest
+
+    notes_highlights = build_notes_digest(results.get("notes_text") or {})
 
     ordered_rows = list(results["growth_rows"]) + list(results["rows"])
     metrics = []
@@ -182,4 +195,5 @@ def build_gemini_payload(results: dict, currency: str = "$") -> dict:
         metrics=metrics,
         missing_data=results["missing"],
         extraction_notes=notes,
+        notes_highlights=notes_highlights,
     )

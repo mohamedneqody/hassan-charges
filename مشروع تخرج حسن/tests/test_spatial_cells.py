@@ -1,0 +1,179 @@
+# -*- coding: utf-8 -*-
+"""Spatial cell extraction + accounting-interpretation tests.
+
+No Indra needed: geometry is tested with synthetic LineBox objects, the
+negative rules and the p6 bridge through the production normalizer, and the
+printed-identity numbers from the independent audit of page 6.
+"""
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from src.extraction.normalizer import (  # noqa: E402
+    FinancialData, build_decision_log, match_field, reconcile,
+)
+from src.extraction.spatial_cells import (  # noqa: E402
+    LineBox, find_year_columns, parse_number_tokens,
+)
+
+
+# ── Negative field matching (الفصل بين البنود المتشابهة) ────────────────────
+
+def test_activity_profit_is_not_net_income_and_vice_versa():
+    assert match_field("صافي أرباح النشاط") == "net_activity_profit"
+    assert match_field("صافى ارباح النشاط") == "net_activity_profit"
+    # the pre-bridge subtotal must NEVER feed net income or pretax
+    assert match_field("صافي أرباح النشاط") != "net_income"
+    assert match_field("صافي أرباح العام") == "net_income"
+    assert match_field("صافى أرباح العام قبل ضريبة الدخل") == "pretax_income"
+    assert match_field("صافي أرباح العام قبل ضريبة الدخل") != "net_activity_profit"
+
+
+def test_total_vs_current_liabilities_separated():
+    assert match_field("إجمالي الالتزامات") == "total_liabilities"
+    assert match_field("الالتزامات المتداولة") == "current_liabilities"
+    assert match_field("اجمالي الالتزامات المتداولة") == "current_liabilities"
+
+
+def test_installments_row_never_long_term_debt():
+    # «أقساط قروض طويلة الأجل مستحقة السداد خلال عام» carries the LT words
+    # but is the CURRENT portion (a live run shipped it as long_term_debt).
+    assert match_field("أقساط قروض طويلة الأجل مستحقة السداد خلال عام") \
+        == "current_portion_lt_debt"
+    assert match_field("قروض طويلة الأجل") == "long_term_debt"
+
+
+def test_overdraft_row_never_bank_facilities():
+    # «بنوك - سحب على المكشوف» is its own line, outside the printed
+    # borrowings definition (facilities + installments + loans).
+    assert match_field("بنوك - سحب على المكشوف") is None
+    assert match_field("بنوك تسهيلات إنتمانية") == "short_term_debt"
+
+
+def test_deferred_tax_never_income_tax_and_other_revenue_never_sales():
+    assert match_field("ضريبة الدخل المؤجلة") is None
+    assert match_field("ضريبة الدخل") == "income_tax_expense"
+    assert match_field("إيرادات التشغيل الأخرى") is None
+    assert match_field("المبيعات (بالصافي)") == "revenue"
+
+
+# ── The p6 printed bridge (الجسر المطبوع) ───────────────────────────────────
+
+def _mk(rows):
+    d = FinancialData()
+    for f, y, v in rows:
+        d.values.setdefault(f, {})[y] = v
+        d.candidates.setdefault(f, {}).setdefault(y, []).append((v, 0))
+    return d
+
+
+def test_p6_bridge_activity_minus_financing_plus_dividends():
+    # Printed identity audited on page 6: 1,257,960,603 − 771,597,390
+    # + 750,000,000 = 1,236,363,213. The difference to net income is the
+    # financing + dividends + tax bridge — NOT a non-controlling interest.
+    d = _mk([
+        ("net_activity_profit", 2022, 1_257_960_603.0),
+        ("interest_expense", 2022, -771_597_390.0),
+        ("dividends_from_subsidiaries", 2022, 750_000_000.0),
+    ])
+    reconcile(d)
+    got = d.get("pretax_income", 2022)
+    assert got is not None, "the p6 bridge did not fire"
+    assert abs(got - 1_236_363_213.0) <= 1.0
+    assert ("pretax_income", 2022) in d.derived, "bridge must be declared"
+
+
+def test_p6_bridge_never_overwrites_a_direct_capture():
+    d = _mk([
+        ("pretax_income", 2022, 1_236_363_213.0),
+        ("net_activity_profit", 2022, 1_257_960_603.0),
+        ("interest_expense", 2022, -771_597_390.0),
+        ("dividends_from_subsidiaries", 2022, 750_000_000.0),
+    ])
+    before = d.get("pretax_income", 2022)
+    reconcile(d)
+    assert d.get("pretax_income", 2022) == before
+    assert ("pretax_income", 2022) not in d.derived
+
+
+# ── Year columns from REAL headers (بلا افتراض جهة السنة الحالية) ───────────
+
+def _ln(x0, y0, x1, y1, text, conf=0.9):
+    return LineBox(x0, y0, x1, y1, text, conf)
+
+
+def test_year_columns_follow_their_own_headers_normal_layout():
+    # RTL printed table: 2022 header at rel-x 0.62, 2021 at 0.25.
+    lines = [
+        _ln(560, 100, 680, 140, "2022"),
+        _ln(220, 100, 300, 140, "2021"),
+        _ln(700, 200, 900, 240, "إجمالي الالتزامات"),
+        _ln(560, 200, 680, 240, "9,030,000,000"),
+        _ln(220, 200, 340, 240, "8,250,000,000"),
+    ]
+    cols, detail = find_year_columns(lines, page_w=1000)
+    assert set(cols) == {2022, 2021}, detail
+    # 2022's range must cover its own header center and NOT reach 2021's.
+    assert cols[2022].contains(0.62)
+    assert not cols[2022].contains(0.25)
+    assert cols[2021].contains(0.25)
+    # the numeric line under each header maps to that header's column
+    v22 = [v for v, _ in parse_number_tokens("9,030,000,000")]
+    assert v22 == [9_030_000_000.0]
+
+
+def test_year_columns_survive_a_mirrored_layout():
+    # Mirrored rendering: 2021 sits to the RIGHT of 2022. The column ranges
+    # must follow the headers themselves — not "current year is on the right".
+    lines = [
+        _ln(220, 100, 300, 140, "2021"),   # right side (x larger)
+        _ln(560, 100, 680, 140, "2022"),   # left side
+    ]
+    cols, detail = find_year_columns(lines, page_w=1000)
+    assert set(cols) == {2022, 2021}, detail
+    assert cols[2022].contains(0.62)      # 2022 keeps ITS header position
+    assert cols[2021].contains(0.25)
+    assert detail.startswith("header row")
+
+
+def test_missing_year_header_is_reported_not_assumed():
+    lines = [_ln(560, 100, 680, 140, "2022")]
+    cols, detail = find_year_columns(lines, page_w=1000)
+    assert cols == {}
+    assert "not co-located" in detail or "no pure" in detail
+
+
+# ── The spatial gate in the decision log ────────────────────────────────────
+
+def test_decision_log_downgrades_unconfirmed_year_assignment():
+    d = FinancialData()
+    d.candidates.setdefault("revenue", {})[2022] = [
+        (16_665_919_878.0, 0), (16_665_919_878.0, 0)]
+    d.values.setdefault("revenue", {})[2022] = 16_665_919_878.0
+    d.confidence.setdefault("revenue", {})[2022] = 2
+    # without spatial findings: two agreeing reads → VERIFIED_EXACT
+    log = build_decision_log(d)
+    entry = next(e for e in log if e["field"] == "revenue")
+    assert entry["status"] == "VERIFIED_EXACT"
+    # with an unconfirmed year assignment: downgraded, no EXACT
+    d.spatial_findings = {("revenue", 2022): {
+        "year_assignment": "unconfirmed", "detail": "year header not found"}}
+    log = build_decision_log(d)
+    entry = next(e for e in log if e["field"] == "revenue")
+    assert entry["status"] == "UNVERIFIED"
+    assert "الإسناد المكاني" in entry["reason"]
+    assert entry["spatial"]["year_assignment"] == "unconfirmed"
+
+
+def test_decision_log_keeps_verified_when_spatial_confirmed():
+    d = FinancialData()
+    d.candidates.setdefault("revenue", {})[2022] = [
+        (16_665_919_878.0, 0), (16_665_919_878.0, 0)]
+    d.values.setdefault("revenue", {})[2022] = 16_665_919_878.0
+    d.confidence.setdefault("revenue", {})[2022] = 2
+    d.spatial_findings = {("revenue", 2022): {
+        "year_assignment": "confirmed", "detail": "header row found"}}
+    log = build_decision_log(d)
+    entry = next(e for e in log if e["field"] == "revenue")
+    assert entry["status"] == "VERIFIED_EXACT"

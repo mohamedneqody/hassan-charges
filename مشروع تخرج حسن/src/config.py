@@ -86,6 +86,16 @@ FIELD_ALIASES: dict[str, list[str]] = {
         "صافي ارباح العام", "صافي ربح العام", "صافي ارباح السنه",
         "صافي ربح الفتره", "صافي ربح السنه", "الربح الصافي", "نتيجه السنه",
     ],
+    # ص6 prints this subtotal BEFORE the «يضاف / (يخصم)» bridge:
+    # net activity profit − net financing costs + dividends from
+    # subsidiaries = pretax; pretax − tax = net income. A DIFFERENT line
+    # from net income — it must never feed it (see _FIELD_NEGATIVE_PATTERNS).
+    "net_activity_profit": [
+        "net activity profit", "profit from activities",
+        # Arabic
+        "صافي أرباح النشاط", "صافى ارباح النشاط", "ارباح النشاط",
+        "صافي ربح النشاط",
+    ],
     "total_assets": [
         "total assets", "assets", "sum of total assets",
         # Arabic
@@ -124,9 +134,11 @@ FIELD_ALIASES: dict[str, list[str]] = {
         "bank facilities", "bank borrowings",
         # Arabic
         "قروض قصيره الاجل", "ديون قصيره الاجل",
-        # البنود المطبوعة فعليًا في القوائم المصرية (وُجدت في وثيقة 2022):
+        # البنود المطبوعة فعليًا في القوائم المصرية (وُجدت في وثيقة 2022).
+        # «سحب على المكشوف» ليست هنا عمدًا: سطر مستقل في الميزانية لا يدخل
+        # تعريف الدين المطبوع (تسهيلات + أقساط + قروض = 4.43B without it).
         "بنوك تسهيلات إنتمانية", "بنوك تسهيلات ائتمانية", "تسهيلات بنكية",
-        "تسهيلات بنكيه", "تسهيلات ائتمانية", "سحب على المكشوف",
+        "تسهيلات بنكيه", "تسهيلات ائتمانية",
     ],
     # الجزء المتداول من القروض طويلة الأجل — بند مستقل مطبوع في الميزانية
     # (لا يجوز دمجه مع القروض غير المتداولة ولا إغفاله من إجمالي الدين)
@@ -190,6 +202,8 @@ FIELD_ALIASES: dict[str, list[str]] = {
         # "net cash GENERATED FROM / USED IN operating activities" — the
         # phrasing actually printed on the Ezz Steel 2022 cash-flow page
         "صافي النقديه الناتجه من انشطه التشغيل",
+        # صيغة مطبوعة بديلة (وُجدت في وثيقة 2022): «النائجة» بدل «الناتجة»
+        "النقديه النائجه من انشطه التشغيل",
         "النقديه الناتجه من انشطه التشغيل",
         "النقديه المستخدمه في انشطه التشغيل",
     ],

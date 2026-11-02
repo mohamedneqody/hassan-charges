@@ -1,0 +1,42 @@
+{
+ "A_fullpage": {
+  "label_match": 11,
+  "row_match": 0,
+  "year_match": 0,
+  "cell_bbox": 0,
+  "exact_numeric": 0,
+  "false_match": 0,
+  "unverified": 11,
+  "n": 11
+ },
+ "B_strip": {
+  "label_match": 11,
+  "row_match": 2,
+  "year_match": 0,
+  "cell_bbox": 0,
+  "exact_numeric": 0,
+  "false_match": 11,
+  "unverified": 0,
+  "n": 11
+ },
+ "C_spatial": {
+  "label_match": 11,
+  "row_match": 0,
+  "year_match": 0,
+  "cell_bbox": 0,
+  "exact_numeric": 0,
+  "false_match": 0,
+  "unverified": 11,
+  "n": 11
+ },
+ "C_spatial_declared": {
+  "label_match": 11,
+  "row_match": 4,
+  "year_match": 4,
+  "cell_bbox": 11,
+  "exact_numeric": 4,
+  "false_match": 3,
+  "unverified": 4,
+  "n": 11
+ }
+}

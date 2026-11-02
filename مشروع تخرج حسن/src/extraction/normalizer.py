@@ -97,6 +97,33 @@ _FIELD_NEGATIVE_PATTERNS: dict[str, tuple[str, ...]] = {
     "operating_cash_flow": _CASH_MOVEMENT_PATTERNS,
     "investing_cash_flow": _CASH_MOVEMENT_PATTERNS,
     "financing_cash_flow": _CASH_MOVEMENT_PATTERNS,
+    # ص6 prints BOTH «صافي أرباح النشاط» (the pre-bridge subtotal) and
+    # «صافي أرباح العام» (after the financing / dividends / tax bridge):
+    # activity 1,257,960,603 − financing 771,597,390 + subsidiaries'
+    # dividends 750,000,000 = pretax 1,236,363,213; pretax − tax
+    # 179,626,127 = net income 1,056,737,086. Mixing the rows is a
+    # 200M-class error — hard veto both ways. No non-controlling-interest
+    # field exists in the standalone statements and none is created.
+    "net_income": ("النشاط", "يضاف"),
+    "pretax_income": ("النشاط", "يضاف"),
+    "net_activity_profit": ("العام", "السنه", "قبل ضريبه", "قبل الضريبه",
+                            "يضاف", "يخصم"),
+    # «إجمالي الالتزامات» (the balance-sheet total) vs «الالتزامات
+    # المتداولة» (its current slice) — never feed one to the other.
+    "total_liabilities": ("المتداوله",),
+    "current_liabilities": ("غير المتداوله",),
+    # «أقساط قروض طويلة الأجل مستحقة السداد خلال عام» carries the words
+    # «قروض طويلة الأجل» but is the CURRENT portion — a live run shipped it
+    # as long_term_debt.
+    "long_term_debt": ("اقساط", "أقساط", "مستحقه السداد خلال عام"),
+    # «بنوك - سحب على المكشوف» is its own printed line and is NOT part of
+    # the printed borrowings definition (facilities + installments + loans).
+    "short_term_debt": ("مكشوف",),
+    # «ضريبة الدخل المؤجلة» is not the period's income-tax expense.
+    # (normalize_label unifies ؤ→و: المؤجلة → الموجله)
+    "income_tax_expense": ("موجله",),
+    # «إيرادات التشغيل الأخرى» is not the sales line.
+    "revenue": ("اخري", "أخرى"),
     "cash": ("صافي الزياده", "صافي النقص",
              "التغير في النقديه", "التغيرات في النقديه",
              # «النقدية وما في حكمها في أول العام» holds the PRIOR year's
@@ -629,6 +656,27 @@ def reconcile(data: FinancialData) -> None:
                 data.candidates.setdefault("financial_debt_incl_leases", {}).setdefault(
                     year, []).append((fin, 0))
 
+    # ص6 printed bridge (الجسر المطبوع في قائمة الدخل): pretax =
+    # net activity profit − net financing costs + dividends from
+    # subsidiaries. Printed identity: 1,257,960,603 − 771,597,390 +
+    # 750,000,000 = 1,236,363,213. Derived ONLY when pretax was not
+    # captured, always declared — a derived value never replaces a direct
+    # capture (the 2026-10-31 NI lesson).
+    for year in list(data.years):
+        if data.get("pretax_income", year) is not None:
+            continue
+        activity = data.get("net_activity_profit", year)
+        financing = data.get("interest_expense", year)
+        dividends = data.get("dividends_from_subsidiaries", year)
+        if None not in (activity, financing, dividends):
+            pretax = activity - abs(financing) + dividends
+            data.values.setdefault("pretax_income", {})[year] = pretax
+            data.derived[("pretax_income", year)] = (
+                "صافي أرباح النشاط − صافي التكاليف التمويلية "
+                "+ توزيعات أرباح من شركات تابعة")
+            data.candidates.setdefault("pretax_income", {}).setdefault(
+                year, []).append((pretax, 0))
+
 
 # ── Verification Decision Log (سجل قرارات التحقق) ────────────────────────────
 # One record per captured field/year: every competing read, the accounting and
@@ -690,6 +738,19 @@ def build_decision_log(data: FinancialData) -> list[dict]:
                 status, reason = "UNVERIFIED", "قراءتان بلا تحقق مستقل حاسم"
             else:
                 status, reason = "UNVERIFIED", "قراءة واحدة بلا تحقق مستقل"
+            # Spatial gate (بوابة الإسناد المكاني): when the spatial layer
+            # ran and could not confirm the year column for this field/year,
+            # a direct capture is downgraded — an unconfirmed column is never
+            # VERIFIED_EXACT and never feeds the ratio engine as documented.
+            spatial = (getattr(data, "spatial_findings", {}) or {}).get(
+                (field_name, year))
+            if spatial and status == "VERIFIED_EXACT" \
+                    and spatial.get("year_assignment") != "confirmed":
+                status = "UNVERIFIED"
+                reason = (
+                    "بوابة الإسناد المكاني: عمود السنة غير مؤكد هندسيًا "
+                    f"({spatial.get('detail', 'لا تحديد')}) — لا تُعتمد "
+                    "القراءة VERIFIED_EXACT ولا تمر للمحرك كموثقة")
             log.append({
                 "field": field_name,
                 "year": year,
@@ -705,5 +766,6 @@ def build_decision_log(data: FinancialData) -> list[dict]:
                 "identity_ok": identity_ok,
                 "status": status,
                 "reason": reason,
+                **({"spatial": spatial} if spatial else {}),
             })
     return log

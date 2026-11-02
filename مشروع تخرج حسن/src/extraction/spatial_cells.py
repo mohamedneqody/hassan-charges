@@ -69,12 +69,42 @@ PROVENANCE_LADDER = ("OCR_READ", "VISUALLY_VERIFIED", "INFERRED",
 
 def mark_visually_verified(cell: "SpatialCell", reviewer: str) -> "SpatialCell":
     """Explicitly upgrade an OCR_READ cell after a human/review pass confirmed
-    the saved crop shows the value. Records who confirmed — the extraction
-    pipeline itself never sets this level."""
+    the saved crop shows the value. Records WHO verified, WHEN, the value
+    before, and the source crop's SHA-256 — any later change to the crop or
+    value voids the review (check with review_is_valid). The extraction
+    pipeline itself never sets this level; OCR/Gemini/arithmetic cannot
+    self-award it."""
+    import hashlib
+    import time as _time
+
     if cell.provenance == "OCR_READ":
+        crop_sha = (hashlib.sha256(cell.crop_png).hexdigest()[:16]
+                    if cell.crop_png else None)
+        cell.review = {
+            "reviewer": reviewer,
+            "timestamp": _time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "value_before": cell.value,
+            "crop_sha256": crop_sha,
+            "source_type": "OCR",
+            "verification_status_before": cell.status,
+        }
         cell.provenance = "VISUALLY_VERIFIED"
         cell.detail = f"[visually verified by {reviewer}] {cell.detail}"
     return cell
+
+
+def review_is_valid(cell: "SpatialCell") -> bool:
+    """The visual review holds only while the reviewed crop (and its value)
+    are unchanged — a new crop or a different value voids it."""
+    import hashlib
+
+    rev = getattr(cell, "review", None)
+    if not rev:
+        return False
+    if cell.crop_png is None:
+        return rev.get("crop_sha256") is None
+    return (hashlib.sha256(cell.crop_png).hexdigest()[:16]
+            == rev.get("crop_sha256"))
 
 
 @dataclass
@@ -117,8 +147,11 @@ class SpatialCell:
     year: int
     status: str
     detail: str = ""
-    provenance: str = "UNVERIFIED"   # OCR_READ | INFERRED | UNREADABLE | UNVERIFIED
-    year_source: str = "none"        # printed_dates | declared_convention | none
+    provenance: str = "UNVERIFIED"   # OCR_READ | VISUALLY_VERIFIED | INFERRED | UNREADABLE | UNVERIFIED
+    source_type: str = "OCR"         # OCR | GEOMETRY | DERIVED — origin, not quality
+    confidence: str = "low"          # low | medium | high — set with status below
+    year_source: str = "none"        # PRINTED_YEAR_READ | YEAR_INFERRED | YEAR_UNVERIFIED
+    review: dict | None = None
     label_text: str = ""
     label_score: int = 0
     label_box_rel: list = field(default_factory=list)
@@ -485,14 +518,32 @@ def _crop(png: bytes, x0r: float, y0r: float, x1r: float, y1r: float) -> bytes |
     return out.tobytes() if ok else None
 
 
+def select_candidate(cands: list[tuple[float, str, str, float]]) -> tuple[float, str]:
+    """GT-free candidate scoring. cands: (value, token, source, x_offset).
+    Score = digit-completeness first (truncated OCR garbles lose digits —
+    the most COMPLETE read of the SAME cell region wins), then source
+    priority (focused crop read above the full-page line), then spatial fit
+    to the column center. Ties keep the first. The runner-up is never
+    discarded — the caller records CONFLICT when distinct candidates remain.
+    No ground truth is consulted at extraction time."""
+    def score(c):
+        v, tok, source, off = c
+        digits = sum(ch.isdigit() for ch in tok)
+        src_rank = 2 if source.startswith("crop") else 1
+        return (digits, src_rank, -abs(off))
+    best = max(cands, key=score)
+    return best[0], best[2]
+
+
 def extract_spatial_cell(conv, png: bytes, field: str, year: int,
                          columns: dict[int, YearColumn] | None = None,
                          columns_source: str = "year_headers") -> SpatialCell:
     """One field/year cell by geometry: label row (production rules) ∩ year
-    column. Columns come from the printed year headers by default; callers
-    may pass `columns` explicitly (e.g. currency-title columns + a DECLARED
-    year order) — `columns_source` is then recorded verbatim in the result
-    detail so a declared convention is never silent."""
+    column. Label rows are TRIALED longest-first until one yields candidates
+    (a section header shares the words of the total row below it); the crop
+    is re-read across enhancement variants; candidates are scored GT-free by
+    digit completeness → source priority → spatial fit; a MULTI_ROW doubt
+    survives resolution and is never promoted to VERIFIED."""
     cell = SpatialCell(field=field, year=year, status=STATUS_NO_COLUMN)
     page_w, page_h, lines = read_page_lines(conv, png)
     if not lines:
@@ -507,106 +558,132 @@ def extract_spatial_cell(conv, png: bytes, field: str, year: int,
             cols, col_detail = find_year_columns(lines, page_w)
     else:
         cols, col_detail = columns, f"columns provided ({columns_source})"
+
     rows, _score = find_label_rows(lines, field)
     if not rows:
         cell.status = STATUS_NO_ROW
         cell.detail = f"no line maps to '{field}' ({col_detail})"
         return cell
     if len(rows) > 1:
-        cell.status = STATUS_MULTI_ROW
-        cell.detail = f"{len(rows)} rows map to '{field}' — kept for review"
-    label = rows[0]
-    cell.label_text = label.text[:120]
-    cell.label_box_rel = [
-        label.x0 / page_w, label.y0 / page_h, label.x1 / page_w, label.y1 / page_h,
-    ]
+        cell.detail = f"{len(rows)} rows map to '{field}'"
+    # trial order: the longest label text first — «إجمالي ضريبة الدخل عن
+    # العام» is more specific than the «ضريبة الدخل» section header
+    rows = sorted(rows, key=lambda ln: -len(ln.text or ""))
+    cell.year_source = ("printed_dates" if "dates" in (columns_source or "")
+                        else "declared_convention" if columns is not None
+                        else "year_headers")
 
-    if year not in cols:
+    from src.extraction.local_ocr import _page_markdown
+
+    multi = len(rows) > 1
+    trials = []
+    for ri, label in enumerate(rows):
+        band = (label.y0 - 0.45 * label.height, label.y1 + 0.45 * label.height)
+        detection: list[tuple[float, str, str, float]] = []
+        for ln in lines:
+            if not (band[0] <= ln.cy <= band[1]) or ln is label:
+                continue
+            cx_rel = ln.cx / page_w
+            if year in cols and cols[year].contains(cx_rel):
+                detection += [(v, t, "line", ln.cx / page_w - cols[year].header_cx)
+                              for v, t in parse_number_tokens(ln.text)]
+        detection = [d for d in detection if abs(d[0]) >= 1000]
+        crop_png = None
+        crop_vals: list[tuple[float, str, str, float]] = []
+        if year in cols:
+            col = cols[year]
+            x0r, x1r = max(col.x0 - 0.01, 0.0), min(col.x1 + 0.01, 1.0)
+            y0r, y1r = max(band[0], 0.0) / page_h, min(band[1], page_h) / page_h
+            crop_png = _crop(png, x0r, y0r, x1r, y1r)
+            if crop_png is not None:
+                # enhancement variants: EVERY variant contributes candidates —
+                # an early garbled orig read must not mask a complete up3 read
+                for vname, variant in enhance_variants(crop_png):
+                    txt = _page_markdown(conv, variant) or ""
+                    crop_vals += [(v, t, f"crop:{vname}", 0.0)
+                                  for v, t in parse_number_tokens(txt)
+                                  if abs(v) >= 1000]
+        trials.append({"label": label, "detection": detection,
+                       "crop": crop_vals, "crop_png": crop_png})
+        if detection or crop_vals:
+            break  # the most specific row that actually holds a value wins
+
+    productive = [t for t in trials if t["detection"] or t["crop"]]
+    if not productive:
+        cell.status = STATUS_UNREADABLE
+        cell.detail = (f"no number in any of {len(trials)} label rows' "
+                       f"row∩column intersections ({col_detail})")
+        return cell
+    pick = productive[0]
+    label = pick["label"]
+    cell.label_text = label.text[:120]
+    cell.label_box_rel = [label.x0 / page_w, label.y0 / page_h,
+                          label.x1 / page_w, label.y1 / page_h]
+    detection = pick["detection"]
+    cell.detection_values = [(v, t) for v, t, _s, _o in detection]
+    cell.crop_values = [(v, t) for v, t, _s, _o in pick["crop"]]
+    col = cols.get(year) if year in cols else None
+    cell.column_rel = [col.x0, col.x1] if col else []
+    band = (label.y0 - 0.45 * label.height, label.y1 + 0.45 * label.height)
+    cell.cell_bbox_rel = [max(col.x0 - 0.01, 0.0) if col else 0.0,
+                          max(band[0], 0.0) / page_h,
+                          min(col.x1 + 0.01, 1.0) if col else 1.0,
+                          min(band[1], page_h) / page_h]
+    if col is None:
         cell.status = STATUS_NO_YEAR
         cell.detail = f"year {year} header not found ({col_detail})"
         return cell
-    col = cols[year]
-    cell.column_rel = [col.x0, col.x1]
+    if pick["crop_png"] is not None:
+        cell.crop_png = pick["crop_png"]
 
-    # Row y-band: the label line ± half its height — values share the SAME
-    # visual row; a wider band bleeds into the adjacent printed rows.
-    band = (label.y0 - 0.45 * label.height, label.y1 + 0.45 * label.height)
-    detection: list[tuple[float, str]] = []
-    for ln in lines:
-        if not (band[0] <= ln.cy <= band[1]):
-            continue
-        cx_rel = ln.cx / page_w
-        if col.contains(cx_rel):
-            detection += parse_number_tokens(ln.text)
-    # note references like (19) are < 1000 — dropped like everywhere else
-    # (abs: accounting negatives like (179,626,127) must survive)
-    detection = [(v, t) for v, t in detection if abs(v) >= 1000]
-    cell.detection_values = detection
-
-    # Cell crop = row band ∩ column range (relative), then one focused read.
-    x0r, x1r = max(col.x0 - 0.01, 0.0), min(col.x1 + 0.01, 1.0)
-    y0r, y1r = max(band[0], 0.0) / page_h, min(band[1], page_h) / page_h
-    cell.cell_bbox_rel = [x0r, y0r, x1r, y1r]
-    crop = _crop(png, x0r, y0r, x1r, y1r)
-    cell.crop_png = crop
-    if crop is not None:
-        from src.extraction.local_ocr import _page_markdown
-
-        md = _page_markdown(conv, crop) or ""
-        cell.crop_values = [(v, t) for v, t in parse_number_tokens(md)
-                            if abs(v) >= 1000]
-
-    # MULTI_ROW (overlapping/duplicate label rows) is a STRUCTURAL doubt:
-    # it survives value resolution — the cell is never VERIFIED while two
-    # rows claim the same field.
-    multi = cell.status == STATUS_MULTI_ROW
-    all_vals = [v for v, _ in detection] + [v for v, _ in cell.crop_values]
+    all_c = detection + pick["crop"]
+    all_vals = [v for v, _t, _s, _o in all_c]
     distinct = []
     for v in all_vals:
         if not any(abs(v - d) <= max(1.0, 1e-6 * abs(v)) for d in distinct):
             distinct.append(v)
+    crop_distinct = []
+    for v, _t, _s, _o in pick["crop"]:
+        if not any(abs(v - d) <= max(1.0, 1e-6 * abs(v)) for d in crop_distinct):
+            crop_distinct.append(v)
     if not all_vals:
         cell.status = STATUS_UNREADABLE
         cell.detail = "no number in the row∩column intersection"
         return cell
-    # The FOCUSED crop read is the purpose-built second read — when it is
-    # unambiguous among itself, it is the final candidate; a disagreement
-    # with the full-page detection keeps CONFLICT with both recorded.
-    crop_distinct = []
-    for v, _t in cell.crop_values:
-        if not any(abs(v - d) <= max(1.0, 1e-6 * abs(v)) for d in crop_distinct):
-            crop_distinct.append(v)
-    if len(crop_distinct) == 1:
-        cell.value = crop_distinct[0]
-    else:
-        cell.value = distinct[0]
-    if multi:
-        cell.status = STATUS_MULTI_ROW
-        cell.provenance = "UNVERIFIED"
-        cell.detail = f"MULTI_ROW kept after resolution: {cell.detail}"[:180]
-        return cell
-    if len(crop_distinct) == 1 and len(distinct) == 1 and detection and cell.crop_values:
+
+    cell.value, src = select_candidate(all_c)
+    if len(distinct) == 1 and detection and pick["crop"]:
         cell.status = STATUS_VERIFIED
-        cell.detail = f"detection + crop read agree on {distinct[0]:,.0f}"
+        cell.detail = f"detection + crop read agree on {cell.value:,.0f}"
     elif len(distinct) == 1:
         cell.status = STATUS_CROP_ONLY
-        src = "crop read" if cell.crop_values else "detection pass"
-        cell.detail = f"single source ({src}) = {distinct[0]:,.0f} — needs the live per-cell confirmation"
-    elif len(crop_distinct) == 1:
-        cell.status = STATUS_CONFLICT
-        cell.detail = (f"crop read {crop_distinct[0]:,.0f} vs full-page detection "
-                       f"{[d for d in distinct if abs(d - crop_distinct[0]) > 1][:2]} — both kept")
+        cell.detail = f"single source ({src}) = {cell.value:,.0f} — needs the live per-cell confirmation"
     else:
         cell.status = STATUS_CONFLICT
-        cell.detail = f"{len(distinct)} distinct values in the cell: {distinct[:4]}"
-    # provenance ladder: computed AFTER the final status is settled
+        cell.detail = (f"selected {cell.value:,.0f} [{src}] vs others "
+                       f"{[d for d in distinct if abs(d - cell.value) > 1][:3]} — all kept")
+    if cell.value is not None:
+        sel_digits = sum(ch.isdigit() for ch in str(cell.value).split(".")[0].lstrip("-"))
+        if sel_digits < 6:
+            cell.detail = f"short read ({sel_digits} digits) — suspect truncation; {cell.detail}"[:180]
+            if cell.status in (STATUS_VERIFIED, STATUS_CROP_ONLY):
+                cell.status = STATUS_UNREADABLE if cell.status == STATUS_VERIFIED                     else cell.status
+                cell.provenance = "UNVERIFIED"
+    if multi:
+        # a MULTI_ROW doubt is structural: the value is never VERIFIED while
+        # several rows claim the field, even when one produced the number
+        keep = cell.status
+        cell.status = STATUS_MULTI_ROW
+        cell.detail = f"MULTI_ROW kept after resolution ({keep}): {cell.detail}"[:180]
     cell.provenance = {
         STATUS_VERIFIED: "OCR_READ", STATUS_CROP_ONLY: "OCR_READ",
         STATUS_CONFLICT: "UNVERIFIED",
     }.get(cell.status, "UNVERIFIED")
-    cell.year_source = ("printed_dates" if "dates" in (columns_source or "")
-                        else "declared_convention" if columns is not None
-                        else "year_headers")
+    # three separated dimensions: origin (source_type/provenance),
+    # verification (status), confidence (agreement level)
+    cell.confidence = {"VERIFIED_CANDIDATE": "high", "CROP_ONLY": "medium",
+                       "CONFLICT": "low", "MULTI_ROW": "low",
+                       "UNREADABLE": "low"}.get(cell.status, "low")
     return cell
 
 

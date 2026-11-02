@@ -53,7 +53,12 @@ def read_crop(png: bytes, label: str, year: int | None, what: str,
     result = {
         "raw_text": "", "normalized_value": None, "year": year,
         "read_status": "BLOCKED", "confidence": None,
+        # geometry-documented bbox (from the spatial locator / Indra
+        # Line.box, relative to the ORIGINAL page render) — never overwritten
+        # by the model; whatever the MODEL proposes goes to model_bbox.
         "bbox": list(bbox) if bbox else None,
+        "bbox_source": "geometry" if bbox else None,
+        "model_bbox": None,
         "evidence_reference": "", "model_name": model or GEMINI_MODEL,
         "notes": "", "latency_ms": None, "attempts": 0, "failure": "",
         "usage": None,  # token usage captured from the response when present
@@ -146,7 +151,10 @@ def _validate(result: dict, text: str, label: str, what: str) -> dict:
     conf = data.get("confidence")
     result["confidence"] = float(conf) if isinstance(conf, (int, float)) else None
     if data.get("bbox") is not None and isinstance(data.get("bbox"), list):
-        result["bbox"] = data["bbox"][:4]
+        # the model's proposal is RECORDED, never substituted for geometry
+        result["model_bbox"] = data["bbox"][:4]
+        result["notes"] = (str(data.get("notes") or "") +
+                           " | model proposed a bbox — geometry kept")[:200]
     result["notes"] = str(data.get("notes") or "")[:200]
     return result
 

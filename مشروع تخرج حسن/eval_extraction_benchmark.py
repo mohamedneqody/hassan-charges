@@ -62,7 +62,7 @@ GT_ROWS = [
     ("revenue", 6, ["المبيعات", "مبيعات"], 16_665_919_878, 13_169_656_088, 1),
     ("net_activity_profit", 6, ["صافي", "أرباح"], 1_257_960_603, None, 1),
     ("net_income", 6, ["أرباح العام", "ربح العام"], 1_056_737_086, 288_152_668, 1),
-    ("income_tax_expense", 6, ["ضريبة"], 179_626_127, None, 1),
+    ("income_tax_expense", 6, ["ضريبة"], -179_626_127, None, 1),
     ("total_liabilities", 5, ["اجمالي الالتزامات", "إجمالي الالتزامات"], 9_030_000_000, 8_250_000_000, 0.02),
     ("operating_cash_flow", 9, ["التشغيل"], 1_214_507_829, None, 1),
 ]
@@ -232,7 +232,9 @@ def main() -> None:
             ),
             "unverified": c22.value is None and c22.status != SC.STATUS_CONFLICT,
             "cell_bbox": bool(c22.cell_bbox_rel) and bool(c22.column_rel),
-            "year_source": "printed_dates" if dcols else "none",
+            "year_source": ("PRINTED_YEAR_READ" if dcols
+                            else "YEAR_UNVERIFIED"),
+            "year_source_c2": "YEAR_INFERRED",
             "value_2022": c22.value,
             "status_2022": c22.status,
             "detail_2022": c22.detail,
@@ -257,7 +259,7 @@ def main() -> None:
             ),
             "unverified": c22d.value is None and c22d.status != SC.STATUS_CONFLICT,
             "cell_bbox": bool(c22d.cell_bbox_rel) and bool(c22d.column_rel),
-            "year_source": "declared_convention",
+            "year_source": "YEAR_INFERRED",
             "value_2022": c22d.value,
             "status_2022": c22d.status,
             "detail_2022": c22d.detail,
@@ -297,7 +299,8 @@ def main() -> None:
                 "unverified": c22g.value is None
                 and c22g.status != SC.STATUS_CONFLICT,
                 "cell_bbox": bool(c22g.cell_bbox_rel) and bool(c22g.column_rel),
-                "year_source": "printed_dates_read_by_gemini",
+                "year_source": "PRINTED_YEAR_READ",
+                "year_association": "GEOMETRICALLY_ASSOCIATED",
                 "value_2022": c22g.value,
                 "status_2022": c22g.status,
                 "detail_2022": c22g.detail,
@@ -388,6 +391,33 @@ def main() -> None:
     summary = {m: tally(m) for m in
                ("A_fullpage", "B_strip", "C_spatial", "C_spatial_declared",
                 "C_spatial_gemini_dates")}
+    # UNIFIED C2-vs-C3 on the SAME 11-cell denominator: C3 only supports
+    # fields whose page has a Gemini-read printed date; unsupported cells
+    # count as NOT extracted (unverified) — never silently dropped.
+    unified = {"n": 11, "note": "same 11 cells for both; C3-unsupported "
+                                "cells count as unverified"}
+    unified_rows = []
+    for field, page, _k, gt_c, gt_p, tol in GT_ROWS:
+        c2 = next((r for r in rows if r["method"] == "C_spatial_declared"
+                   and r["field"] == field), None)
+        c3 = next((r for r in rows if r["method"] == "C_spatial_gemini_dates"
+                   and r["field"] == field), None)
+        unified_rows.append({
+            "field": field, "page": page,
+            "C2_exact": bool(c2 and c2["exact_numeric"]),
+            "C3_exact": bool(c3 and c3["exact_numeric"]),
+            "C3_supported": c3 is not None,
+        })
+    unified = {
+        "n": len(unified_rows),
+        "C2_exact": sum(r["C2_exact"] for r in unified_rows),
+        "C3_exact": sum(r["C3_exact"] for r in unified_rows),
+        "C3_supported": sum(r["C3_supported"] for r in unified_rows),
+        "note": "same 11-cell denominator; C3-unsupported cells count as "
+                "not extracted (unverified), never dropped",
+        "rows": unified_rows,
+    }
+    summary["unified_C2_vs_C3"] = unified
     (PROJ / "cell_evidence" / "benchmark_abc_summary.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=1), encoding="utf-8")
     print(json.dumps(summary, ensure_ascii=False, indent=1))

@@ -60,6 +60,7 @@ _SORTED_ALIASES = sorted(_ALIAS_LOOKUP, key=len, reverse=True)
 # Whole-word tokens that mark a DERIVED line (margins, growth, per-share, ...).
 # Those are computed by the system itself, so source rows must not override them.
 _DERIVED_TOKENS = {
+    "سهم", "النصيب",
     "growth", "margin", "ratio", "change", "increase", "decrease",
     "percent", "percentage", "eps", "roe", "roa", "roi", "cagr",
     "per", "share", "shares", "vs", "variance", "variation", "ebitda",
@@ -110,7 +111,7 @@ _FIELD_NEGATIVE_PATTERNS: dict[str, tuple[str, ...]] = {
                             "يضاف", "يخصم"),
     # «إجمالي الالتزامات» (the balance-sheet total) vs «الالتزامات
     # المتداولة» (its current slice) — never feed one to the other.
-    "total_liabilities": ("المتداوله",),
+    "total_liabilities": ("المتداوله", "غير متداوله", "الغير متداوله"),
     "current_liabilities": ("غير المتداوله",),
     # «أقساط قروض طويلة الأجل مستحقة السداد خلال عام» carries the words
     # «قروض طويلة الأجل» but is the CURRENT portion — a live run shipped it
@@ -165,6 +166,8 @@ def match_field(label: object) -> str | None:
     # Only the line carrying «صافي» is the operating total.
     if field == "operating_cash_flow" and "صافي" not in norm and (
         "النقديه الناتجه" in norm or "النقديه النائجه" in norm
+        # normalize_label renders ئ as ي: «النائجة» → «النايجه»
+        or "النقديه النايجه" in norm
     ):
         return None
     # A row that mentions a field's words but is a different line (cash at

@@ -1280,7 +1280,9 @@ def extract_via_vision(
     # impact when unset.
     import os as _os
 
-    if _os.getenv("SPATIAL_SHADOW") == "1" and caller is None:
+    if (_os.getenv("SPATIAL_SHADOW") == "1"
+            or _os.getenv("ENABLE_SPATIAL_EXTRACTION") == "1") \
+            and caller is None:
         try:
             from .local_ocr import indra_available
             from .spatial_cells import extract_spatial_cell

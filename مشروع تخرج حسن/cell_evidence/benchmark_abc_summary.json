@@ -37,26 +37,112 @@
  },
  "C_spatial_declared": {
   "label_match": 11,
-  "row_match": 4,
-  "year_match": 4,
+  "row_match": 8,
+  "year_match": 8,
   "cell_bbox": 11,
-  "exact_numeric": 4,
+  "exact_numeric": 8,
   "false_match": 3,
-  "unverified": 4,
-  "ocr_readability_rate": 0.636,
-  "end_to_end_accuracy": 0.364,
+  "unverified": 0,
+  "ocr_readability_rate": 1.0,
+  "end_to_end_accuracy": 0.727,
   "n": 11
  },
  "C_spatial_gemini_dates": {
   "label_match": 5,
-  "row_match": 2,
-  "year_match": 2,
+  "row_match": 4,
+  "year_match": 4,
   "cell_bbox": 5,
-  "exact_numeric": 2,
-  "false_match": 2,
-  "unverified": 1,
-  "ocr_readability_rate": 0.8,
-  "end_to_end_accuracy": 0.4,
+  "exact_numeric": 4,
+  "false_match": 1,
+  "unverified": 0,
+  "ocr_readability_rate": 1.0,
+  "end_to_end_accuracy": 0.8,
   "n": 5
+ },
+ "unified_C2_vs_C3": {
+  "n": 11,
+  "C2_exact": 8,
+  "C3_exact": 4,
+  "C3_supported": 5,
+  "note": "same 11-cell denominator; C3-unsupported cells count as not extracted (unverified), never dropped",
+  "rows": [
+   {
+    "field": "short_term_debt",
+    "page": 5,
+    "C2_exact": true,
+    "C3_exact": false,
+    "C3_supported": false
+   },
+   {
+    "field": "current_portion_lt_debt",
+    "page": 5,
+    "C2_exact": true,
+    "C3_exact": false,
+    "C3_supported": false
+   },
+   {
+    "field": "long_term_debt",
+    "page": 5,
+    "C2_exact": true,
+    "C3_exact": false,
+    "C3_supported": false
+   },
+   {
+    "field": "non_current_lease_liabilities",
+    "page": 5,
+    "C2_exact": false,
+    "C3_exact": false,
+    "C3_supported": false
+   },
+   {
+    "field": "current_lease_liabilities",
+    "page": 5,
+    "C2_exact": true,
+    "C3_exact": false,
+    "C3_supported": false
+   },
+   {
+    "field": "revenue",
+    "page": 6,
+    "C2_exact": true,
+    "C3_exact": true,
+    "C3_supported": true
+   },
+   {
+    "field": "net_activity_profit",
+    "page": 6,
+    "C2_exact": true,
+    "C3_exact": true,
+    "C3_supported": true
+   },
+   {
+    "field": "net_income",
+    "page": 6,
+    "C2_exact": true,
+    "C3_exact": true,
+    "C3_supported": true
+   },
+   {
+    "field": "income_tax_expense",
+    "page": 6,
+    "C2_exact": true,
+    "C3_exact": true,
+    "C3_supported": true
+   },
+   {
+    "field": "total_liabilities",
+    "page": 5,
+    "C2_exact": false,
+    "C3_exact": false,
+    "C3_supported": false
+   },
+   {
+    "field": "operating_cash_flow",
+    "page": 9,
+    "C2_exact": false,
+    "C3_exact": false,
+    "C3_supported": true
+   }
+  ]
  }
 }

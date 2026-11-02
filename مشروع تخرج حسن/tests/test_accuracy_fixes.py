@@ -8,7 +8,7 @@ import json
 
 import pytest
 
-from src.extraction.normalizer import match_field
+from src.extraction.normalizer import build_decision_log, match_field
 from src.extraction.vision_ocr import _loads_relaxed
 
 
@@ -172,7 +172,52 @@ def test_bank_facilities_row_maps_to_short_term_debt():
     assert match_field("تسهيلات بنكية") == "short_term_debt"
 
 
-def test_current_portion_of_lt_loans_maps_to_short_term():
-    assert match_field("أقساط قروض طويلة الأجل مستحقة السداد خلال عام") == "short_term_debt"
+def test_current_portion_maps_to_its_own_field():
+    """بند مستقل مطبوع — لا يُدمج مع القروض غير المتداولة ولا مع التسهيلات"""
+    assert match_field("أقساط قروض طويلة الأجل مستحقة السداد خلال عام") == "current_portion_lt_debt"
     # while the LT loans row itself stays long-term
     assert match_field("قروض طويلة الأجل") == "long_term_debt"
+
+
+# --- debt mapping (التعريفان المعتمدان: بنود بدون تأجير / دين تمويلي شامل) --- #
+
+def test_current_portion_maps_to_its_own_field_not_lt_or_double_count():
+    assert match_field("أقساط قروض طويلة الأجل مستحقة السداد خلال عام") == "current_portion_lt_debt"
+    # وقراءة سطر القروض غير المتداولة تبقى طويلة الأجل — لا عد مزدوج
+    assert match_field("قروض طويلة الأجل") == "long_term_debt"
+
+
+def test_lease_rows_map_to_distinct_fields():
+    assert match_field("التزامات تأجير تمويلي") == "non_current_lease_liabilities"
+    assert match_field("التزامات تأجير تمويلي مستحقة السداد خلال عام") == "current_lease_liabilities"
+
+
+def test_debt_mapping_computes_both_totals_without_double_count():
+    data = merge_parsed([{2022: {
+        "short_term_debt": 4_063_400_167.0,          # بنوك تسهيلات إنتمانية
+        "current_portion_lt_debt": 299_320_963.0,     # أقساط القروض المتداولة
+        "long_term_debt": 363_974_291.0,              # القروض غير المتداولة
+        "non_current_lease_liabilities": 209_154_419.0,
+        "current_lease_liabilities": 83_301_722.0,
+        "equity": 6_938_330_481.0,
+        "operating_cash_flow": 1_214_507_839.0,
+    }}], [])
+    reconcile(data)
+    borrowings = data.get("borrowings_excl_leases", 2022)
+    fin = data.get("financial_debt_incl_leases", 2022)
+    # 4,063,400,167 + 299,320,963 + 363,974,291 = 4,726,695,421 (قروض وتسهيلات — ص23)
+    assert borrowings == pytest.approx(4_726_695_421.0, abs=1.0)
+    # + 209,154,419 + 83,301,722 = 5,019,151,562 (شامل التأجير التمويلي)
+    assert fin == pytest.approx(5_019_151_562.0, abs=1.0)
+    # لا عد مزدوج: الأقساط مرة واحدة، والتأجير خارج البنود بدون تأجير
+    assert data.get("total_debt", 2022) == pytest.approx(4_726_695_421.0, abs=1.0)
+    log = {d["field"]: d for d in build_decision_log(data)}
+    assert log["borrowings_excl_leases"]["status"] == "VERIFIED_DERIVED"
+
+
+def test_debt_mapping_partial_inputs_still_derive_borrowings():
+    """وثيقة بلا بند أقساط: الإجمالي = تسهيلات + قروض غير متداولة (بلا فشل)"""
+    data = merge_parsed([{2022: {"short_term_debt": 1_000.0, "long_term_debt": 2_000.0}}], [])
+    reconcile(data)
+    assert data.get("borrowings_excl_leases", 2022) == pytest.approx(3_000.0, abs=1.0)
+    assert data.get("total_debt", 2022) == pytest.approx(3_000.0, abs=1.0)

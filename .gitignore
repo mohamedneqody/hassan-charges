@@ -11,6 +11,5 @@ cache/
 logs/
 *.log
 *.mp4
-eval_pages/
 node_modules/
 .package-lock.json

@@ -26,7 +26,10 @@ from src.extraction.normalizer import (
 
 VISION_BATCH_SIZE = 4       # pages per Gemini call — fewer calls fit the free
                             # tier (20 req/day/model/key) and halve wall time
-VISION_TOTAL_BUDGET = 720   # seconds — hard cap on the whole vision sweep (raised: the 2-of-3 third opinion once ate 4.5 min and starved CF verification)
+VISION_TOTAL_BUDGET = 720   # seconds — hard cap on the whole vision sweep
+# Version tag for the extraction prompts + pipeline (logged in every result
+# and in the Verification Decision Log — reproducibility requirement).
+VISION_PROMPT_VERSION = "sweep-v2/verify-v4(10-fields+dual-variant+cell-crop)/cf-v3(dual-variant)"   # seconds — hard cap on the whole vision sweep (raised: the 2-of-3 third opinion once ate 4.5 min and starved CF verification)
 VISION_CALL_TIMEOUT = 45_000  # ms — a hanging request must not eat the budget
 VISION_WORKERS = 5          # concurrent batches — 14 key/model pairs absorb this
 VISION_MAX_PAGES = 40       # hard cap so a huge scan cannot drain the pool
@@ -1269,6 +1272,65 @@ def extract_via_vision(
     # Provenance: which page each field was captured from — surfaces in the
     # UI and lets the pipeline flag balance fields sourced from notes pages.
     data.field_sources = field_sources
+    # ── Cell-crop verification (الخانة المقتطعة) ──
+    # Core fields whose decision-log status is CONFLICT or UNVERIFIED get ONE
+    # focused strip re-read each (max 2 per run). Confidence-UPGRADE only: a
+    # disagreeing crop read is RECORDED as CONFLICT, never auto-applied — per
+    # mandate: no forced replacement, unresolved conflict stays visible.
+    if LOCAL_OCR_ENABLED and caller is None:
+        try:
+            from .normalizer import build_decision_log
+            from src.analysis.comparison import LABELS_AR as _CV_LBL
+
+            _decisions = build_decision_log(data)
+            _CORE = ("net_income", "revenue", "pretax_income", "total_assets",
+                     "total_liabilities", "current_liabilities", "equity")
+            _disputed = [d for d in _decisions
+                         if d["field"] in _CORE
+                         and d["status"] in ("CONFLICT", "UNVERIFIED")]
+            _disputed.sort(key=lambda d: 0 if d["status"] == "CONFLICT" else 1)
+            _spent = 0
+            for d in _disputed:
+                if _spent >= 2:
+                    break
+                _pages = [p for p in d["pages"] if p in selected]
+                if not _pages:
+                    continue
+                _src = pages_png[selected.index(_pages[0])]
+                _strip = _cell_crop_png(_src)
+                _label = _CV_LBL.get(d["field"], d["field"])
+                _prompt = CELL_VERIFY_PROMPT.format(label=_label, field=d["field"])
+                try:
+                    _raw = _call_with_rotation(pool, _prompt, [_strip])
+                    _verified = _parse_verify_json(_raw)
+                except Exception as exc:
+                    if notes is not None:
+                        notes.append(f"Cell verification of {d['field']} failed: {exc}")
+                    continue
+                _spent += 1
+                _by_year = _verified.get(d["field"]) or {}
+                _final = data.get(d["field"], d["year"])
+                _agree = any(
+                    y is not None and _final is not None
+                    and abs(y - _final) <= max(1.0, 1e-6 * abs(_final))
+                    for y in _by_year.values()
+                )
+                if _agree and _final is not None:
+                    data.bump_confidence(d["field"], d["year"], 2)
+                    if notes is not None:
+                        notes.append(
+                            f"✓ Cell-crop re-read confirms {d['field']} in {d['year']} "
+                            f"= {_final:,.0f} (page {_pages[0]}) — VERIFIED_EXACT."
+                        )
+                elif notes is not None:
+                    notes.append(
+                        f"⚠ Cell-crop re-read DISAGREES on {d['field']} in {d['year']}: "
+                        f"crop read {json.dumps(_by_year, ensure_ascii=False)} vs captured "
+                        f"{_final:,.0f} — value kept, status CONFLICT (mandate: no forced "
+                        "replacement).")
+        except Exception:
+            pass  # cell verification is an enhancement — never breaks extraction
+
     data.currency_hint = currency_holder.get("hint")
     data.company_hint = company_holder.get("name") or None
     if LOCAL_OCR_ENABLED and caller is None:

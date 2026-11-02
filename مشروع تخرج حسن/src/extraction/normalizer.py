@@ -232,6 +232,14 @@ class FinancialData:
     # page -> local Indra text of EVERY page (esp. الإيضاحات المتممة) — feeds
     # the notes RAG (search/Q&A) which the table-only sweep never kept.
     notes_text: dict[int, str] = field(default_factory=dict)
+    # Verification Decision Log support — (field, year) -> human-readable note:
+    # which final values were DERIVED or settled by VOTE (never silently).
+    derived: dict = field(default_factory=dict)
+    vote_outcomes: dict = field(default_factory=dict)
+    # (field, year) -> True when the field participated in a SATISFIED
+    # accounting identity — honest metadata: identity-consistent is NOT the
+    # same as independently verified.
+    identity_ok: dict = field(default_factory=dict)
 
     def bump_confidence(self, field_name: str, year: int, level: int) -> None:
         if level > self.confidence.get(field_name, {}).get(year, 0):
@@ -367,7 +375,6 @@ _IDENTITY_GROUPS: list[tuple[str, tuple[tuple[str, int], ...]]] = [
     ("gross_profit", (("revenue", 1), ("cost_of_revenue", -1))),
     ("operating_income", (("gross_profit", 1), ("operating_expenses", -1))),
     ("net_income", (("pretax_income", 1), ("income_tax_expense", -1))),
-    ("total_debt", (("short_term_debt", 1), ("long_term_debt", 1))),
 ]
 
 _TOLERANCE = 0.005  # identities must hold within 0.5%
@@ -418,6 +425,17 @@ def _majority_vote(data: FinancialData) -> None:
             if best_val is None or best_count < 2:
                 continue  # no agreement — keep first-capture semantics
             current = data.values.get(field, {}).get(year)
+            # Record EVERY majority outcome that has a dissenting capture —
+            # even when the winner equals the current value. A live run once
+            # had two digit-close WRONG reads outvote the correct one; the
+            # decision log must preserve that dissent, never fold it away.
+            dissent = [v for v in vals if not _digit_close(v, best_val)]
+            if dissent:
+                data.vote_outcomes[(field, year)] = {
+                    "winner": best_val, "votes": best_count, "total": len(vals),
+                    "replaced": current, "dissent": dissent,
+                    "contested": current is not None and not _digit_close(current, best_val),
+                }
             if current is not None and not _digit_close(current, best_val):
                 data.values.setdefault(field, {})[year] = best_val
                 data.notes.append(
@@ -483,6 +501,9 @@ def reconcile(data: FinancialData) -> None:
                 key = (score, -order_sum)
                 if best_assignment is None or key > best_key:
                     best_assignment, best_key = assignment, key
+            if best_assignment is not None and best_key[0] == 1:
+                for f in group_fields:
+                    data.identity_ok[(f, year)] = True
             if best_assignment is None:
                 continue
             t = best_assignment[target]
@@ -543,6 +564,12 @@ def reconcile(data: FinancialData) -> None:
                             f"accounting identity ({target} = "
                             + " + ".join(c for c, _ in comps) + ")."
                         )
+                        # Decision Log: a value rewritten by reconciliation is
+                        # DERIVED, never silently presented as a direct capture
+                        data.derived[(f, year)] = (
+                            f"identity ({target} = "
+                            + " + ".join(c for c, _ in comps) + ")"
+                        )
                     data.values.setdefault(f, {})[year] = value
                 # downstream groups should see the reconciled value only
                 data.candidates[f][year] = [(value, 0)]
@@ -564,3 +591,119 @@ def reconcile(data: FinancialData) -> None:
                 f"⚠ Sanity check: current assets ({ca:,.0f}) exceed total assets "
                 f"({ta:,.0f}) in {year} — verify the source page."
             )
+
+    # Debt mapping (تعريف الدين) — two explicit definitions, derived and
+    # flagged: borrowings = bank facilities + current portion of LT loans +
+    # non-current LT loans; financial debt adds lease liabilities. A live run
+    # once shipped total_debt = 201M because the bank-facilities row and the
+    # current-portion row had no matching fields.
+    for year in list(data.years):
+        st_d = data.get("short_term_debt", year)
+        cp = data.get("current_portion_lt_debt", year)
+        lt_d = data.get("long_term_debt", year)
+        if st_d is not None and lt_d is not None:
+            # A directly captured total-debt row (e.g. «إجمالي القروض والتسهيلات»)
+            # that disagrees with the component sum is a CONFLICT — logged, and
+            # the COMPONENT SUM wins per the mandate (items beat opaque totals),
+            # with the direct row preserved in the decision log.
+            direct_total = data.get("direct_total_debt", year)
+            if direct_total is not None and abs(direct_total - (st_d + (cp or 0.0) + lt_d)) > max(1.0, 0.005 * direct_total):
+                data.notes.append(
+                    f"⚠ CONFLICT: direct total-debt row ({direct_total:,.0f}) disagrees with "
+                    f"the component sum ({st_d + (cp or 0.0) + lt_d:,.0f}) in {year} — "
+                    "components used; verify the source row.")
+            borrowings = st_d + (cp or 0.0) + lt_d
+            data.values.setdefault("borrowings_excl_leases", {})[year] = borrowings
+            data.derived[("borrowings_excl_leases", year)] = (
+                "تسهيلات بنكية + أقساط قروض متداولة + قروض غير متداولة")
+            data.candidates.setdefault("borrowings_excl_leases", {}).setdefault(
+                year, []).append((borrowings, 0))
+            data.values.setdefault("total_debt", {})[year] = borrowings
+            data.derived[("total_debt", year)] = "borrowings excluding leases"
+            nc_l = data.get("non_current_lease_liabilities", year)
+            c_l = data.get("current_lease_liabilities", year)
+            if nc_l is not None and c_l is not None:
+                fin = borrowings + nc_l + c_l
+                data.values.setdefault("financial_debt_incl_leases", {})[year] = fin
+                data.derived[("financial_debt_incl_leases", year)] = "borrowings + lease liabilities"
+                data.candidates.setdefault("financial_debt_incl_leases", {}).setdefault(
+                    year, []).append((fin, 0))
+
+
+# ── Verification Decision Log (سجل قرارات التحقق) ────────────────────────────
+# One record per captured field/year: every competing read, the accounting and
+# source checks, the final value, and an HONEST status. Derived or contested
+# values are never presented as VERIFIED_EXACT.
+
+DECISION_STATUSES = (
+    "VERIFIED_EXACT",     # ≥2 independent agreeing reads or verified re-read
+    "VERIFIED_DERIVED",   # derived from a verified identity — flagged
+    "CONFLICT",           # competing reads without resolution or verification
+    "UNVERIFIED",         # single capture, no independent confirmation
+    "MISSING",            # nothing captured
+    "NOT_APPLICABLE",     # field not present in this document
+)
+
+
+def build_decision_log(data: FinancialData) -> list[dict]:
+    """One honest record per captured field/year. Status precedence:
+    MISSING → VERIFIED_DERIVED (flagged) → CONFLICT (competing reads without
+    enough verification) → VERIFIED_EXACT (≥2 agreeing reads or verified
+    re-read) → UNVERIFIED (single unconfirmed capture)."""
+    fs = getattr(data, "field_sources", {}) or {}
+    derived = getattr(data, "derived", {}) or {}
+    votes = getattr(data, "vote_outcomes", {}) or {}
+    log = []
+    for field_name, by_year in sorted(data.candidates.items()):
+        for year in sorted(by_year, key=str):
+            cands = [c for c in by_year[year] if c[0] is not None]
+            if not cands:
+                continue
+            values = [v for v, _ in cands]
+            final = data.values.get(field_name, {}).get(year)
+            pages = sorted(set(fs.get(field_name, [])))
+            conf = data.confidence.get(field_name, {}).get(year, 0)
+            distinct = []
+            for v in values:
+                if not any(_digit_close(v, d) for d in distinct):
+                    distinct.append(v)
+            derived_note = derived.get((field_name, year))
+            vote = votes.get((field_name, year))
+            identity_ok = data.identity_ok.get((field_name, year), False)
+            if final is None:
+                status, reason = "MISSING", "لا قيمة معتمدة لهذا الحقل/السنة"
+            elif derived_note:
+                status, reason = "VERIFIED_DERIVED", f"مشتق: {derived_note} — موسوم ولا يُعد قراءة مباشرة"
+            elif len(distinct) >= 2 and conf < 2:
+                status = "CONFLICT"
+                reason = (f"قراءات متضاربة غير محسومة ({len(distinct)} قيمًا مختلفة) "
+                          "والتحقق المستقل لم يحسم — القيمة المعتمدة أول الالتقاط")
+            elif conf >= 2:
+                if vote and vote.get("contested"):
+                    status = "VERIFIED_EXACT"
+                    reason = (f"اتفاق {vote['votes']} قراءات مستقلة بعد تصويت 2-ضد-1 "
+                              f"(قراءة معارضة محفوظة: {vote['replaced']:,.0f})")
+                else:
+                    status = "VERIFIED_EXACT"
+                    reason = f"اتفاق {conf} قراءات/تحقق مستقل"
+            elif len(values) >= 2 and conf >= 1:
+                status, reason = "UNVERIFIED", "قراءتان بلا تحقق مستقل حاسم"
+            else:
+                status, reason = "UNVERIFIED", "قراءة واحدة بلا تحقق مستقل"
+            log.append({
+                "field": field_name,
+                "year": year,
+                "pages": pages,
+                "candidates": (
+                    [f"{v:,.0f}" for v in values]
+                    + ([f"{d:,.0f} (مرفوضة بالتصويت)" for d in vote.get("dissent", [])]
+                       if vote else [])
+                ),
+                "final": final,
+                "distinct_reads": len(distinct),
+                "confidence": conf,
+                "identity_ok": identity_ok,
+                "status": status,
+                "reason": reason,
+            })
+    return log

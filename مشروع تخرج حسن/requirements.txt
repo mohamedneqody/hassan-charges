@@ -13,3 +13,8 @@ google-genai>=1.0
 
 # Optional local pre-layer (speeds up scanned PDFs, zero API cost):
 # pip install indra-ocr==1.1.2   -> set LOCAL_OCR_ENABLED=0 to disable
+
+# ENV PIN (2026-11-01): streamlit 1.65 vendored middleware imports
+# DEFAULT_EXCLUDED_CONTENT_TYPES from starlette.middleware.gzip — removed in
+# starlette 1.7.0 (breaks `streamlit run` entirely). 1.6.0 restores it.
+starlette==1.6.0

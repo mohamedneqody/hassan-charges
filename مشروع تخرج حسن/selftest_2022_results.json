@@ -1,5 +1,5 @@
 {
- "elapsed_s": 524.9,
+ "elapsed_s": 102.1,
  "company": "شركة حديد عز (شركة مساهمة مصرية)",
  "currency_hint": "ج.م",
  "years": [
@@ -10,7 +10,7 @@
  "curr_year": 2022,
  "prev": {
   "revenue": 13169656088.0,
-  "net_income": 288152668.0,
+  "net_income": 288153668.0,
   "operating_cash_flow": 484942852.0,
   "total_assets": 14614683997.0,
   "total_liabilities": 8250997672.0,
@@ -19,16 +19,16 @@
   "equity": 6363686325.0,
   "retained_earnings": 775286560.0,
   "working_capital": -4126537276.0,
-  "fixed_assets": 521471030.0,
+  "fixed_assets": 784689.0,
   "inventory": 906649677.0,
   "accounts_receivable": 691267962.0,
   "cash": 598007850.0,
   "gross_profit": 1197622108.0,
   "pretax_income": 391633505.0,
-  "depreciation_amortization": 38671822.0,
-  "short_term_debt": 2655419.0,
-  "long_term_debt": 663143468.0,
-  "total_debt": 665798887.0,
+  "depreciation_amortization": 49252251.0,
+  "short_term_debt": 186871411.0,
+  "long_term_debt": 93040128.0,
+  "total_debt": 279911539.0,
   "capex": -20108611.0,
   "free_cash_flow": 464834241.0,
   "financing_cash_flow": -345940155.0,
@@ -38,44 +38,44 @@
   "equity_ratio": 0.4354309902496895,
   "financial_leverage": 2.296575168952879,
   "asset_turnover": 0.9011249296052775,
-  "net_margin": 2.188004501215188,
-  "roe": 4.52807780402344,
-  "roa": 1.9716654021335662,
+  "net_margin": 2.188012094427898,
+  "roe": 4.528093518185782,
+  "roa": 1.9716722445668355,
   "current_ratio": 0.4128379854448904
  },
  "curr": {
   "revenue": 16665919878.0,
-  "net_income": 1056737086.0,
+  "net_income": 1057241086.0,
   "operating_cash_flow": 1214507839.0,
-  "total_assets": 15965645960.0,
-  "total_liabilities": 9027315479.0,
+  "total_assets": 15965646460.0,
+  "total_liabilities": 9027315979.0,
   "current_assets": 4248947378.0,
   "current_liabilities": 8306618199.0,
   "equity": 6938330481.0,
   "retained_earnings": 1353388467.0,
   "working_capital": -4057670821.0,
-  "fixed_assets": 495044060.0,
+  "fixed_assets": 146491.0,
   "inventory": 283292828.0,
   "accounts_receivable": 770203387.0,
   "cash": 1804894141.0,
   "gross_profit": 1632142979.0,
   "pretax_income": 1236363213.0,
-  "depreciation_amortization": 39012520.0,
-  "short_term_debt": 4063400167.0,
-  "long_term_debt": 363974291.0,
-  "total_debt": 4427374458.0,
+  "depreciation_amortization": 49044136.0,
+  "short_term_debt": 19995067.0,
+  "long_term_debt": 201143687.0,
+  "total_debt": 221138754.0,
   "capex": -25799279.0,
   "free_cash_flow": 1188708560.0,
   "financing_cash_flow": -727063341.0,
   "investing_cash_flow": 722097212.0,
-  "income_tax_expense": -179626127.0,
-  "debt_ratio": 0.5654212489502053,
-  "equity_ratio": 0.43457875104979465,
-  "financial_leverage": 2.301078912819229,
-  "asset_turnover": 1.0899764588174485,
-  "net_margin": 6.34070662607082,
-  "roe": 15.888373942263383,
-  "roa": 6.911220954685005,
+  "income_tax_expense": -179122127.0,
+  "debt_ratio": 0.5654212625600129,
+  "equity_ratio": 0.43457873743998715,
+  "financial_leverage": 2.3010789848826745,
+  "asset_turnover": 1.08997644099592,
+  "net_margin": 6.3437307615742276,
+  "roe": 15.895951740537893,
+  "roa": 6.914517078137014,
   "current_ratio": 0.5115135035954239
  },
  "rows_count": 53,
@@ -93,24 +93,24 @@
   "Scanned PDF detected (no text layer) — pages were read with AI vision (OpenCV cleanup + Gemini), then validated by accounting identities.",
   "Local OCR triage: 19/29 pages carry table markup — they are read first so the run can stop early.",
   "Currency detected from the document: ج.م",
-  "Vision extraction stopped early after page 18: the core statements were complete (remaining pages are notes).",
+  "Vision batch 15-18 error: AI vision extraction failed (quota exhausted for gemini-3.7-flash on AQ.Ab8…fidA).",
+  "Vision extraction stopped early after page 14: the core statements were complete (remaining pages are notes).",
   "Verifying cash-flow totals by focused re-read of page(s) [9]…",
   "التحقق المركزي من إجماليات الميزانية بإعادة قراءة مركزة للصفحات [5, 6, 7]…",
   "Disagreement on page 5 — resolving with a third read at higher resolution (2-of-3 majority)…",
+  "✓ Resolved by 2-of-3 majority: total_assets in 2021 10,437,895 → 14,614,683,997.",
+  "✓ Resolved by 2-of-3 majority: total_assets in 2022 2,164,257 → 15,965,646,460.",
   "✓ Resolved by 2-of-3 majority: inventory in 2021 128,097,446 → 906,649,677.",
-  "✓ Resolved by 2-of-3 majority: accounts_receivable in 2021 2,687,762 → 691,267,962.",
-  "✓ Resolved by 2-of-3 majority: accounts_receivable in 2022 4,852,019 → 770,203,387.",
+  "✓ Resolved by 2-of-3 majority: accounts_receivable in 2021 477,904,109 → 691,267,962.",
+  "✓ Resolved by 2-of-3 majority: accounts_receivable in 2022 78,935,425 → 770,203,387.",
   "✓ Resolved by 2-of-3 majority: accounts_payable in 2021 258,404,016 → 1,900,777,647.",
   "✓ Resolved by 2-of-3 majority: accounts_payable in 2022 151,047,202 → 2,939,430,800.",
-  "✓ Resolved by 2-of-3 majority: cash in 2021 14,797,803 → 598,007,850.",
-  "✓ Resolved by 2-of-3 majority: cash in 2022 25,258,016 → 1,804,894,141.",
-  "Disagreement on page 6 — resolving with a third read at higher resolution (2-of-3 majority)…",
-  "✓ Resolved by 2-of-3 majority: net_income in 2021 288,153,668 → 288,152,668.",
-  "✓ Resolved by 2-of-3 majority: pretax_income in 2021 391,634,505 → 391,633,505.",
-  "✓ Resolved by focused verify read: net_income in 2021 288,153,668 → 288,152,668.",
-  "⚠ income_tax_expense in 2022 derived from the identity (NI − pretax = -179,626,127) — the printed tax row was garbled; verify against the إجمالي ضريبة الدخل line of the notes.",
-  "Reconciled 'income_tax_expense' in 2022 to -179,626,127 using the accounting identity (net_income = pretax_income + income_tax_expense).",
-  "Reconciled 'income_tax_expense' in 2021 to -103,480,837 using the accounting identity (net_income = pretax_income + income_tax_expense).",
+  "✓ Resolved by 2-of-3 majority: cash in 2021 595,352,431 → 598,007,850.",
+  "Verification of page 6 failed: AI vision extraction failed (quota exhausted for gemini-3.5-flash on AQ.Ab8…vb_Q).",
+  "Verification of page 7 failed: all API key/model pairs are exhausted or unavailable (daily free-tier quota resets after midnight US Pacific).",
+  "Cross-statement majority vote: 'net_income' in 2021 set to 288,153,668 (2 agreeing captures) — replaced a disagreeing capture of 288,152,668.",
+  "Cross-statement majority vote: 'net_income' in 2022 set to 1,057,241,086 (2 agreeing captures) — replaced a disagreeing capture of 1,056,737,086.",
+  "Reconciled 'income_tax_expense' in 2022 to -179,122,127 using the accounting identity (net_income = pretax_income + income_tax_expense).",
   "Notes text captured locally for 29 pages (الإيضاحات صارت قابلة للسؤال في تاب الإيضاحات)."
  ],
  "confidence": {
@@ -134,10 +134,6 @@
    "2021": 2,
    "2022": 2
   },
-  "total_assets": {
-   "2021": 2,
-   "2022": 2
-  },
   "equity": {
    "2021": 2,
    "2022": 2
@@ -146,56 +142,53 @@
    "2022": 2,
    "2021": 2
   },
+  "cash": {
+   "2022": 2,
+   "2021": 2
+  },
+  "total_assets": {
+   "2021": 2,
+   "2022": 2
+  },
   "accounts_receivable": {
-   "2021": 3,
-   "2022": 3
+   "2021": 2,
+   "2022": 2
   },
   "accounts_payable": {
    "2021": 2,
    "2022": 2
-  },
-  "cash": {
-   "2021": 3,
-   "2022": 3
   },
   "revenue": {
    "2021": 2,
    "2022": 2
   },
   "net_income": {
-   "2022": 3,
-   "2021": 3
-  },
-  "pretax_income": {
-   "2022": 2,
-   "2021": 2
-  },
-  "short_term_debt": {
-   "2021": 2
+   "2021": 2,
+   "2022": 2
   }
  },
  "library_records": 0,
  "health": {
-  "total": 61.4,
+  "total": 65.2,
   "label": "مستقر",
   "pillars": {
    "liquidity": 36.7,
-   "leverage": 55.8,
-   "profitability": 78.1,
+   "leverage": 70.9,
+   "profitability": 78.2,
    "cash": 74.3
   }
  },
  "red_flags": [],
  "beneish": {
-  "m_score": -2.46,
+  "m_score": -2.457,
   "zone": "clean",
   "missing": [],
   "components": {
    "DSRI": 0.8804,
    "GMI": 0.9286,
-   "AQI": 1.0048,
+   "AQI": 1.0,
    "SGI": 1.2655,
-   "DEPI": 0.9451,
+   "DEPI": 0.9873,
    "SGAI": 1.1093,
    "LVGI": 0.9985,
    "TATA": -0.0099
@@ -245,7 +238,7 @@
   },
   {
    "key": "dupont",
-   "value": 15.23,
+   "value": 15.24,
    "zone": "",
    "verdict": "محركات العائد على حقوق الملكية ضمن المستويات الاعتيادية",
    "missing": [],
@@ -253,7 +246,7 @@
     "NetMargin": 6.34,
     "AssetTurnover": 1.044,
     "EquityMultiplier": 2.301,
-    "ROE_rebuilt": 15.23
+    "ROE_rebuilt": 15.24
    }
   }
  ],

@@ -56,7 +56,8 @@
   "value_2021": null,
   "label_2022": "بنوك تسهيلات إنتمانية",
   "column_detail": [],
-  "bbox_rel": []
+  "bbox_rel": [],
+  "column_iou_vs_reviewer_gt": 0.954
  },
  {
   "method": "C_spatial_declared",
@@ -83,7 +84,8 @@
    0.5938004750593825,
    0.42978991596638655,
    0.6169675376088677
-  ]
+  ],
+  "column_iou_vs_reviewer_gt": 0.954
  },
  {
   "method": "A_fullpage",
@@ -142,7 +144,8 @@
   "value_2021": null,
   "label_2022": "أقساط قروض طويلة الأجل مستحقة السداد خلال عام",
   "column_detail": [],
-  "bbox_rel": []
+  "bbox_rel": [],
+  "column_iou_vs_reviewer_gt": 0.954
  },
  {
   "method": "C_spatial_declared",
@@ -169,7 +172,8 @@
    0.6075534441805226,
    0.42978991596638655,
    0.6313222486144101
-  ]
+  ],
+  "column_iou_vs_reviewer_gt": 0.954
  },
  {
   "method": "A_fullpage",
@@ -221,7 +225,8 @@
   "value_2021": null,
   "label_2022": "قروض طويلة الأجل",
   "column_detail": [],
-  "bbox_rel": []
+  "bbox_rel": [],
+  "column_iou_vs_reviewer_gt": 0.954
  },
  {
   "method": "C_spatial_declared",
@@ -248,7 +253,8 @@
    0.4918745051464766,
    0.42978991596638655,
    0.5163202692003167
-  ]
+  ],
+  "column_iou_vs_reviewer_gt": 0.954
  },
  {
   "method": "A_fullpage",
@@ -300,7 +306,8 @@
   "value_2021": null,
   "label_2022": "التزامات تأجير تمويلي",
   "column_detail": [],
-  "bbox_rel": []
+  "bbox_rel": [],
+  "column_iou_vs_reviewer_gt": 0.954
  },
  {
   "method": "C_spatial_declared",
@@ -327,7 +334,8 @@
    0.5201504354711006,
    0.42978991596638655,
    0.5457244655581948
-  ]
+  ],
+  "column_iou_vs_reviewer_gt": 0.954
  },
  {
   "method": "A_fullpage",
@@ -379,7 +387,8 @@
   "value_2021": null,
   "label_2022": "التزامات تأجير تمويلي مستحقة السداد خلال عام",
   "column_detail": [],
-  "bbox_rel": []
+  "bbox_rel": [],
+  "column_iou_vs_reviewer_gt": 0.954
  },
  {
   "method": "C_spatial_declared",
@@ -406,7 +415,8 @@
    0.621076801266825,
    0.42978991596638655,
    0.6457482185273159
-  ]
+  ],
+  "column_iou_vs_reviewer_gt": 0.954
  },
  {
   "method": "A_fullpage",
@@ -465,7 +475,8 @@
   "value_2021": null,
   "label_2022": "المبيعات (بالصافي)",
   "column_detail": [],
-  "bbox_rel": []
+  "bbox_rel": [],
+  "column_iou_vs_reviewer_gt": 0.688
  },
  {
   "method": "C_spatial_declared",
@@ -492,7 +503,32 @@
    0.132444576405384,
    0.394733893557423,
    0.15959817893903405
-  ]
+  ],
+  "column_iou_vs_reviewer_gt": 0.688
+ },
+ {
+  "method": "C_spatial_gemini_dates",
+  "field": "revenue",
+  "page": 6,
+  "label_match": true,
+  "row_match": false,
+  "year_match": false,
+  "exact_numeric": false,
+  "false_match": true,
+  "unverified": false,
+  "cell_bbox": true,
+  "year_source": "printed_dates_read_by_gemini",
+  "value_2022": 177709194.0,
+  "status_2022": "CONFLICT",
+  "detail_2022": "crop read 177,709,194 vs full-page detection [17770919.0] — both kept",
+  "provenance": "UNVERIFIED",
+  "bbox_rel": [
+   0.2069467787114846,
+   0.132444576405384,
+   0.394733893557423,
+   0.15959817893903405
+  ],
+  "column_iou_vs_reviewer_gt": 0.688
  },
  {
   "method": "A_fullpage",
@@ -544,7 +580,8 @@
   "value_2021": null,
   "label_2022": "صافى أرباح النشاط",
   "column_detail": [],
-  "bbox_rel": []
+  "bbox_rel": [],
+  "column_iou_vs_reviewer_gt": 0.688
  },
  {
   "method": "C_spatial_declared",
@@ -571,7 +608,32 @@
    0.2716250989707047,
    0.394733893557423,
    0.2953186856690419
-  ]
+  ],
+  "column_iou_vs_reviewer_gt": 0.688
+ },
+ {
+  "method": "C_spatial_gemini_dates",
+  "field": "net_activity_profit",
+  "page": 6,
+  "label_match": true,
+  "row_match": true,
+  "year_match": true,
+  "exact_numeric": true,
+  "false_match": false,
+  "unverified": false,
+  "cell_bbox": true,
+  "year_source": "printed_dates_read_by_gemini",
+  "value_2022": 1257960603.0,
+  "status_2022": "CONFLICT",
+  "detail_2022": "crop read 1,257,960,603 vs full-page detection [140445.33] — both kept",
+  "provenance": "UNVERIFIED",
+  "bbox_rel": [
+   0.2069467787114846,
+   0.2716250989707047,
+   0.394733893557423,
+   0.2953186856690419
+  ],
+  "column_iou_vs_reviewer_gt": 0.688
  },
  {
   "method": "A_fullpage",
@@ -630,7 +692,8 @@
   "value_2021": null,
   "label_2022": "صافى أرباح العام",
   "column_detail": [],
-  "bbox_rel": []
+  "bbox_rel": [],
+  "column_iou_vs_reviewer_gt": 0.688
  },
  {
   "method": "C_spatial_declared",
@@ -645,8 +708,8 @@
   "cell_bbox": true,
   "year_source": "declared_convention",
   "value_2022": 1056737086.0,
-  "status_2022": "CONFLICT",
-  "detail_2022": "crop read 1,056,737,086 vs full-page detection [1004.0] — both kept",
+  "status_2022": "MULTI_ROW",
+  "detail_2022": "MULTI_ROW kept after resolution: 2 rows map to 'net_income' — kept for review",
   "label_2022": "صافى أرباح العام",
   "column_detail": [
    0.2169467787114846,
@@ -657,7 +720,32 @@
    0.4843665874901029,
    0.394733893557423,
    0.5085866983372922
-  ]
+  ],
+  "column_iou_vs_reviewer_gt": 0.688
+ },
+ {
+  "method": "C_spatial_gemini_dates",
+  "field": "net_income",
+  "page": 6,
+  "label_match": true,
+  "row_match": true,
+  "year_match": true,
+  "exact_numeric": true,
+  "false_match": false,
+  "unverified": false,
+  "cell_bbox": true,
+  "year_source": "printed_dates_read_by_gemini",
+  "value_2022": 1056737086.0,
+  "status_2022": "MULTI_ROW",
+  "detail_2022": "MULTI_ROW kept after resolution: 2 rows map to 'net_income' — kept for review",
+  "provenance": "UNVERIFIED",
+  "bbox_rel": [
+   0.2069467787114846,
+   0.4843665874901029,
+   0.394733893557423,
+   0.5085866983372922
+  ],
+  "column_iou_vs_reviewer_gt": 0.688
  },
  {
   "method": "A_fullpage",
@@ -709,7 +797,8 @@
   "value_2021": null,
   "label_2022": "ضريبة الدخل",
   "column_detail": [],
-  "bbox_rel": []
+  "bbox_rel": [],
+  "column_iou_vs_reviewer_gt": 0.688
  },
  {
   "method": "C_spatial_declared",
@@ -736,7 +825,32 @@
    0.42459817893903407,
    0.394733893557423,
    0.4469378463974663
-  ]
+  ],
+  "column_iou_vs_reviewer_gt": 0.688
+ },
+ {
+  "method": "C_spatial_gemini_dates",
+  "field": "income_tax_expense",
+  "page": 6,
+  "label_match": true,
+  "row_match": false,
+  "year_match": false,
+  "exact_numeric": false,
+  "false_match": false,
+  "unverified": true,
+  "cell_bbox": true,
+  "year_source": "printed_dates_read_by_gemini",
+  "value_2022": null,
+  "status_2022": "UNREADABLE",
+  "detail_2022": "no number in the row∩column intersection",
+  "provenance": "UNVERIFIED",
+  "bbox_rel": [
+   0.2069467787114846,
+   0.42459817893903407,
+   0.394733893557423,
+   0.4469378463974663
+  ],
+  "column_iou_vs_reviewer_gt": 0.688
  },
  {
   "method": "A_fullpage",
@@ -795,7 +909,8 @@
   "value_2021": null,
   "label_2022": "الالتزامات",
   "column_detail": [],
-  "bbox_rel": []
+  "bbox_rel": [],
+  "column_iou_vs_reviewer_gt": 0.954
  },
  {
   "method": "C_spatial_declared",
@@ -822,7 +937,8 @@
    0.4634026128266033,
    0.42978991596638655,
    0.4860431512272368
-  ]
+  ],
+  "column_iou_vs_reviewer_gt": 0.954
  },
  {
   "method": "A_fullpage",
@@ -874,7 +990,8 @@
   "value_2021": null,
   "label_2022": "النقدية النائجة من أنشطة التشغيل",
   "column_detail": [],
-  "bbox_rel": []
+  "bbox_rel": [],
+  "column_iou_vs_reviewer_gt": 0.709
  },
  {
   "method": "C_spatial_declared",
@@ -889,8 +1006,8 @@
   "cell_bbox": true,
   "year_source": "declared_convention",
   "value_2022": 1995.0,
-  "status_2022": "CONFLICT",
-  "detail_2022": "crop read 1,995 vs full-page detection [1496.0] — both kept",
+  "status_2022": "MULTI_ROW",
+  "detail_2022": "MULTI_ROW kept after resolution: 2 rows map to 'operating_cash_flow' — kept for review",
   "label_2022": "النقدية النائجة من أنشطة التشغيل",
   "column_detail": [
    0.22317927170868346,
@@ -901,6 +1018,31 @@
    0.43748614410134606,
    0.39448179271708683,
    0.46140538400633413
-  ]
+  ],
+  "column_iou_vs_reviewer_gt": 0.709
+ },
+ {
+  "method": "C_spatial_gemini_dates",
+  "field": "operating_cash_flow",
+  "page": 9,
+  "label_match": true,
+  "row_match": false,
+  "year_match": false,
+  "exact_numeric": false,
+  "false_match": true,
+  "unverified": false,
+  "cell_bbox": true,
+  "year_source": "printed_dates_read_by_gemini",
+  "value_2022": 1995.0,
+  "status_2022": "MULTI_ROW",
+  "detail_2022": "MULTI_ROW kept after resolution: 2 rows map to 'operating_cash_flow' — kept for review",
+  "provenance": "UNVERIFIED",
+  "bbox_rel": [
+   0.21317927170868345,
+   0.43748614410134606,
+   0.39448179271708683,
+   0.46140538400633413
+  ],
+  "column_iou_vs_reviewer_gt": 0.709
  }
 ]

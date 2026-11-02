@@ -143,6 +143,30 @@ def main() -> None:
         print(f"page {p}: {len(lines)} lines; date columns: "
               f"{sorted(date_cols[p]) or 'none readable'}")
 
+    # printed-year columns from the REAL Gemini date reads (if any)
+    gemini_date_cols: dict[int, dict] = {}
+    gt_pages = json.loads((PROJ / "cell_evidence" / "gt_cells.json")
+                          .read_text(encoding="utf-8"))["pages"]
+    greads_p = PROJ / "cell_evidence" / "gemini_reads.json"
+    if greads_p.exists():
+        cur_cols_cache: dict[int, tuple] = {}
+        for r in json.loads(greads_p.read_text(encoding="utf-8")):
+            if r.get("read_status") != "READ" or not r.get("year"):
+                continue
+            ref = r["evidence_reference"]          # date_p{p}_{side}.png
+            if not ref.startswith("date_"):
+                continue
+            p = int(ref.split("_")[1].replace("p", ""))
+            side = "right" if ref.endswith("right.png") else "left"
+            if p not in cur_cols_cache:
+                cur_cols_cache[p] = SC.find_currency_columns(
+                    page_lines[p], page_dims[p][0])
+            cc, _cd = cur_cols_cache[p]
+            if cc and side in cc:
+                gemini_date_cols.setdefault(p, {})[int(r["year"])] = cc[side]
+        for p, cols in gemini_date_cols.items():
+            print(f"page {p}: printed-year columns read by Gemini: {sorted(cols)}")
+
     rows = []
     for field, page, kws, gt_c, gt_p, tol in GT_ROWS:
         lines = page_lines[page]
@@ -245,11 +269,64 @@ def main() -> None:
             (PROJ / "cell_evidence" / f"spatial_{field}_p{page}_y2022.png") \
                 .write_bytes(c22d.crop_png)
 
-        rows += [a, b, c, cd]
+        # ── C3: columns from the dates Gemini actually READ (printed-year
+        # evidence, second reader). Reads come from
+        # cell_evidence/gemini_reads.json (real API responses; quota
+        # exhaustion recorded as BLOCKED in that file). A page gets a
+        # printed-year column only where ITS date was READ.
+        c3 = None
+        gemini_year_cols = gemini_date_cols.get(page)
+        if gemini_year_cols:
+            c22g = SC.extract_spatial_cell(
+                get_conv(), page_pngs[page], field, 2022,
+                columns=gemini_year_cols,
+                columns_source="printed_dates_read_by_gemini")
+            c3 = {
+                "method": "C_spatial_gemini_dates", "field": field,
+                "page": page,
+                "label_match": c22g.status not in (SC.STATUS_NO_ROW,),
+                "row_match": any(_close(v, gt_c, tol) or _close(v, gt_p, tol)
+                                 for v, _ in c22g.detection_values + c22g.crop_values),
+                "year_match": _close(c22g.value, gt_c, tol),
+                "exact_numeric": _close(c22g.value, gt_c, tol),
+                "false_match": (
+                    c22g.value is not None
+                    and not (_close(c22g.value, gt_c, tol)
+                             or _close(c22g.value, gt_p, tol))
+                ) or (c22g.value is None and c22g.status == SC.STATUS_CONFLICT),
+                "unverified": c22g.value is None
+                and c22g.status != SC.STATUS_CONFLICT,
+                "cell_bbox": bool(c22g.cell_bbox_rel) and bool(c22g.column_rel),
+                "year_source": "printed_dates_read_by_gemini",
+                "value_2022": c22g.value,
+                "status_2022": c22g.status,
+                "detail_2022": c22g.detail,
+                "provenance": c22g.provenance,
+                "bbox_rel": c22g.cell_bbox_rel,
+            }
+
+        # ── IoU of the 2022 column interval vs the reviewer-estimated GT ──
+        col_iou = None
+        for cand in (c22d, c22g if c3 else None):
+            if cand is not None and cand.column_rel:
+                gx = gt_pages.get(str(page), {}).get("col_2022_x")
+                if gx:
+                    s0, s1 = cand.column_rel
+                    inter = max(0.0, min(s1, gx[1]) - max(s0, gx[0]))
+                    union = max(s1, gx[1]) - min(s0, gx[0])
+                    if union > 0:
+                        col_iou = round(inter / union, 3)
+                        break
+
+        rows += [a, b, c, cd] + ([c3] if c3 else [])
+        for r in (c, cd, c3):
+            if r is not None:
+                r["column_iou_vs_reviewer_gt"] = col_iou
+        tag = f" | C3: {c3['status_2022']} v={c3['value_2022'] and format(c3['value_2022'], ',.0f')}" if c3 else ""
         print(f"{field:30s} A: lm={a['label_match']} rm={a['row_match']} "
               f"yr={a['year_match']} | B: rm={b['row_match']} | "
               f"C1: {c22.status} | C2: {c22d.status} "
-              f"v={c22d.value and format(c22d.value, ',.0f')}")
+              f"v={c22d.value and format(c22d.value, ',.0f')}{tag}")
 
         # ── Indra stage ladder for this GT (audit request #4) ──
         AR2EN = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
@@ -288,6 +365,8 @@ def main() -> None:
 
     def tally(m):
         sub = [r for r in rows if r["method"] == m]
+        n = len(sub)
+        read_any = sum(1 for r in sub if not r["unverified"])
         return {
             "label_match": sum(r["label_match"] for r in sub),
             "row_match": sum(r["row_match"] for r in sub),
@@ -296,11 +375,19 @@ def main() -> None:
             "exact_numeric": sum(r["exact_numeric"] for r in sub),
             "false_match": sum(r["false_match"] for r in sub),
             "unverified": sum(r["unverified"] for r in sub),
-            "n": len(sub),
+            # OCR Readability Rate: the reader produced SOME reading (value or
+            # recorded conflict) — distinct from being CORRECT.
+            "ocr_readability_rate": round(read_any / n, 3) if n else None,
+            # End-to-End Extraction Accuracy: exact value AND correct year
+            # (exact_numeric already requires year_match) over all cells.
+            "end_to_end_accuracy": round(
+                sum(r["exact_numeric"] for r in sub) / n, 3) if n else None,
+            "n": n,
         }
 
     summary = {m: tally(m) for m in
-               ("A_fullpage", "B_strip", "C_spatial", "C_spatial_declared")}
+               ("A_fullpage", "B_strip", "C_spatial", "C_spatial_declared",
+                "C_spatial_gemini_dates")}
     (PROJ / "cell_evidence" / "benchmark_abc_summary.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=1), encoding="utf-8")
     print(json.dumps(summary, ensure_ascii=False, indent=1))

@@ -1,0 +1,28 @@
+{
+  "_provenance": {
+    "values_years": "settled from the printed document (eval_2022.py GT + page-6 audited bridge); provenance=settled_printed",
+    "column_x_ranges": "REVIEWER VISUAL ESTIMATES from viewing the rendered pages (label column right ~0.50-0.90, note ~0.44-0.50, value columns left). NOT auto-generated and NOT pixel-perfect — refine with tools/annotate_cells.py before treating as final manual GT.",
+    "row_y": "NOT yet reviewer-set: use tools/annotate_cells.py to mark row bands per cell; IoU below is computed on the COLUMN x-interval only, which is the localization dimension that decides year assignment."
+  },
+  "pages": {
+    "5": {"width": 1785, "height": 2526,
+          "col_2021_x": [0.10, 0.245], "col_2022_x": [0.245, 0.42]},
+    "6": {"width": 1785, "height": 2526,
+          "col_2021_x": [0.10, 0.245], "col_2022_x": [0.245, 0.42]},
+    "9": {"width": 1785, "height": 2526,
+          "col_2021_x": [0.10, 0.245], "col_2022_x": [0.245, 0.42]}
+  },
+  "cells": [
+    {"field": "short_term_debt", "page": 5, "year": 2022, "gt_value": 4063400167, "gt_source": "settled_printed"},
+    {"field": "current_portion_lt_debt", "page": 5, "year": 2022, "gt_value": 299320963, "gt_source": "settled_printed"},
+    {"field": "long_term_debt", "page": 5, "year": 2022, "gt_value": 363974291, "gt_source": "settled_printed"},
+    {"field": "non_current_lease_liabilities", "page": 5, "year": 2022, "gt_value": 209154419, "gt_source": "settled_printed"},
+    {"field": "current_lease_liabilities", "page": 5, "year": 2022, "gt_value": 83301722, "gt_source": "settled_printed"},
+    {"field": "revenue", "page": 6, "year": 2022, "gt_value": 16665919878, "gt_source": "settled_printed"},
+    {"field": "net_activity_profit", "page": 6, "year": 2022, "gt_value": 1257960603, "gt_source": "settled_printed"},
+    {"field": "net_income", "page": 6, "year": 2022, "gt_value": 1056737086, "gt_source": "settled_printed"},
+    {"field": "income_tax_expense", "page": 6, "year": 2022, "gt_value": 179626127, "gt_source": "settled_printed"},
+    {"field": "total_liabilities", "page": 5, "year": 2022, "gt_value": 9030000000, "gt_source": "approx_printed_2pct"},
+    {"field": "operating_cash_flow", "page": 9, "year": 2022, "gt_value": 1214507829, "gt_source": "settled_printed"}
+  ]
+}

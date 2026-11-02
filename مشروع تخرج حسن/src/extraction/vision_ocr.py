@@ -1272,6 +1272,58 @@ def extract_via_vision(
     # Provenance: which page each field was captured from — surfaces in the
     # UI and lets the pipeline flag balance fields sourced from notes pages.
     data.field_sources = field_sources
+    # ── Spatial shadow mode (FEATURE FLAG: SPATIAL_SHADOW=1) ──
+    # Runs the spatial cell extractor on the rendered pages and RECORDS its
+    # findings without touching any captured value or decision-log status
+    # (the gate only fires on data.spatial_findings, which shadow never
+    # sets). Rollback = unset the env var; default OFF, zero production
+    # impact when unset.
+    import os as _os
+
+    if _os.getenv("SPATIAL_SHADOW") == "1" and caller is None:
+        try:
+            from .local_ocr import indra_available
+            from .spatial_cells import extract_spatial_cell
+
+            if indra_available():
+                import indra_ocr as _indra
+
+                _sconv = _indra.load()
+                _years = [int(y) for y in data.years
+                          if isinstance(y, int)][:2]
+                _shadow: dict = {}
+                for _pi, _ppng in list(zip(selected, pages_png))[:3]:
+                    for _f in ("revenue", "net_income", "total_assets",
+                               "total_liabilities", "operating_cash_flow"):
+                        for _y in _years:
+                            try:
+                                _c = extract_spatial_cell(_sconv, _ppng, _f, _y)
+                            except Exception as _exc:
+                                _shadow[(str(_f), _y, _pi)] = {
+                                    "status": "ERROR", "detail": str(_exc)[:120]}
+                                continue
+                            _shadow[(str(_f), _y, _pi)] = {
+                                "status": _c.status,
+                                "value": _c.value,
+                                "provenance": _c.provenance,
+                                "year_source": _c.year_source,
+                                "detail": _c.detail[:160],
+                            }
+                data.spatial_shadow = {
+                    "flag": "SPATIAL_SHADOW=1",
+                    "affects_results": False,
+                    "cells": {f"{k[0]}|{k[1]}|p{k[2]}": v
+                              for k, v in _shadow.items()},
+                }
+                if notes is not None:
+                    notes.append(
+                        "Shadow spatial layer ran (SPATIAL_SHADOW=1): "
+                        f"{sum(1 for v in _shadow.values() if v.get('value') is not None)}"
+                        f"/{len(_shadow)} cells produced a value — recorded "
+                        "only, no status changed.")
+        except Exception as _exc:  # noqa: BLE001 — shadow must never break the run
+            if notes is not None:
+                notes.append(f"Spatial shadow mode failed (ignored): {_exc}")
     # ── Cell-crop verification (الخانة المقتطعة) ──
     # Core fields whose decision-log status is CONFLICT or UNVERIFIED get ONE
     # focused strip re-read each (max 2 per run). Confidence-UPGRADE only: a

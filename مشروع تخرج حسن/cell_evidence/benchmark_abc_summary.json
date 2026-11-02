@@ -7,6 +7,8 @@
   "exact_numeric": 0,
   "false_match": 0,
   "unverified": 11,
+  "ocr_readability_rate": 0.0,
+  "end_to_end_accuracy": 0.0,
   "n": 11
  },
  "B_strip": {
@@ -17,6 +19,8 @@
   "exact_numeric": 0,
   "false_match": 11,
   "unverified": 0,
+  "ocr_readability_rate": 1.0,
+  "end_to_end_accuracy": 0.0,
   "n": 11
  },
  "C_spatial": {
@@ -27,6 +31,8 @@
   "exact_numeric": 0,
   "false_match": 0,
   "unverified": 11,
+  "ocr_readability_rate": 0.0,
+  "end_to_end_accuracy": 0.0,
   "n": 11
  },
  "C_spatial_declared": {
@@ -37,6 +43,20 @@
   "exact_numeric": 4,
   "false_match": 3,
   "unverified": 4,
+  "ocr_readability_rate": 0.636,
+  "end_to_end_accuracy": 0.364,
   "n": 11
+ },
+ "C_spatial_gemini_dates": {
+  "label_match": 5,
+  "row_match": 2,
+  "year_match": 2,
+  "cell_bbox": 5,
+  "exact_numeric": 2,
+  "false_match": 2,
+  "unverified": 1,
+  "ocr_readability_rate": 0.8,
+  "end_to_end_accuracy": 0.4,
+  "n": 5
  }
 }

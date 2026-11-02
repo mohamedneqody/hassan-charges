@@ -60,6 +60,22 @@ STATUS_MULTI_ROW = "MULTI_ROW"
 STATUS_NO_YEAR = "UNCONFIRMED_YEAR"
 STATUS_NO_COLUMN = "NO_COLUMN"
 
+# Provenance ladder (سلّم المصدر) — a machine read can never award itself
+# the visual level: VISUALLY_VERIFIED is set ONLY via mark_visually_verified
+# by review tooling / a human confirming the saved crop.
+PROVENANCE_LADDER = ("OCR_READ", "VISUALLY_VERIFIED", "INFERRED",
+                     "UNREADABLE", "UNVERIFIED")
+
+
+def mark_visually_verified(cell: "SpatialCell", reviewer: str) -> "SpatialCell":
+    """Explicitly upgrade an OCR_READ cell after a human/review pass confirmed
+    the saved crop shows the value. Records who confirmed — the extraction
+    pipeline itself never sets this level."""
+    if cell.provenance == "OCR_READ":
+        cell.provenance = "VISUALLY_VERIFIED"
+        cell.detail = f"[visually verified by {reviewer}] {cell.detail}"
+    return cell
+
 
 @dataclass
 class LineBox:
@@ -101,6 +117,8 @@ class SpatialCell:
     year: int
     status: str
     detail: str = ""
+    provenance: str = "UNVERIFIED"   # OCR_READ | INFERRED | UNREADABLE | UNVERIFIED
+    year_source: str = "none"        # printed_dates | declared_convention | none
     label_text: str = ""
     label_score: int = 0
     label_box_rel: list = field(default_factory=list)
@@ -215,6 +233,63 @@ def find_year_columns(
 _YEAR_ANY = re.compile(r"(20[0-9]{2})")
 
 
+def enhance_variants(crop_png: bytes) -> list[tuple[str, bytes]]:
+    """Focused re-read variants, in preference order: original, ×3 cubic
+    upscale, ×3+CLAHE contrast, ×3+adaptive threshold. A sharper image is
+    NOT evidence of better OCR — the caller judges by what comes back."""
+    import cv2
+    import numpy as np
+
+    arr = np.frombuffer(crop_png, np.uint8)
+    img = cv2.imdecode(arr, cv2.IMREAD_GRAYSCALE)
+    if img is None:
+        return [("orig", crop_png)]
+    out = [("orig", crop_png)]
+    up = cv2.resize(img, None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
+    ok, b = cv2.imencode(".png", up)
+    if ok:
+        out.append(("up3", b.tobytes()))
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(up)
+        ok, b = cv2.imencode(".png", clahe)
+        if ok:
+            out.append(("up3_clahe", b.tobytes()))
+        th = cv2.adaptiveThreshold(
+            up, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 31, 15)
+        ok, b = cv2.imencode(".png", th)
+        if ok:
+            out.append(("up3_bin", b.tobytes()))
+    return out
+
+
+def parse_date_tokens(text: str) -> tuple[int, int, int] | None:
+    """One VALID printed date → (year, month, day). Accepts Arabic-Indic or
+    Latin digits and d/m/y, m/d/y or y/m/d orders with / . - separators;
+    REJECTS impossible day/month values (32/13/2022 and the like) — a regex
+    year match alone is never sufficient."""
+    t = (text or "").translate(AR2EN)
+    groups = [g.strip(" .-–") for g in re.split(r"[\\/.\-–]", t)]
+    nums = [int(g) for g in groups if g.isdigit() and len(g) <= 4]
+    years = [n for n in nums if 2000 <= n <= 2099]
+    if len(set(years)) != 1:
+        return None
+    year = years[0]
+    rest = [n for n in nums if n != year]
+    if len(rest) != 2:
+        return None
+    a, b = rest
+    day_ok = (1 <= a <= 31 and 1 <= b <= 12) or (1 <= a <= 12 and 1 <= b <= 31)
+    if not day_ok:
+        return None
+    # assign month/day; when both fit both roles the printed order is kept
+    if 1 <= a <= 12 and 1 <= b <= 12:
+        month, day = a, b
+    elif a > 12:
+        month, day = b, a
+    else:
+        month, day = a, b
+    return year, month, day
+
+
 def year_from_date_text(text: str) -> int | None:
     """The 4-digit year in a printed column date — any digit system, any
     day/month/year order (٣١/١٢/٢٠٢٢، 2022/12/31، ٢٠٢٢/١٢/٣١). Garbled OCR
@@ -267,12 +342,21 @@ def find_date_columns(
     hdr_y0 = min(ln.y0 for ln in row)
     if date_reader is None:
         def date_reader(png_, x0, y0, x1, y1):
+            """Focused re-read over enhancement variants; returns the first
+            variant text that parses as a VALID date, else the best raw."""
             crop = _crop(png_, x0 / page_w, y0 / page_h, x1 / page_w, y1 / page_h)
             if crop is None:
                 return ""
             from src.extraction.local_ocr import _page_markdown
 
-            return _page_markdown(conv, crop) or ""
+            best = ""
+            for _name, variant in enhance_variants(crop):
+                txt = _page_markdown(conv, variant) or ""
+                if parse_date_tokens(txt):
+                    return txt
+                if txt.strip() and not best:
+                    best = txt
+            return best
     cols: dict[int, YearColumn] = {}
     notes = []
     for side, col in cur_cols.items():
@@ -344,7 +428,9 @@ def find_currency_columns(
 def parse_number_tokens(text: str) -> list[tuple[float, str]]:
     """(float, raw_token) pairs — the raw token is kept so the evaluation can
     separate OCR recognition from numeric normalization. Arabic-Indic digits
-    are normalized here (stage 2 of the metric ladder)."""
+    are normalized here (stage 2 of the metric ladder). Accounting parens
+    («(179,626,127)») and an attached minus read as NEGATIVE values; a bare
+    dash/empty cell yields nothing."""
     out: list[tuple[float, str]] = []
     t = (text or "").translate(AR2EN)
     for m in _NUM_RE.finditer(t):
@@ -355,6 +441,13 @@ def parse_number_tokens(text: str) -> list[tuple[float, str]]:
             v = float(tok.replace(",", ""))
         except ValueError:
             continue
+        # accounting negative: (token) or -token
+        before = t[max(0, m.start() - 1):m.start()]
+        after = t[m.end():m.end() + 1]
+        if before.strip() == "(" and after.strip() == ")":
+            v = -v
+        elif before.strip() == "-":
+            v = -v
         out.append((v, tok))
     return out
 
@@ -446,7 +539,8 @@ def extract_spatial_cell(conv, png: bytes, field: str, year: int,
         if col.contains(cx_rel):
             detection += parse_number_tokens(ln.text)
     # note references like (19) are < 1000 — dropped like everywhere else
-    detection = [(v, t) for v, t in detection if v >= 1000]
+    # (abs: accounting negatives like (179,626,127) must survive)
+    detection = [(v, t) for v, t in detection if abs(v) >= 1000]
     cell.detection_values = detection
 
     # Cell crop = row band ∩ column range (relative), then one focused read.
@@ -459,8 +553,13 @@ def extract_spatial_cell(conv, png: bytes, field: str, year: int,
         from src.extraction.local_ocr import _page_markdown
 
         md = _page_markdown(conv, crop) or ""
-        cell.crop_values = [(v, t) for v, t in parse_number_tokens(md) if v >= 1000]
+        cell.crop_values = [(v, t) for v, t in parse_number_tokens(md)
+                            if abs(v) >= 1000]
 
+    # MULTI_ROW (overlapping/duplicate label rows) is a STRUCTURAL doubt:
+    # it survives value resolution — the cell is never VERIFIED while two
+    # rows claim the same field.
+    multi = cell.status == STATUS_MULTI_ROW
     all_vals = [v for v, _ in detection] + [v for v, _ in cell.crop_values]
     distinct = []
     for v in all_vals:
@@ -481,7 +580,12 @@ def extract_spatial_cell(conv, png: bytes, field: str, year: int,
         cell.value = crop_distinct[0]
     else:
         cell.value = distinct[0]
-    if len(distinct) == 1 and detection and cell.crop_values:
+    if multi:
+        cell.status = STATUS_MULTI_ROW
+        cell.provenance = "UNVERIFIED"
+        cell.detail = f"MULTI_ROW kept after resolution: {cell.detail}"[:180]
+        return cell
+    if len(crop_distinct) == 1 and len(distinct) == 1 and detection and cell.crop_values:
         cell.status = STATUS_VERIFIED
         cell.detail = f"detection + crop read agree on {distinct[0]:,.0f}"
     elif len(distinct) == 1:
@@ -495,6 +599,14 @@ def extract_spatial_cell(conv, png: bytes, field: str, year: int,
     else:
         cell.status = STATUS_CONFLICT
         cell.detail = f"{len(distinct)} distinct values in the cell: {distinct[:4]}"
+    # provenance ladder: computed AFTER the final status is settled
+    cell.provenance = {
+        STATUS_VERIFIED: "OCR_READ", STATUS_CROP_ONLY: "OCR_READ",
+        STATUS_CONFLICT: "UNVERIFIED",
+    }.get(cell.status, "UNVERIFIED")
+    cell.year_source = ("printed_dates" if "dates" in (columns_source or "")
+                        else "declared_convention" if columns is not None
+                        else "year_headers")
     return cell
 
 

@@ -1,0 +1,137 @@
+{
+ "needs_human": true,
+ "cells": [
+  {
+   "field": "short_term_debt",
+   "page": 5,
+   "system_bbox_rel": [
+    0.2429131652661064,
+    0.5938004750593825,
+    0.42978991596638655,
+    0.6169675376088677
+   ],
+   "reviewer_bbox_rel": null,
+   "needs_human": true
+  },
+  {
+   "field": "current_portion_lt_debt",
+   "page": 5,
+   "system_bbox_rel": [
+    0.2429131652661064,
+    0.6075534441805226,
+    0.42978991596638655,
+    0.6313222486144101
+   ],
+   "reviewer_bbox_rel": null,
+   "needs_human": true
+  },
+  {
+   "field": "long_term_debt",
+   "page": 5,
+   "system_bbox_rel": [
+    0.2429131652661064,
+    0.4918745051464766,
+    0.42978991596638655,
+    0.5163202692003167
+   ],
+   "reviewer_bbox_rel": null,
+   "needs_human": true
+  },
+  {
+   "field": "non_current_lease_liabilities",
+   "page": 5,
+   "system_bbox_rel": [
+    0.2429131652661064,
+    0.5201504354711006,
+    0.42978991596638655,
+    0.5457244655581948
+   ],
+   "reviewer_bbox_rel": null,
+   "needs_human": true
+  },
+  {
+   "field": "current_lease_liabilities",
+   "page": 5,
+   "system_bbox_rel": [
+    0.2429131652661064,
+    0.621076801266825,
+    0.42978991596638655,
+    0.6457482185273159
+   ],
+   "reviewer_bbox_rel": null,
+   "needs_human": true
+  },
+  {
+   "field": "total_liabilities",
+   "page": 5,
+   "system_bbox_rel": [
+    0.2429131652661064,
+    0.4634026128266033,
+    0.42978991596638655,
+    0.4860431512272368
+   ],
+   "reviewer_bbox_rel": null,
+   "needs_human": true
+  },
+  {
+   "field": "revenue",
+   "page": 6,
+   "system_bbox_rel": [
+    0.2069467787114846,
+    0.132444576405384,
+    0.394733893557423,
+    0.15959817893903405
+   ],
+   "reviewer_bbox_rel": null,
+   "needs_human": true
+  },
+  {
+   "field": "net_activity_profit",
+   "page": 6,
+   "system_bbox_rel": [
+    0.2069467787114846,
+    0.2716250989707047,
+    0.394733893557423,
+    0.2953186856690419
+   ],
+   "reviewer_bbox_rel": null,
+   "needs_human": true
+  },
+  {
+   "field": "net_income",
+   "page": 6,
+   "system_bbox_rel": [
+    0.2069467787114846,
+    0.4843665874901029,
+    0.394733893557423,
+    0.5085866983372922
+   ],
+   "reviewer_bbox_rel": null,
+   "needs_human": true
+  },
+  {
+   "field": "income_tax_expense",
+   "page": 6,
+   "system_bbox_rel": [
+    0.2069467787114846,
+    0.42459817893903407,
+    0.394733893557423,
+    0.4469378463974663
+   ],
+   "reviewer_bbox_rel": null,
+   "needs_human": true
+  },
+  {
+   "field": "operating_cash_flow",
+   "page": 9,
+   "system_bbox_rel": [
+    0.21317927170868345,
+    0.43748614410134606,
+    0.39448179271708683,
+    0.46140538400633413
+   ],
+   "reviewer_bbox_rel": null,
+   "needs_human": true
+  }
+ ]
+}

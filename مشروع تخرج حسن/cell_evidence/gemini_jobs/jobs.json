@@ -1,0 +1,93 @@
+[
+ {
+  "evidence_reference": "date_p5_right.png",
+  "png_file": "date_p5_right.png",
+  "label": "تاريخ العمود",
+  "year": null,
+  "what": "تاريخ العمود المطبوع (يوم/شهر/سنة)"
+ },
+ {
+  "evidence_reference": "date_p5_left.png",
+  "png_file": "date_p5_left.png",
+  "label": "تاريخ العمود",
+  "year": null,
+  "what": "تاريخ العمود المطبوع (يوم/شهر/سنة)"
+ },
+ {
+  "evidence_reference": "date_p6_right.png",
+  "png_file": "date_p6_right.png",
+  "label": "تاريخ العمود",
+  "year": null,
+  "what": "تاريخ العمود المطبوع (يوم/شهر/سنة)"
+ },
+ {
+  "evidence_reference": "date_p6_left.png",
+  "png_file": "date_p6_left.png",
+  "label": "تاريخ العمود",
+  "year": null,
+  "what": "تاريخ العمود المطبوع (يوم/شهر/سنة)"
+ },
+ {
+  "evidence_reference": "date_p9_right.png",
+  "png_file": "date_p9_right.png",
+  "label": "تاريخ العمود",
+  "year": null,
+  "what": "تاريخ العمود المطبوع (يوم/شهر/سنة)"
+ },
+ {
+  "evidence_reference": "date_p9_left.png",
+  "png_file": "date_p9_left.png",
+  "label": "تاريخ العمود",
+  "year": null,
+  "what": "تاريخ العمود المطبوع (يوم/شهر/سنة)"
+ },
+ {
+  "evidence_reference": "cell_spatial_current_portion_lt_debt_p5_y2022.png",
+  "png_file": "cell_spatial_current_portion_lt_debt_p5_y2022.png",
+  "label": "أقساط قروض طويلة الأجل مستحقة السداد خلال عام",
+  "year": 2022,
+  "what": "الرقم المطبوع في الخلية"
+ },
+ {
+  "evidence_reference": "cell_spatial_non_current_lease_liabilities_p5_y2022.png",
+  "png_file": "cell_spatial_non_current_lease_liabilities_p5_y2022.png",
+  "label": "التزامات تأجير تمويلي غير متداولة",
+  "year": 2022,
+  "what": "الرقم المطبوع في الخلية"
+ },
+ {
+  "evidence_reference": "cell_spatial_current_lease_liabilities_p5_y2022.png",
+  "png_file": "cell_spatial_current_lease_liabilities_p5_y2022.png",
+  "label": "التزامات تأجير تمويلي متداولة",
+  "year": 2022,
+  "what": "الرقم المطبوع في الخلية"
+ },
+ {
+  "evidence_reference": "cell_spatial_revenue_p6_y2022.png",
+  "png_file": "cell_spatial_revenue_p6_y2022.png",
+  "label": "المبيعات (بالصافي)",
+  "year": 2022,
+  "what": "الرقم المطبوع في الخلية"
+ },
+ {
+  "evidence_reference": "cell_spatial_income_tax_expense_p6_y2022.png",
+  "png_file": "cell_spatial_income_tax_expense_p6_y2022.png",
+  "label": "ضريبة الدخل",
+  "year": 2022,
+  "what": "الرقم المطبوع في الخلية"
+ },
+ {
+  "evidence_reference": "cell_spatial_total_liabilities_p5_y2022.png",
+  "png_file": "cell_spatial_total_liabilities_p5_y2022.png",
+  "label": "إجمالي الالتزامات",
+  "year": 2022,
+  "what": "الرقم المطبوع في الخلية"
+ },
+ {
+  "evidence_reference": "cell_spatial_operating_cash_flow_p9_y2022.png",
+  "png_file": "cell_spatial_operating_cash_flow_p9_y2022.png",
+  "label": "صافي النقدية الناتجة من أنشطة التشغيل",
+  "year": 2022,
+  "what": "الرقم المطبوع في الخلية"
+ }
+]

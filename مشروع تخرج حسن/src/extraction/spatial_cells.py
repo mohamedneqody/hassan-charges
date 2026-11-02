@@ -212,6 +212,90 @@ def find_year_columns(
     )
 
 
+_YEAR_ANY = re.compile(r"(20[0-9]{2})")
+
+
+def year_from_date_text(text: str) -> int | None:
+    """The 4-digit year in a printed column date — any digit system, any
+    day/month/year order (٣١/١٢/٢٠٢٢، 2022/12/31، ٢٠٢٢/١٢/٣١). Garbled OCR
+    text ('4.41/14/1') yields None — never a guess."""
+    t = (text or "").translate(AR2EN)
+    years = [int(y) for y in _YEAR_ANY.findall(t)]
+    if len(set(years)) == 1 and 2000 <= years[0] <= 2099:
+        return years[0]
+    return None
+
+
+def _currency_header_lines(lines: list[LineBox]) -> list[LineBox]:
+    cands = [
+        ln for ln in lines
+        if ln.text and not any(ch.isdigit() for ch in ln.text.translate(AR2EN))
+        # «جنيه مصري» with either yeh codepoint (ي U+064A / ی U+06CC)
+        and ("نيه" in ln.text or "نیه" in ln.text) and "مص" in ln.text
+        and len(ln.text.strip()) <= 12
+    ]
+    return cands
+
+
+def find_date_columns(
+    conv, png: bytes, lines: list[LineBox], page_w: float, page_h: float,
+    date_reader=None,
+) -> tuple[dict[int, YearColumn], str]:
+    """Year columns from the PRINTED column dates (31/12/2022-style) sitting
+    directly above the currency column titles — real printed evidence, never
+    a convention. The full-page read often garbles or EMPTIES these small
+    date lines (conf 0.25–0.76 on the 2022 statements), so each date region
+    gets a focused crop re-read (the crop reads proved far more accurate).
+    `date_reader(png, x0, y0, x1, y1) -> str` is injectable for tests.
+    A year counts as READ only when exactly one 4-digit year parses."""
+    cur_cols, cur_detail = find_currency_columns(lines, page_w)
+    if not cur_cols:
+        return {}, f"no currency columns ({cur_detail})"
+    cands = _currency_header_lines(lines)
+    med_h = sorted(ln.height for ln in cands)[len(cands) // 2]
+    groups: list[list[LineBox]] = []
+    for ln in sorted(cands, key=lambda l: l.cy):
+        for g in groups:
+            if abs(ln.cy - g[0].cy) <= 1.5 * med_h:
+                g.append(ln)
+                break
+        else:
+            groups.append([ln])
+    row = next((g for g in groups if len(g) >= 2), None)
+    if row is None:
+        return {}, "currency headers not co-located; no date row expected"
+    hdr_y0 = min(ln.y0 for ln in row)
+    if date_reader is None:
+        def date_reader(png_, x0, y0, x1, y1):
+            crop = _crop(png_, x0 / page_w, y0 / page_h, x1 / page_w, y1 / page_h)
+            if crop is None:
+                return ""
+            from src.extraction.local_ocr import _page_markdown
+
+            return _page_markdown(conv, crop) or ""
+    cols: dict[int, YearColumn] = {}
+    notes = []
+    for side, col in cur_cols.items():
+        hdr = next((ln for ln in row
+                    if abs(ln.cx / page_w - col.header_cx) < 0.08), None)
+        if hdr is None:
+            continue
+        # the date line sits directly above its currency title
+        x0 = max(col.x0 - 0.02, 0.0) * page_w
+        x1 = min(col.x1 + 0.02, 1.0) * page_w
+        y0 = max(hdr.y0 - 3.2 * hdr.height, 0.0)
+        y1 = hdr.y0 + 0.2 * hdr.height
+        raw = date_reader(png, x0, y0, x1, y1)
+        yr = year_from_date_text(raw)
+        notes.append(f"{side}: raw={raw.strip()[:24]!r} year={yr}")
+        if yr is not None:
+            cols[yr] = YearColumn(yr, col.x0, col.x1, col.header_cx)
+    detail = "printed column dates [" + "; ".join(notes) + "]"
+    if not cols:
+        return {}, detail + " — none readable"
+    return cols, detail
+
+
 def find_currency_columns(
     lines: list[LineBox], page_w: float,
 ) -> tuple[dict[str, YearColumn], str]:
@@ -324,7 +408,10 @@ def extract_spatial_cell(conv, png: bytes, field: str, year: int,
         return cell
 
     if columns is None:
-        cols, col_detail = find_year_columns(lines, page_w)
+        # printed evidence first: the column DATES above the currency titles
+        cols, col_detail = find_date_columns(conv, png, lines, page_w, page_h)
+        if not cols:
+            cols, col_detail = find_year_columns(lines, page_w)
     else:
         cols, col_detail = columns, f"columns provided ({columns_source})"
     rows, _score = find_label_rows(lines, field)

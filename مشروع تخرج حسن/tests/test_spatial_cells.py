@@ -177,3 +177,97 @@ def test_decision_log_keeps_verified_when_spatial_confirmed():
     log = build_decision_log(d)
     entry = next(e for e in log if e["field"] == "revenue")
     assert entry["status"] == "VERIFIED_EXACT"
+
+
+# ── Date header detection (المهمة 2/6: التواريخ المطبوعة) ───────────────────
+
+from src.extraction.spatial_cells import (  # noqa: E402
+    find_date_columns, year_from_date_text,
+)
+
+
+def test_date_year_parsing_all_formats():
+    assert year_from_date_text("٣١/١٢/٢٠٢٢") == 2022
+    assert year_from_date_text("2022/12/31") == 2022
+    assert year_from_date_text("31/12/2021") == 2021
+    assert year_from_date_text("٢٠٢١/١٢/٣١") == 2021
+    assert year_from_date_text("٢٠٢٢ / ١٢ / ٣١") == 2022
+
+
+def test_date_year_garbled_or_absent_is_none():
+    # the actual full-page OCR output of the printed dates
+    assert year_from_date_text("4.41/14/1") is None
+    assert year_from_date_text("Y. 11/11/1") is None
+    assert year_from_date_text("") is None
+    assert year_from_date_text("31/12") is None
+    assert year_from_date_text("2021/12/31 2022") is None  # ambiguous
+
+
+def test_find_date_columns_binds_year_to_its_own_column():
+    # RTL layout: 2022 right, 2021 left — each above its currency title
+    lines = [
+        _ln(560, 100, 680, 140, ""),               # date above right col
+        _ln(220, 100, 340, 140, ""),               # date above left col
+        _ln(560, 160, 680, 190, "جنيه مصري"),      # right currency title
+        _ln(220, 160, 340, 190, "جنيه مصري"),      # left currency title
+    ]
+
+    def reader(png, x0, y0, x1, y1):
+        cx = (x0 + x1) / 2
+        return "٢٠٢٢/١٢/٣١" if cx > 500 else "٢٠٢١/١٢/٣١"
+
+    cols, detail = find_date_columns(
+        None, b"", lines, 1000, 400, date_reader=reader)
+    assert set(cols) == {2022, 2021}, detail
+    assert cols[2022].contains(0.62) and not cols[2022].contains(0.25)
+    assert cols[2021].contains(0.25)
+    assert "printed column dates" in detail
+
+
+def test_find_date_columns_survives_mirrored_layout():
+    lines = [
+        _ln(220, 100, 340, 140, ""),               # date above RIGHT col
+        _ln(560, 100, 680, 140, ""),               # date above LEFT col
+        _ln(220, 160, 340, 190, "جنيه مصري"),
+        _ln(560, 160, 680, 190, "جنيه مصري"),
+    ]
+
+    def reader(png, x0, y0, x1, y1):
+        cx = (x0 + x1) / 2
+        return "31/12/2022" if cx < 500 else "31/12/2021"  # mirrored print
+
+    cols, detail = find_date_columns(
+        None, b"", lines, 1000, 400, date_reader=reader)
+    assert set(cols) == {2022, 2021}, detail
+    assert cols[2022].contains(0.25)      # follows ITS printed date
+    assert cols[2021].contains(0.62)
+
+
+def test_find_date_columns_unreadable_date_is_not_guessed():
+    lines = [
+        _ln(560, 100, 680, 140, ""),
+        _ln(220, 100, 340, 140, ""),
+        _ln(560, 160, 680, 190, "جنيه مصري"),
+        _ln(220, 160, 340, 190, "جنيه مصري"),
+    ]
+    cols, detail = find_date_columns(
+        None, b"", lines, 1000, 400,
+        date_reader=lambda *a: "4.41/14/1")     # the real garbled output
+    assert cols == {}
+    assert "none readable" in detail
+
+
+def test_date_in_page_header_is_not_a_column_title():
+    # a date line far ABOVE the currency row (page header) must not bind
+    lines = [
+        _ln(100, 20, 900, 50, "القوائم المالية عن السنة المنتهية في ٣١/١٢/٢٠٢٢"),
+        _ln(560, 100, 680, 140, ""),
+        _ln(220, 100, 340, 140, ""),
+        _ln(560, 160, 680, 190, "جنيه مصري"),
+        _ln(220, 160, 340, 190, "جنيه مصري"),
+    ]
+    cols, detail = find_date_columns(
+        None, b"", lines, 1000, 400,
+        date_reader=lambda *a: "")
+    assert cols == {}
+    assert "none readable" in detail or "not co-located" in detail

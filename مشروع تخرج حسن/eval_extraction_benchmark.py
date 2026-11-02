@@ -132,13 +132,16 @@ def main() -> None:
     page_lines: dict[int, list] = {}
     page_pngs: dict[int, bytes] = {}
     page_dims: dict[int, tuple] = {}
+    date_cols: dict[int, dict] = {}
     for p, rel in PAGES.items():
         png = (PROJ / rel).read_bytes()
         page_pngs[p] = png
         _w, _h, lines = SC.read_page_lines(get_conv(), png)
         page_lines[p] = lines
         page_dims[p] = (_w, _h)
-        print(f"page {p}: {len(lines)} lines with boxes")
+        date_cols[p], _dd = SC.find_date_columns(get_conv(), png, lines, _w, _h)
+        print(f"page {p}: {len(lines)} lines; date columns: "
+              f"{sorted(date_cols[p]) or 'none readable'}")
 
     rows = []
     for field, page, kws, gt_c, gt_p, tol in GT_ROWS:
@@ -162,12 +165,20 @@ def main() -> None:
         b["page"] = page
 
         # ── C: spatial row∩column ──
-        # C1: pure year-header geometry. On THIS document the statements
-        # print NO per-column year titles (only «جنيه مصري»), so C1 honestly
-        # reports UNCONFIRMED_YEAR everywhere — the printed years simply do
-        # not exist; any year order would be an assumption.
-        c22 = SC.extract_spatial_cell(get_conv(), page_pngs[page], field, 2022)
-        c21 = SC.extract_spatial_cell(get_conv(), page_pngs[page], field, 2021)
+        # C1: columns from the PRINTED column dates (31/12/2022-style) above
+        # the currency titles — computed once per page; a year counts as
+        # READ only when its date parsed. If a date is unreadable the pure
+        # path reports honestly and the declared-convention run (C2) covers
+        # the fallback, always labeled inferred.
+        dcols = date_cols.get(page) or {}
+        c22 = SC.extract_spatial_cell(
+            get_conv(), page_pngs[page], field, 2022,
+            columns=dcols or None,
+            columns_source="printed column dates" if dcols else "none")
+        c21 = SC.extract_spatial_cell(
+            get_conv(), page_pngs[page], field, 2021,
+            columns=dcols or None,
+            columns_source="printed column dates" if dcols else "none")
         # C2: same geometry, but the columns come from the printed currency
         # titles and the YEAR ORDER is an explicitly DECLARED convention
         # (current year beside the note column — the Egyptian layout), never
@@ -197,6 +208,7 @@ def main() -> None:
             ),
             "unverified": c22.value is None and c22.status != SC.STATUS_CONFLICT,
             "cell_bbox": bool(c22.cell_bbox_rel) and bool(c22.column_rel),
+            "year_source": "printed_dates" if dcols else "none",
             "value_2022": c22.value,
             "status_2022": c22.status,
             "detail_2022": c22.detail,
@@ -221,6 +233,7 @@ def main() -> None:
             ),
             "unverified": c22d.value is None and c22d.status != SC.STATUS_CONFLICT,
             "cell_bbox": bool(c22d.cell_bbox_rel) and bool(c22d.column_rel),
+            "year_source": "declared_convention",
             "value_2022": c22d.value,
             "status_2022": c22d.status,
             "detail_2022": c22d.detail,

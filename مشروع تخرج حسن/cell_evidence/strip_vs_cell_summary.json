@@ -1,0 +1,20 @@
+{
+ "strip": {
+  "fields": 10,
+  "localization": 10,
+  "row_match": 0,
+  "year_column": 0,
+  "numeric_exact": 0,
+  "false_match": 7,
+  "unverified": 3
+ },
+ "cell": {
+  "fields": 10,
+  "localization": 10,
+  "row_match": 2,
+  "year_column": 0,
+  "numeric_exact": 0,
+  "false_match": 9,
+  "unverified": 1
+ }
+}

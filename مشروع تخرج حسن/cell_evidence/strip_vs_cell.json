@@ -1,0 +1,350 @@
+[
+ {
+  "method": "strip",
+  "field": "short_term_debt",
+  "localized": true,
+  "row_match": false,
+  "year_column": false,
+  "numeric_exact": false,
+  "false_match": true,
+  "unverified": false,
+  "selected_2022": 1910901.9,
+  "numbers": [
+   1910901.9
+  ],
+  "text": "<tr><td>بنوك تسهيلات إنتمانية</td><td>(44)</td><td colspan=\"2\">6, 15,6., 184</td><td>1,910,901,.9</td></tr>"
+ },
+ {
+  "method": "cell",
+  "field": "short_term_debt",
+  "localized": true,
+  "row_match": true,
+  "year_column": false,
+  "numeric_exact": false,
+  "false_match": true,
+  "unverified": false,
+  "selected_2022": 170019.0,
+  "numbers": [
+   170019.0,
+   19109044.9,
+   4063400167.0
+  ],
+  "text": "الإسرامات المداونه\n\nبنوك - سحب علي المكشوف\n\n(11) 1,700,19 1,910,904,4.9\n\n٤,٠٦٣,٤٠٠,١٦٧\n\n(YY)\n\nبنوك تسهيلات إنتمانية\n\nm",
+  "band_y": [
+   1452,
+   1547
+  ]
+ },
+ {
+  "method": "strip",
+  "field": "current_portion_lt_debt",
+  "localized": true,
+  "row_match": false,
+  "year_column": false,
+  "numeric_exact": false,
+  "false_match": false,
+  "unverified": true,
+  "selected_2022": null,
+  "numbers": [],
+  "text": "<tr><td>أقساط قروض طويلة الأجل مستحقة السداد خلال عام</td><td>(NY)</td><td colspan=\"2\"></td><td>Y. 1, 16 Y, NAV</td></tr>"
+ },
+ {
+  "method": "cell",
+  "field": "current_portion_lt_debt",
+  "localized": true,
+  "row_match": true,
+  "year_column": false,
+  "numeric_exact": false,
+  "false_match": true,
+  "unverified": false,
+  "selected_2022": 1910901.0,
+  "numbers": [
+   1910901.0,
+   299320963.0
+  ],
+  "text": "بنوك تسهيلات إنتمانية\n\n(11) 6, 75, 8 , 184 1,910,901,t.9\n\n(14) ٢٩٩,٣٢٠,٩٦٣ Y. 1, 16, NAV\n\nأقساط قروض طويلة الأجل مستحقة السداد خلال عام\n\nATTI, VYY\n\nVY,NYI, YY,\n",
+  "band_y": [
+   1515,
+   1610
+  ]
+ },
+ {
+  "method": "strip",
+  "field": "long_term_debt",
+  "localized": true,
+  "row_match": false,
+  "year_column": false,
+  "numeric_exact": false,
+  "false_match": true,
+  "unverified": false,
+  "selected_2022": 174946891.0,
+  "numbers": [
+   174946891.0
+  ],
+  "text": "<tr><td>قروض طويلة الأجل</td><td>(14)</td><td colspan=\"2\">174,946,891</td><td>17, 189, ETA</td></tr>"
+ },
+ {
+  "method": "cell",
+  "field": "long_term_debt",
+  "localized": true,
+  "row_match": false,
+  "year_column": false,
+  "numeric_exact": false,
+  "false_match": true,
+  "unverified": false,
+  "selected_2022": 14946491.0,
+  "numbers": [
+   14946491.0
+  ],
+  "text": "الالتزامات الغير متداولة\n\n14,946,491\n\n778, 189, ENA\n\n(14)\n\nقروض طويلة الأجل",
+  "band_y": [
+   1199,
+   1294
+  ]
+ },
+ {
+  "method": "strip",
+  "field": "non_current_lease_liabilities",
+  "localized": true,
+  "row_match": false,
+  "year_column": false,
+  "numeric_exact": false,
+  "false_match": true,
+  "unverified": false,
+  "selected_2022": 104419.0,
+  "numbers": [
+   104419.0,
+   891814171.0
+  ],
+  "text": "<tr><td>التزامات تأجير تمويلي</td><td>(14)</td><td colspan=\"2\">4.9,104,419</td><td>891,814,171</td></tr>"
+ },
+ {
+  "method": "cell",
+  "field": "non_current_lease_liabilities",
+  "localized": true,
+  "row_match": false,
+  "year_column": false,
+  "numeric_exact": false,
+  "false_match": true,
+  "unverified": false,
+  "selected_2022": 109819.0,
+  "numbers": [
+   109819.0,
+   891814171.0,
+   41814.0
+  ],
+  "text": "التزامات تأجير تمويلي\n\n(14) 8.9,109,819\n\n891,814,171\n\nإلتزامات ضريبية مؤجلة\n\n(1-8A) Y., t0,095 41,814, 170\n\nVI. NAVIVA. 14.4 1.444.\n\nI",
+  "band_y": [
+   1326,
+   1420
+  ]
+ },
+ {
+  "method": "strip",
+  "field": "current_lease_liabilities",
+  "localized": true,
+  "row_match": false,
+  "year_column": false,
+  "numeric_exact": false,
+  "false_match": false,
+  "unverified": true,
+  "selected_2022": null,
+  "numbers": [],
+  "text": "<tr><td>التزامات تأجير تمويلي مستحقة السداد خلال عام</td><td>(14)</td><td colspan=\"2\">ATT. 1, VYY</td><td>VY, T1, Y.</td></tr>"
+ },
+ {
+  "method": "cell",
+  "field": "current_lease_liabilities",
+  "localized": true,
+  "row_match": false,
+  "year_column": false,
+  "numeric_exact": false,
+  "false_match": true,
+  "unverified": false,
+  "selected_2022": 1959.0,
+  "numbers": [
+   1959.0
+  ],
+  "text": "Li\n\nالتزامات تأجير تمويلي مستحقة السداد خلال عام\n\n(14)\n\nAY, N. 1, VYY YT, NY, Y.\n\n(f) 1,959, 25. , A. 1,9 , YY, 184\n\nموردون وأوراق دفع\n\n11\n\n£9.0...414\n\nNo. 78. ",
+  "band_y": [
+   1578,
+   1673
+  ]
+ },
+ {
+  "method": "strip",
+  "field": "revenue",
+  "localized": true,
+  "row_match": false,
+  "year_column": false,
+  "numeric_exact": false,
+  "false_match": true,
+  "unverified": false,
+  "selected_2022": 17770919.0,
+  "numbers": [
+   17770919.0,
+   15129201.0
+  ],
+  "text": "<tr><td>المبيعات (بالصافي)</td><td>(f)</td><td>17,770,919, AVA</td><td colspan=\"2\">15,129,201, AA</td></tr>"
+ },
+ {
+  "method": "cell",
+  "field": "revenue",
+  "localized": true,
+  "row_match": false,
+  "year_column": false,
+  "numeric_exact": false,
+  "false_match": true,
+  "unverified": false,
+  "selected_2022": 17770919.0,
+  "numbers": [
+   17770919.0,
+   179702.0
+  ],
+  "text": "(f) 17,770,919, 181 15, 179,702, AA\n\nالمبيعات (بالصافي)",
+  "band_y": [
+   315,
+   410
+  ]
+ },
+ {
+  "method": "strip",
+  "field": "net_income",
+  "localized": true,
+  "row_match": false,
+  "year_column": false,
+  "numeric_exact": false,
+  "false_match": true,
+  "unverified": false,
+  "selected_2022": 17770919.0,
+  "numbers": [
+   17770919.0,
+   15129201.0
+  ],
+  "text": "<tr><td>المبيعات (بالصافي)</td><td>(f)</td><td>17,770,919, AVA</td><td colspan=\"2\">15,129,201, AA</td></tr>"
+ },
+ {
+  "method": "cell",
+  "field": "net_income",
+  "localized": true,
+  "row_match": false,
+  "year_column": false,
+  "numeric_exact": false,
+  "false_match": true,
+  "unverified": false,
+  "selected_2022": 17770919.0,
+  "numbers": [
+   17770919.0,
+   179702.0
+  ],
+  "text": "(f) 17,770,919, 181 15, 179,702, AA\n\nالمبيعات (بالصافي)",
+  "band_y": [
+   315,
+   410
+  ]
+ },
+ {
+  "method": "strip",
+  "field": "income_tax_expense",
+  "localized": true,
+  "row_match": false,
+  "year_column": false,
+  "numeric_exact": false,
+  "false_match": true,
+  "unverified": false,
+  "selected_2022": 1411480.0,
+  "numbers": [
+   1411480.0
+  ],
+  "text": "<tr><td>صافى أرباح العام قبل ضريبة الدخل</td><td></td><td>1, 175, 759, YIT</td><td>141,148,0.0</td><td></td></tr>"
+ },
+ {
+  "method": "cell",
+  "field": "income_tax_expense",
+  "localized": true,
+  "row_match": false,
+  "year_column": false,
+  "numeric_exact": false,
+  "false_match": true,
+  "unverified": false,
+  "selected_2022": 19911.0,
+  "numbers": [
+   19911.0,
+   1411480.0
+  ],
+  "text": "U\n\nتوزيعات أرباح من شركات تابعة\n\nVer\n\n1, 175, 199,11\n\n141,148,0.0\n\nصافى أرباح العام قبل ضريبة الدخل",
+  "band_y": [
+   947,
+   1041
+  ]
+ },
+ {
+  "method": "strip",
+  "field": "total_liabilities",
+  "localized": true,
+  "row_match": false,
+  "year_column": false,
+  "numeric_exact": false,
+  "false_match": true,
+  "unverified": false,
+  "selected_2022": 11411799.0,
+  "numbers": [
+   11411799.0,
+   11414.0,
+   4169.0
+  ],
+  "text": "<tr><td>إجمالى الأصول غير المتداولة</td><td></td><td colspan=\"2\">11,411,799, AY</td><td>11,414, 416,9 0</td></tr>"
+ },
+ {
+  "method": "cell",
+  "field": "total_liabilities",
+  "localized": true,
+  "row_match": false,
+  "year_column": false,
+  "numeric_exact": false,
+  "false_match": true,
+  "unverified": false,
+  "selected_2022": 9519791.0,
+  "numbers": [
+   9519791.0,
+   66380664.0,
+   11713284905.0,
+   11411799.0
+  ],
+  "text": "9,519,791. ٦٦,٣٨٠,٦٦٤\n\n(1-14)\n\nأصول ضريبية مؤجلة\n\n١١,٧١٣,٢٨٤,٩٠٥\n\n11,411,799, 19\n\nإجمالى الأصول غير المتداولة\n\nn",
+  "band_y": [
+   505,
+   599
+  ]
+ },
+ {
+  "method": "strip",
+  "field": "operating_cash_flow",
+  "localized": true,
+  "row_match": false,
+  "year_column": false,
+  "numeric_exact": false,
+  "false_match": false,
+  "unverified": true,
+  "selected_2022": null,
+  "numbers": [],
+  "text": "<tr><td>التدفقات النقدية من أنشطة التشغيل</td><td></td><td></td><td></td></tr>"
+ },
+ {
+  "method": "cell",
+  "field": "operating_cash_flow",
+  "localized": true,
+  "row_match": false,
+  "year_column": false,
+  "numeric_exact": false,
+  "false_match": false,
+  "unverified": true,
+  "selected_2022": null,
+  "numbers": [],
+  "text": "رهم جیه مصری جیه مصری\n\nالتدفقات النقدية من أنشطة التشغيل\n\n1. Y. T AT YAT\n\n17\n\n191.755.0.0",
+  "band_y": [
+   252,
+   347
+  ]
+ }
+]

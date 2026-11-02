@@ -149,6 +149,12 @@ FIELD_ALIASES: dict[str, list[str]] = {
         # Arabic
         "التزامات تأجير تمويلي", "التزامات التأجير التمويلي",
     ],
+    # توزيعات أرباح من الشركات التابعة — بند مؤثر في تفسير نمو الأرباح
+    "dividends_from_subsidiaries": [
+        "dividends from subsidiaries", "income from subsidiaries",
+        # Arabic
+        "توزيعات أرباح من شركات تابعة", "توزيعات أرباح من الشركات التابعة",
+    ],
     "long_term_debt": [
         "long term debt", "long term borrowings", "long term loans",
         # Arabic

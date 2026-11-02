@@ -187,6 +187,10 @@ def test_current_portion_maps_to_its_own_field_not_lt_or_double_count():
     assert match_field("قروض طويلة الأجل") == "long_term_debt"
 
 
+def test_dividends_from_subsidiaries_field():
+    assert match_field("توزيعات أرباح من شركات تابعة") == "dividends_from_subsidiaries"
+
+
 def test_lease_rows_map_to_distinct_fields():
     assert match_field("التزامات تأجير تمويلي") == "non_current_lease_liabilities"
     assert match_field("التزامات تأجير تمويلي مستحقة السداد خلال عام") == "current_lease_liabilities"

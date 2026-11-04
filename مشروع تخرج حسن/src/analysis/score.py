@@ -62,6 +62,14 @@ class HealthScore:
     pillars: list[Pillar]
     label_en: str
     label_ar: str
+    coverage: float = 1.0          # share of pillar weights actually computed
+    complete: bool = True          # False = partial score (some pillars missing)
+    missing_pillars: list[str] = None  # type: ignore[assignment]
+    policy: str = ""               # Missing-Data-Coverage disclosure
+
+    def __post_init__(self):
+        if self.missing_pillars is None:
+            self.missing_pillars = []
 
     @property
     def label(self) -> str:
@@ -138,8 +146,22 @@ def compute_health_score(curr: YearMetrics,
         else None
     )
 
-    if total is None:
-        label_en, label_ar = "Not computable", "غير قابل للحساب"
+    # Missing-Data-Coverage policy: liquidity and leverage are the risk
+    # cores — a score printed without them would HIDE company risk, so the
+    # score is REFUSED (not renormalized around the hole). Profitability/
+    # cash may be missing: the score becomes PARTIAL with the coverage
+    # disclosed next to it.
+    CRITICAL_PILLARS = {"liquidity", "leverage"}
+    total_weight = sum(p.weight for p in pillars) or 100.0
+    missing_pillars = [p.key for p in pillars if p.score is None]
+    coverage = sum(p.weight for p in pillars if p.score is not None) / total_weight
+    refused = bool(CRITICAL_PILLARS & set(missing_pillars))
+
+    if total is None or refused:
+        total = None
+        label_en = "Refused — critical data missing"
+        label_ar = ("مرفوض — بيانات حرجة ناقصة (سيولة/مديونية): "
+                    "لا تُصدر درجة قد تخفي مخاطر الشركة")
     elif total >= 80:
         label_en, label_ar = "Strong", "قوي"
     elif total >= 60:
@@ -149,11 +171,24 @@ def compute_health_score(curr: YearMetrics,
     else:
         label_en, label_ar = "Weak", "ضعيف"
 
+    complete = not missing_pillars
+    policy = (
+        f"تغطية البيانات {coverage * 0.0 + coverage * 100:.0f}% | "
+        f"الركائز المحسوبة: {sorted(set(p.key for p in pillars) - set(missing_pillars))} | "
+        f"المحجوبة/الناقصة: {sorted(missing_pillars) or 'لا شيء'} | "
+        + ("درجة كلية" if complete else
+           "درجة جزئية — لا تعوض غياب ركيزة حرجة" if not refused else
+           "رُفضت الدرجة: ركيزة سيولة/مديونية ناقصة")
+    )
     return HealthScore(
         total=None if total is None else round(total, 1),
         pillars=pillars,
         label_en=label_en,
         label_ar=label_ar,
+        coverage=round(coverage, 3),
+        complete=complete,
+        missing_pillars=missing_pillars,
+        policy=policy,
     )
 
 

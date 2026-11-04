@@ -526,13 +526,18 @@ def test_health_score_and_top_movers():
     assert cash.score == 100.0  # CFO/NI > 1.0 and CFO margin 16.1% > 15%
     assert score.label in ("Strong", "Stable", "Needs attention", "Weak", "قوي", "مستقر")
 
-    # missing data: pillar excluded and weights renormalized
+    # missing data: liquidity+leverage missing → the score is REFUSED, not
+    # renormalized around the hole (a reassuring score would hide risk)
     sparse = {"revenue": {2026: 1000.0}, "net_income": {2026: 100.0}}
     curr_sparse = compute_year_metrics(2026, sparse)
     score2 = compute_health_score(curr_sparse)
     available = [p for p in score2.pillars if p.score is not None]
     assert all(p.key in ("profitability",) for p in available)
-    assert score2.total is not None
+    assert score2.total is None                        # refused
+    assert score2.coverage < 0.5
+    assert not score2.complete
+    assert "liquidity" in score2.missing_pillars
+    assert "مرفوض" in score2.label_ar
 
     # top movers: strongest improving / declining by |change %|
     rows = build_comparison(prev, curr)

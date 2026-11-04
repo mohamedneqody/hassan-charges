@@ -1,0 +1,167 @@
+[
+ {
+  "packet_id": "short_term_debt|5|2022",
+  "field": "short_term_debt",
+  "page": 5,
+  "year": 2022,
+  "status": "CROP_ONLY",
+  "crop_image": "cell_evidence\\spatial_short_term_debt_p5_y2022.png",
+  "machine_selected": 4063400167.0,
+  "readings": {
+   "detection_line": [],
+   "crop_variants": []
+  },
+  "conflict_reason": "single source (crop:orig) = 4,063,400,167 — needs the live per-cell confirmation",
+  "decision": null
+ },
+ {
+  "packet_id": "current_portion_lt_debt|5|2022",
+  "field": "current_portion_lt_debt",
+  "page": 5,
+  "year": 2022,
+  "status": "CONFLICT",
+  "crop_image": "cell_evidence\\spatial_current_portion_lt_debt_p5_y2022.png",
+  "machine_selected": 299320963.0,
+  "readings": {
+   "detection_line": [],
+   "crop_variants": []
+  },
+  "conflict_reason": "selected 299,320,963 [crop:up3_bin] vs others [199784954.0] — all kept",
+  "decision": null
+ },
+ {
+  "packet_id": "long_term_debt|5|2022",
+  "field": "long_term_debt",
+  "page": 5,
+  "year": 2022,
+  "status": "CONFLICT",
+  "crop_image": "cell_evidence\\spatial_long_term_debt_p5_y2022.png",
+  "machine_selected": 363974291.0,
+  "readings": {
+   "detection_line": [],
+   "crop_variants": []
+  },
+  "conflict_reason": "selected 363,974,291 [crop:orig] vs others [174946891.0, 178946891.0] — all kept",
+  "decision": null
+ },
+ {
+  "packet_id": "non_current_lease_liabilities|5|2022",
+  "field": "non_current_lease_liabilities",
+  "page": 5,
+  "year": 2022,
+  "status": "CONFLICT",
+  "crop_image": "cell_evidence\\spatial_non_current_lease_liabilities_p5_y2022.png",
+  "machine_selected": 9109619.0,
+  "readings": {
+   "detection_line": [],
+   "crop_variants": []
+  },
+  "conflict_reason": "selected 9,109,619 [crop:orig] vs others [104419.0, 4109614.0, 109819.0] — all kept",
+  "decision": null
+ },
+ {
+  "packet_id": "current_lease_liabilities|5|2022",
+  "field": "current_lease_liabilities",
+  "page": 5,
+  "year": 2022,
+  "status": "CROP_ONLY",
+  "crop_image": "cell_evidence\\spatial_current_lease_liabilities_p5_y2022.png",
+  "machine_selected": 83301722.0,
+  "readings": {
+   "detection_line": [],
+   "crop_variants": []
+  },
+  "conflict_reason": "single source (crop:up3_bin) = 83,301,722 — needs the live per-cell confirmation",
+  "decision": null
+ },
+ {
+  "packet_id": "revenue|6|2022",
+  "field": "revenue",
+  "page": 6,
+  "year": 2022,
+  "status": "CONFLICT",
+  "crop_image": "cell_evidence\\spatial_revenue_p6_y2022.png",
+  "machine_selected": 16665919878.0,
+  "readings": {
+   "detection_line": [],
+   "crop_variants": []
+  },
+  "conflict_reason": "selected 16,665,919,878 [crop:up3_clahe] vs others [17770919.0, 177709194.0, 1777091944.0] — all kept",
+  "decision": null
+ },
+ {
+  "packet_id": "net_activity_profit|6|2022",
+  "field": "net_activity_profit",
+  "page": 6,
+  "year": 2022,
+  "status": "CONFLICT",
+  "crop_image": "cell_evidence\\spatial_net_activity_profit_p6_y2022.png",
+  "machine_selected": 1257960603.0,
+  "readings": {
+   "detection_line": [],
+   "crop_variants": []
+  },
+  "conflict_reason": "selected 1,257,960,603 [crop:orig] vs others [140445.33] — all kept",
+  "decision": null
+ },
+ {
+  "packet_id": "net_income|6|2022",
+  "field": "net_income",
+  "page": 6,
+  "year": 2022,
+  "status": "CONFLICT",
+  "crop_image": "cell_evidence\\spatial_net_income_p6_y2022.png",
+  "machine_selected": 1056737086.0,
+  "readings": {
+   "detection_line": [],
+   "crop_variants": []
+  },
+  "conflict_reason": "selected 1,056,737,086 [crop:orig] vs others [1004.0, 1001.0] — all kept",
+  "decision": null
+ },
+ {
+  "packet_id": "income_tax_expense|6|2022",
+  "field": "income_tax_expense",
+  "page": 6,
+  "year": 2022,
+  "status": "MULTI_ROW",
+  "crop_image": "cell_evidence\\spatial_income_tax_expense_p6_y2022.png",
+  "machine_selected": -179626127.0,
+  "readings": {
+   "detection_line": [],
+   "crop_variants": []
+  },
+  "conflict_reason": "MULTI_ROW kept after resolution (CONFLICT): selected -179,626,127 [crop:orig] vs others [-119587144.0, -11948318.0] — all kept",
+  "decision": null
+ },
+ {
+  "packet_id": "total_liabilities|5|2022",
+  "field": "total_liabilities",
+  "page": 5,
+  "year": 2022,
+  "status": "CONFLICT",
+  "crop_image": "cell_evidence\\spatial_total_liabilities_p5_y2022.png",
+  "machine_selected": 418441944.0,
+  "readings": {
+   "detection_line": [],
+   "crop_variants": []
+  },
+  "conflict_reason": "selected 418,441,944 [crop:up3_bin] vs others [10944.0, 1410444.0, 10444.0] — all kept",
+  "decision": null
+ },
+ {
+  "packet_id": "operating_cash_flow|9|2022",
+  "field": "operating_cash_flow",
+  "page": 9,
+  "year": 2022,
+  "status": "UNREADABLE",
+  "crop_image": "cell_evidence\\spatial_operating_cash_flow_p9_y2022.png",
+  "machine_selected": 11160.0,
+  "readings": {
+   "detection_line": [],
+   "crop_variants": []
+  },
+  "conflict_reason": "short read (5 digits) — suspect truncation; detection + crop read agree on 11,160",
+  "decision": null
+ }
+]

@@ -14,7 +14,8 @@
   "usable_decisive": 0,
   "candidate_yield_rate": 0.0,
   "e2e_strict": 0.0,
-  "e2e_strict_count": 0
+  "e2e_strict_count": 0,
+  "note_single_read": "CROP_ONLY counts as gated — a single uncorroborated read is never decisive"
  },
  "B_strip": {
   "n": 11,
@@ -31,7 +32,8 @@
   "usable_decisive": 0,
   "candidate_yield_rate": 1.0,
   "e2e_strict": 0.0,
-  "e2e_strict_count": 0
+  "e2e_strict_count": 0,
+  "note_single_read": "CROP_ONLY counts as gated — a single uncorroborated read is never decisive"
  },
  "C_spatial": {
   "n": 11,
@@ -48,7 +50,8 @@
   "usable_decisive": 0,
   "candidate_yield_rate": 0.0,
   "e2e_strict": 0.0,
-  "e2e_strict_count": 0
+  "e2e_strict_count": 0,
+  "note_single_read": "CROP_ONLY counts as gated — a single uncorroborated read is never decisive"
  },
  "C_spatial_declared": {
   "n": 11,
@@ -62,10 +65,11 @@
   "false_match": 3,
   "no_value": 0,
   "gated_not_decisive": 9,
-  "usable_decisive": 2,
+  "usable_decisive": 0,
   "candidate_yield_rate": 1.0,
-  "e2e_strict": 0.182,
-  "e2e_strict_count": 2
+  "e2e_strict": 0.0,
+  "e2e_strict_count": 0,
+  "note_single_read": "CROP_ONLY counts as gated — a single uncorroborated read is never decisive"
  },
  "C_spatial_gemini_dates": {
   "n": 5,
@@ -82,12 +86,13 @@
   "usable_decisive": 0,
   "candidate_yield_rate": 1.0,
   "e2e_strict": 0.0,
-  "e2e_strict_count": 0
+  "e2e_strict_count": 0,
+  "note_single_read": "CROP_ONLY counts as gated — a single uncorroborated read is never decisive"
  },
  "unified_C2_vs_C3": {
   "n": 11,
-  "C2_exact": 8,
-  "C3_exact": 4,
+  "C2_exact": 0,
+  "C3_exact": 0,
   "C3_supported": 5,
   "note": "same 11-cell denominator; C3-unsupported cells count as not extracted (unverified), never dropped",
   "rows": [

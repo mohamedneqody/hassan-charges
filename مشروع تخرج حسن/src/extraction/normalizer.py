@@ -747,6 +747,19 @@ def build_decision_log(data: FinancialData) -> list[dict]:
             # VERIFIED_EXACT and never feeds the ratio engine as documented.
             spatial = (getattr(data, "spatial_findings", {}) or {}).get(
                 (field_name, year))
+            # Human-in-the-loop: an explicit reviewer attestation is an
+            # independent verified re-read — status VERIFIED_HUMAN with the
+            # reviewer/time cited; the change (if any) was applied to
+            # data.values by human_review.apply_review and is kept in the log.
+            hr = (getattr(data, "human_reviews", {}) or {}).get(
+                (field_name, year))
+            if hr and hr.get("status") == "VERIFIED_HUMAN"                     and hr.get("value_final") is not None:
+                status = "VERIFIED_HUMAN"
+                reason = (
+                    f"إقرار بشري موثق — المراجع {hr.get('reviewer')} في "
+                    f"{hr.get('timestamp')}; القيمة الآلية قبل الاعتماد: "
+                    f"{hr.get('value_before')} (سجل التغيير في "
+                    "cell_evidence/human_reviews.json)")
             if spatial and status == "VERIFIED_EXACT" \
                     and spatial.get("year_assignment") != "confirmed":
                 status = "UNVERIFIED"

@@ -367,6 +367,9 @@ def main() -> None:
                    encoding="utf-8")
 
     BLOCKED_STATUS = ("CONFLICT", "MULTI_ROW", "UNREADABLE")
+    # a SINGLE uncorroborated crop read (CROP_ONLY) is NOT decisive — only
+    # VERIFIED_CANDIDATE (full-page read + focused crop read AGREE) is
+    DECISIVE_STATUS = ("VERIFIED_CANDIDATE",)
 
     def cell_strict(r) -> bool:
         """E2E pass = ALL conditions together: label AND row AND year AND
@@ -374,7 +377,7 @@ def main() -> None:
         return bool(
             r["label_match"] and r["row_match"] and r["year_match"]
             and r.get("cell_bbox") and r["exact_numeric"]
-            and r.get("status_2022") not in BLOCKED_STATUS
+            and r.get("status_2022") in DECISIVE_STATUS
         )
 
     def tally(m):
@@ -409,7 +412,7 @@ def main() -> None:
             # count (this is what the report may actually print)
             "usable_decisive": sum(
                 1 for r in sub if r["exact_numeric"]
-                and r.get("status_2022") not in BLOCKED_STATUS),
+                and r.get("status_2022") in DECISIVE_STATUS),
             # candidate yield: SOME number came out (correct or NOT) — the old
             # 'readability 100%' was this, NOT a correctness measure
             "candidate_yield_rate": round(read_any / n, 3) if n else None,

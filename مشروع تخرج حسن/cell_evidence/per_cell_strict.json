@@ -8,7 +8,7 @@
   "correct_bbox": true,
   "exact_value": true,
   "final_status": "CROP_ONLY",
-  "e2e_pass": true,
+  "e2e_pass": false,
   "year_source": "YEAR_INFERRED",
   "selected": 4063400167.0,
   "gt": 4063400167
@@ -64,7 +64,7 @@
   "correct_bbox": true,
   "exact_value": true,
   "final_status": "CROP_ONLY",
-  "e2e_pass": true,
+  "e2e_pass": false,
   "year_source": "YEAR_INFERRED",
   "selected": 83301722.0,
   "gt": 83301722

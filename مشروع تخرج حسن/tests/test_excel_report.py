@@ -27,6 +27,11 @@ def _metrics(year: int, revenue: float, net_income: float) -> YearMetrics:
         retained_earnings=revenue * 0.2,
         working_capital=revenue * 0.15,
         net_margin=net_income / revenue * 100,
+        # critical-pillar ratios so the Missing-Data-Coverage policy computes
+        # liquidity+leverage and prints a numeric score (a score built on
+        # profitability alone is now REFUSED by design)
+        current_ratio=2.0, quick_ratio=1.5, debt_to_equity=1.14,
+        debt_ratio=0.53, roe=14.3, roa=8.0,
     )
 
 

@@ -475,3 +475,98 @@ def test_stale_cache_values_carry_provenance_or_are_refused():
     d2.candidates = {"revenue": {2022: [(16_665_919_878.0, 0)]}}
     log2 = build_decision_log(d2)
     assert log2[0]["status"] == "UNVERIFIED"          # single read, no sources
+
+
+# ── Human-in-the-loop verification (المهمة: المراجعة البشرية) ───────────────
+
+def test_review_queue_covers_all_non_decisive_cells():
+    from src.extraction.human_review import build_review_queue
+    from pathlib import Path
+
+    proj = Path(__file__).resolve().parents[1]
+    queue = build_review_queue(proj / "cell_evidence/per_cell_strict.json",
+                               proj / "cell_evidence")
+    non_decisive = [c for c in json.loads(
+        (proj / "cell_evidence/per_cell_strict.json").read_text(encoding="utf-8"))
+        if c["final_status"] != "VERIFIED_CANDIDATE"]
+    assert len(queue) == len(non_decisive) == 11  # CROP_ONLY is non-decisive too
+    for pkt in queue:
+        assert pkt["decision"] is None              # reviewer fills it
+        assert pkt["crop_image"], pkt["field"]       # crop image attached
+        assert pkt["conflict_reason"]
+    ids = {p["packet_id"] for p in queue}
+    assert "short_term_debt|5|2022" in ids           # CROP_ONLY is reviewable too
+
+
+def test_human_review_corroboration_and_correction(tmp_path):
+    from src.extraction.human_review import (
+        REVIEW_LOG, accuracy_separation, apply_review, build_review_queue,
+    )
+    from src.extraction.normalizer import FinancialData, build_decision_log
+    from pathlib import Path
+
+    proj = Path(__file__).resolve().parents[1]
+    log_path = tmp_path / "human_reviews.json"
+    queue = build_review_queue(proj / "cell_evidence/per_cell_strict.json",
+                               proj / "cell_evidence")
+    # net_income: machine CONFLICT selected the exact value — human corroborates
+    rec = apply_review(queue, "net_income|6|2022", 1_056_737_086.0,
+                       reviewer="auditor-A", log_path=log_path)
+    assert rec["corroborates_machine"] is True
+    assert rec["reviewer"] == "auditor-A" and rec["timestamp"]
+    assert rec["crop_sha256"]
+    # a differing value is a CORRECTION with the machine value preserved
+    rec2 = apply_review(queue, "operating_cash_flow|9|2022", 1_214_507_839.0,
+                        reviewer="auditor-B", log_path=log_path)
+    assert rec2["corroborates_machine"] is False
+    assert rec2["value_before"] is not None and rec2["value_before"] != 1_214_507_839.0
+
+    # separation: the automatic counters are NOT raised by human reviews
+    summary = json.loads((proj / "cell_evidence/benchmark_abc_summary.json")
+                         .read_text(encoding="utf-8"))["C_spatial_declared"]
+    before_auto = summary["exact_numeric"], summary["usable_decisive"]
+    sep = accuracy_separation(summary, human_log=log_path,
+                              gt={"net_income": 1_056_737_086,
+                                  "operating_cash_flow": 1_214_507_839})
+    after_auto = (sep["automatic"]["automatic_exact"],
+                  sep["automatic"]["automatic_usable_decisive"])
+    assert after_auto == before_auto                 # immutable by reviews
+    assert sep["human_assisted"]["reviewed"] == 2
+    assert sep["human_assisted"]["human_verified_exact"] == 2
+    assert REVIEW_LOG.name == "human_reviews.json"
+
+
+def test_human_review_flows_through_gate_and_health(tmp_path):
+    from src.analysis.financial_gate import decisive_values
+    from src.extraction.human_review import apply_review, build_review_queue, review_is_valid
+    from src.extraction.normalizer import FinancialData, build_decision_log
+    from pathlib import Path
+
+    proj = Path(__file__).resolve().parents[1]
+    queue = build_review_queue(proj / "cell_evidence/per_cell_strict.json",
+                               proj / "cell_evidence")
+    d = FinancialData()
+    d.values["net_income"] = {2022: 1_056_737_086.0}
+    d.candidates["net_income"] = {2022: [(1_056_737_086.0, 0)]}
+    d.confidence["net_income"] = {2022: 1}          # single machine read
+    # before review: single uncorroborated read is NOT decisive
+    log0 = build_decision_log(d)
+    e0 = next(e for e in log0 if e["field"] == "net_income")
+    assert e0["status"] in ("UNVERIFIED", "CROP_ONLY", "CONFLICT")
+    assert decisive_values(d)[("net_income", 2022)]["usable_decisive"] is False
+
+    apply_review(queue, "net_income|6|2022", 1_056_737_086.0,
+                 reviewer="auditor-A", data=d, log_path=tmp_path / "hr.json")
+    log1 = build_decision_log(d)
+    e1 = next(e for e in log1 if e["field"] == "net_income")
+    assert e1["status"] == "VERIFIED_HUMAN"
+    assert "auditor-A" in e1["reason"]
+    dv = decisive_values(d)
+    assert dv[("net_income", 2022)]["usable_decisive"] is True
+    assert dv[("net_income", 2022)]["gate"] == "use_disclosed"  # human-assisted disclosed
+
+    # invalidation: the reviewed crop changes → the attestation is void
+    rec = d.human_reviews[("net_income", 2022)]
+    assert review_is_valid(rec, crops_dir=proj / "cell_evidence")
+    rec["crop_sha256"] = "deadbeef"                  # source replaced
+    assert not review_is_valid(rec, crops_dir=proj / "cell_evidence")

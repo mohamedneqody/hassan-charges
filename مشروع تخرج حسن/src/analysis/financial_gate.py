@@ -20,7 +20,14 @@ def decide(status: str) -> str:
     """use | use_disclosed | not_decisive | missing"""
     return {
         "VERIFIED_EXACT": "use",
+        # explicit human attestation — usable, but always DISCLOSED as
+        # human-assisted (never folded into automatic OCR accuracy)
+        "VERIFIED_HUMAN": "use_disclosed",
+        # spatial dual attestation (full-page read + focused crop read AGREE)
+        "VERIFIED_CANDIDATE": "use",
         "VERIFIED_DERIVED": "use_disclosed",
+        # a SINGLE uncorroborated read — never decisive on its own
+        "CROP_ONLY": "not_decisive",
         "UNVERIFIED": "not_decisive",
         "CONFLICT": "not_decisive",
         "MULTI_ROW": "not_decisive",

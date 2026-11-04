@@ -63,8 +63,8 @@ GT_ROWS = [
     ("net_activity_profit", 6, ["صافي", "أرباح"], 1_257_960_603, None, 1),
     ("net_income", 6, ["أرباح العام", "ربح العام"], 1_056_737_086, 288_152_668, 1),
     ("income_tax_expense", 6, ["ضريبة"], -179_626_127, None, 1),
-    ("total_liabilities", 5, ["اجمالي الالتزامات", "إجمالي الالتزامات"], 9_030_000_000, 8_250_000_000, 0.02),
-    ("operating_cash_flow", 9, ["التشغيل"], 1_214_507_829, None, 1),
+    ("total_liabilities", 5, ["اجمالي الالتزامات", "إجمالي الالتزامات"], 9_027_315_979, 8_250_000_000, 0.02),
+    ("operating_cash_flow", 9, ["التشغيل"], 1_214_507_839, None, 1),
 ]
 
 
@@ -366,26 +366,56 @@ def main() -> None:
     OUT.write_text(json.dumps(rows, ensure_ascii=False, indent=1, default=str),
                    encoding="utf-8")
 
+    BLOCKED_STATUS = ("CONFLICT", "MULTI_ROW", "UNREADABLE")
+
+    def cell_strict(r) -> bool:
+        """E2E pass = ALL conditions together: label AND row AND year AND
+        bbox AND exact value AND a status eligible for decisive use."""
+        return bool(
+            r["label_match"] and r["row_match"] and r["year_match"]
+            and r.get("cell_bbox") and r["exact_numeric"]
+            and r.get("status_2022") not in BLOCKED_STATUS
+        )
+
     def tally(m):
         sub = [r for r in rows if r["method"] == m]
         n = len(sub)
+        no_value = sum(1 for r in sub if r["unverified"])
+        gated = sum(1 for r in sub if not r["unverified"]
+                    and r.get("status_2022") in BLOCKED_STATUS)
+        year_printed = sum(1 for r in sub if r["year_match"]
+                           and "PRINTED" in str(r.get("year_source", "")))
+        year_inferred = sum(1 for r in sub if r["year_match"]
+                            and "INFERRED" in str(r.get("year_source", "")))
+        year_unresolved = n - year_printed - year_inferred
+        strict = sum(1 for r in sub if cell_strict(r))
         read_any = sum(1 for r in sub if not r["unverified"])
         return {
+            "n": n,
             "label_match": sum(r["label_match"] for r in sub),
             "row_match": sum(r["row_match"] for r in sub),
-            "year_match": sum(r["year_match"] for r in sub),
+            "year_match_printed": year_printed,
+            "year_match_inferred": year_inferred,
+            "year_unresolved": year_unresolved,
             "cell_bbox": sum(r.get("cell_bbox", 0) or 0 for r in sub),
             "exact_numeric": sum(r["exact_numeric"] for r in sub),
+            # FALSE MATCH = the FINAL selected value matches neither year's GT
             "false_match": sum(r["false_match"] for r in sub),
-            "unverified": sum(r["unverified"] for r in sub),
-            # OCR Readability Rate: the reader produced SOME reading (value or
-            # recorded conflict) — distinct from being CORRECT.
-            "ocr_readability_rate": round(read_any / n, 3) if n else None,
-            # End-to-End Extraction Accuracy: exact value AND correct year
-            # (exact_numeric already requires year_match) over all cells.
-            "end_to_end_accuracy": round(
-                sum(r["exact_numeric"] for r in sub) / n, 3) if n else None,
-            "n": n,
+            # no_value: nothing extractable; gated: a value WAS extracted but
+            # its status (CONFLICT/MULTI_ROW/UNREADABLE) blocks decisive use
+            "no_value": no_value,
+            "gated_not_decisive": gated,
+            # usable_decisive = exact AND not gated — the honest final-answer
+            # count (this is what the report may actually print)
+            "usable_decisive": sum(
+                1 for r in sub if r["exact_numeric"]
+                and r.get("status_2022") not in BLOCKED_STATUS),
+            # candidate yield: SOME number came out (correct or NOT) — the old
+            # 'readability 100%' was this, NOT a correctness measure
+            "candidate_yield_rate": round(read_any / n, 3) if n else None,
+            # STRICT end-to-end: label+row+year+bbox+exact+usable together
+            "e2e_strict": round(strict / n, 3) if n else None,
+            "e2e_strict_count": strict,
         }
 
     summary = {m: tally(m) for m in

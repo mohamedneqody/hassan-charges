@@ -291,6 +291,20 @@ def enhance_variants(crop_png: bytes) -> list[tuple[str, bytes]]:
         ok, b = cv2.imencode(".png", th)
         if ok:
             out.append(("up3_bin", b.tobytes()))
+        # stronger variants for cells whose digits survive no mild treatment
+        med = cv2.medianBlur(up, 3)
+        ok, b = cv2.imencode(".png", med)
+        if ok:
+            out.append(("up3_med", b.tobytes()))
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+        morph = cv2.morphologyEx(med, cv2.MORPH_CLOSE, kernel)
+        ok, b = cv2.imencode(".png", morph)
+        if ok:
+            out.append(("up3_morph", b.tobytes()))
+        up4 = cv2.resize(img, None, fx=4, fy=4, interpolation=cv2.INTER_CUBIC)
+        ok, b = cv2.imencode(".png", up4)
+        if ok:
+            out.append(("up4", b.tobytes()))
     return out
 
 
@@ -573,9 +587,19 @@ def extract_spatial_cell(conv, png: bytes, field: str, year: int,
                         else "declared_convention" if columns is not None
                         else "year_headers")
 
+    # a missing year column is an ASSIGNMENT failure, not a reading failure —
+    # report it before any trial so callers can invoke the labelled fallback
+    if year not in cols:
+        label = rows[0]
+        cell.label_text = label.text[:120]
+        cell.label_box_rel = [label.x0 / page_w, label.y0 / page_h,
+                              label.x1 / page_w, label.y1 / page_h]
+        cell.status = STATUS_NO_YEAR
+        cell.detail = f"year {year} header not found ({col_detail})"
+        return cell
+
     from src.extraction.local_ocr import _page_markdown
 
-    multi = len(rows) > 1
     trials = []
     for ri, label in enumerate(rows):
         band = (label.y0 - 0.45 * label.height, label.y1 + 0.45 * label.height)
@@ -605,10 +629,11 @@ def extract_spatial_cell(conv, png: bytes, field: str, year: int,
                                   if abs(v) >= 1000]
         trials.append({"label": label, "detection": detection,
                        "crop": crop_vals, "crop_png": crop_png})
-        if detection or crop_vals:
-            break  # the most specific row that actually holds a value wins
-
+    # try ALL matched rows — a section header that yields no number in its
+    # own intersection is NOT a competing value. MULTI_ROW doubt = two or
+    # more rows that PRODUCED candidates, not merely matched the words.
     productive = [t for t in trials if t["detection"] or t["crop"]]
+    multi = len(productive) > 1
     if not productive:
         cell.status = STATUS_UNREADABLE
         cell.detail = (f"no number in any of {len(trials)} label rows' "

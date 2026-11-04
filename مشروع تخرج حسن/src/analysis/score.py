@@ -68,8 +68,14 @@ class HealthScore:
         return self.label_ar if report_language() == "ar" else self.label_en
 
 
-def compute_health_score(curr: YearMetrics) -> HealthScore:
-    """Build the score from current-year ratios (prev metrics not needed)."""
+def compute_health_score(curr: YearMetrics,
+                         blocked_fields: set[str] | None = None) -> HealthScore:
+    """Build the score from current-year ratios (prev metrics not needed).
+    `blocked_fields` (from financial_gate) excludes any metric whose input
+    fields are not decisive — a pillar built ONLY from blocked inputs is
+    dropped and the remaining weights renormalize, instead of printing a
+    confident score computed from a conflicted number."""
+    blocked = blocked_fields or set()
     pillars: list[Pillar] = []
 
     # --- Liquidity (25%) ---
@@ -101,6 +107,30 @@ def compute_health_score(curr: YearMetrics) -> HealthScore:
     ]
     pillars.append(_pillar("cash", "Cash Generation", "التدفق النقدي", 20, cash_subs))
 
+    if blocked:
+        for p in pillars:
+            key_inputs = {
+                "liquidity": ("current_ratio", "quick_ratio"),
+                "leverage": ("debt_to_equity", "debt_ratio"),
+                "profitability": ("net_margin", "roe", "roa"),
+                "cash": ("cfo_to_net_income", "cfo_margin"),
+            }.get(p.key, ())
+            # a pillar whose inputs ALL depend on blocked fields is dropped
+            required = {"current_ratio": ["current_assets", "current_liabilities"],
+                        "quick_ratio": ["current_assets", "current_liabilities", "inventory"],
+                        "debt_to_equity": ["total_liabilities", "equity"],
+                        "debt_ratio": ["total_liabilities", "total_assets"],
+                        "net_margin": ["net_income", "revenue"],
+                        "roe": ["net_income", "equity"],
+                        "roa": ["net_income", "total_assets"],
+                        "cfo_to_net_income": ["operating_cash_flow", "net_income"],
+                        "cfo_margin": ["operating_cash_flow", "revenue"]}
+            if key_inputs and all(
+                any(f in blocked for f in required.get(k, []))
+                for k in key_inputs
+            ):
+                p.score = None
+                p.details.append("(محجوب: مدخلاته غير حاسمة — لن تُطبع كدرجة)")
     weighted = [(p.score, p.weight) for p in pillars if p.score is not None]
     total = (
         sum(s * w for s, w in weighted) / sum(w for _, w in weighted)

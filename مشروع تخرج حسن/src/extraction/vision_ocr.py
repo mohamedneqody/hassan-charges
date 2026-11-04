@@ -1280,52 +1280,12 @@ def extract_via_vision(
     # impact when unset.
     import os as _os
 
-    if (_os.getenv("SPATIAL_SHADOW") == "1"
-            or _os.getenv("ENABLE_SPATIAL_EXTRACTION") == "1") \
-            and caller is None:
-        try:
-            from .local_ocr import indra_available
-            from .spatial_cells import extract_spatial_cell
-
-            if indra_available():
-                import indra_ocr as _indra
-
-                _sconv = _indra.load()
-                _years = [int(y) for y in data.years
-                          if isinstance(y, int)][:2]
-                _shadow: dict = {}
-                for _pi, _ppng in list(zip(selected, pages_png))[:3]:
-                    for _f in ("revenue", "net_income", "total_assets",
-                               "total_liabilities", "operating_cash_flow"):
-                        for _y in _years:
-                            try:
-                                _c = extract_spatial_cell(_sconv, _ppng, _f, _y)
-                            except Exception as _exc:
-                                _shadow[(str(_f), _y, _pi)] = {
-                                    "status": "ERROR", "detail": str(_exc)[:120]}
-                                continue
-                            _shadow[(str(_f), _y, _pi)] = {
-                                "status": _c.status,
-                                "value": _c.value,
-                                "provenance": _c.provenance,
-                                "year_source": _c.year_source,
-                                "detail": _c.detail[:160],
-                            }
-                data.spatial_shadow = {
-                    "flag": "SPATIAL_SHADOW=1",
-                    "affects_results": False,
-                    "cells": {f"{k[0]}|{k[1]}|p{k[2]}": v
-                              for k, v in _shadow.items()},
-                }
-                if notes is not None:
-                    notes.append(
-                        "Shadow spatial layer ran (SPATIAL_SHADOW=1): "
-                        f"{sum(1 for v in _shadow.values() if v.get('value') is not None)}"
-                        f"/{len(_shadow)} cells produced a value — recorded "
-                        "only, no status changed.")
-        except Exception as _exc:  # noqa: BLE001 — shadow must never break the run
-            if notes is not None:
-                notes.append(f"Spatial shadow mode failed (ignored): {_exc}")
+    # ── Spatial shadow mode (FEATURE FLAGS: SPATIAL_SHADOW=1 or
+    # ENABLE_SPATIAL_EXTRACTION=1) ── records-only; never touches values or
+    # decision-log statuses. Rollback = unset the env var (default OFF).
+    if _os.getenv("SPATIAL_SHADOW") == "1"             or _os.getenv("ENABLE_SPATIAL_EXTRACTION") == "1":
+        if caller is None:
+            run_spatial_shadow(data, list(zip(selected, pages_png)), notes)
     # ── Cell-crop verification (الخانة المقتطعة) ──
     # Core fields whose decision-log status is CONFLICT or UNVERIFIED get ONE
     # focused strip re-read each (max 2 per run). Confidence-UPGRADE only: a
@@ -1451,3 +1411,93 @@ def _absorb_batch(
                         field_sources.setdefault(field, []).extend(chunk)
         except Exception as exc:  # one bad page must not kill the run
             notes.append(f"Vision page skipped ({exc}).")
+
+
+def run_spatial_shadow(data, page_items, notes=None, fields=None,
+                       converter=None) -> dict | None:
+    """REPLAY/SHADOW runner: spatial extraction over the rendered pages,
+    RECORDS-ONLY (no value/status changes). Returns the shadow record or
+    None when the local reader is unavailable. Runnable directly against
+    saved PNGs for replay tests (labelled REPLAY, not a live run)."""
+    try:
+        from .local_ocr import indra_available
+        from .spatial_cells import extract_spatial_cell
+
+        if not indra_available():
+            if notes is not None:
+                notes.append("Spatial shadow skipped: local OCR unavailable")
+            return None
+        import indra_ocr as _indra
+
+        conv = converter or _indra.load()
+        years = [int(y) for y in data.years if isinstance(y, int)][:2]
+        fields = fields or ("revenue", "net_income", "total_assets",
+                            "total_liabilities", "operating_cash_flow")
+        shadow: dict = {}
+        for pi, ppng in page_items[:3]:
+            for f in fields:
+                for y in years:
+                    try:
+                        c = extract_spatial_cell(conv, ppng, f, y)
+                    except Exception as exc:  # noqa: BLE001 — recorded
+                        shadow[f"{f}|{y}|p{pi}"] = {"status": "ERROR",
+                                                    "detail": str(exc)[:120]}
+                        continue
+                    shadow[f"{f}|{y}|p{pi}"] = {
+                        "status": c.status, "value": c.value,
+                        "provenance": c.provenance,
+                        "year_source": c.year_source,
+                        "detail": c.detail[:160],
+                    }
+                    # pure geometry reports the honest UNCONFIRMED_YEAR on
+                    # documents without readable year headers; ALSO record the
+                    # declared-convention arm (labelled YEAR_INFERRED) so the
+                    # shadow comparison is informative — never conflated.
+                    if c.status in ("UNCONFIRMED_YEAR", "NO_COLUMN"):
+                        try:
+                            from .spatial_cells import find_currency_columns
+
+                            _w, _h, _lines = (None, None, None)
+                            cd = extract_spatial_cell(
+                                conv, ppng, f, y,
+                                columns=_declared_cols(conv, ppng),
+                                columns_source="declared convention")
+                            shadow[f"{f}|{y}|p{pi}|inferred"] = {
+                                "status": cd.status, "value": cd.value,
+                                "provenance": cd.provenance,
+                                "year_source": "YEAR_INFERRED",
+                                "detail": cd.detail[:160],
+                            }
+                        except Exception as exc:  # noqa: BLE001
+                            shadow[f"{f}|{y}|p{pi}|inferred"] = {
+                                "status": "ERROR", "detail": str(exc)[:120]}
+        record = {
+            "mode": "SHADOW_REPLAY",
+            "affects_results": False,
+            "cells": shadow,
+            "produced_value": sum(1 for v in shadow.values()
+                                  if v.get("value") is not None),
+        }
+        data.spatial_shadow = record
+        if notes is not None:
+            notes.append(f"Spatial shadow ran: {record['produced_value']}"
+                         f"/{len(shadow)} cells produced a value — recorded "
+                         "only, no status changed.")
+        return record
+    except Exception as exc:  # noqa: BLE001 — shadow must never break the run
+        if notes is not None:
+            notes.append(f"Spatial shadow mode failed (ignored): {exc}")
+        return None
+
+
+def _declared_cols(conv, png):
+    """Currency-title columns + the declared year order (YEAR_INFERRED) —
+    the fallback arm of the shadow, always labelled, never presented as a
+    printed-date read."""
+    from .spatial_cells import find_currency_columns, read_page_lines
+
+    w, h, lines = read_page_lines(conv, png)
+    cc, _d = find_currency_columns(lines, w)
+    if not cc:
+        return None
+    return {2022: cc["right"], 2021: cc["left"]}

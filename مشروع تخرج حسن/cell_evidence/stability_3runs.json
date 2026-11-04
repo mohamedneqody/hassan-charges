@@ -1,0 +1,182 @@
+{
+ "runs": 3,
+ "geometry": "pipeline currency-title columns + declared order",
+ "fields": {
+  "short_term_debt": {
+   "values": [
+    "4063400167.0",
+    "4063400167.0",
+    "4063400167.0"
+   ],
+   "statuses": [
+    "CROP_ONLY",
+    "CROP_ONLY",
+    "CROP_ONLY"
+   ],
+   "value_stable": true,
+   "status_stable": true,
+   "exact_all_runs": true,
+   "correct_and_stable": true
+  },
+  "current_portion_lt_debt": {
+   "values": [
+    "299320963.0",
+    "299320963.0",
+    "299320963.0"
+   ],
+   "statuses": [
+    "CONFLICT",
+    "CONFLICT",
+    "CONFLICT"
+   ],
+   "value_stable": true,
+   "status_stable": true,
+   "exact_all_runs": true,
+   "correct_and_stable": true
+  },
+  "long_term_debt": {
+   "values": [
+    "363974291.0",
+    "363974291.0",
+    "363974291.0"
+   ],
+   "statuses": [
+    "CONFLICT",
+    "CONFLICT",
+    "CONFLICT"
+   ],
+   "value_stable": true,
+   "status_stable": true,
+   "exact_all_runs": true,
+   "correct_and_stable": true
+  },
+  "non_current_lease_liabilities": {
+   "values": [
+    "9109619.0",
+    "9109619.0",
+    "9109619.0"
+   ],
+   "statuses": [
+    "CONFLICT",
+    "CONFLICT",
+    "CONFLICT"
+   ],
+   "value_stable": true,
+   "status_stable": true,
+   "exact_all_runs": false,
+   "correct_and_stable": false
+  },
+  "current_lease_liabilities": {
+   "values": [
+    "83301722.0",
+    "83301722.0",
+    "83301722.0"
+   ],
+   "statuses": [
+    "CROP_ONLY",
+    "CROP_ONLY",
+    "CROP_ONLY"
+   ],
+   "value_stable": true,
+   "status_stable": true,
+   "exact_all_runs": true,
+   "correct_and_stable": true
+  },
+  "total_liabilities": {
+   "values": [
+    "418441944.0",
+    "418441944.0",
+    "418441944.0"
+   ],
+   "statuses": [
+    "CONFLICT",
+    "CONFLICT",
+    "CONFLICT"
+   ],
+   "value_stable": true,
+   "status_stable": true,
+   "exact_all_runs": false,
+   "correct_and_stable": false
+  },
+  "revenue": {
+   "values": [
+    "16665919878.0",
+    "16665919878.0",
+    "16665919878.0"
+   ],
+   "statuses": [
+    "CONFLICT",
+    "CONFLICT",
+    "CONFLICT"
+   ],
+   "value_stable": true,
+   "status_stable": true,
+   "exact_all_runs": true,
+   "correct_and_stable": true
+  },
+  "net_activity_profit": {
+   "values": [
+    "1257960603.0",
+    "1257960603.0",
+    "1257960603.0"
+   ],
+   "statuses": [
+    "CONFLICT",
+    "CONFLICT",
+    "CONFLICT"
+   ],
+   "value_stable": true,
+   "status_stable": true,
+   "exact_all_runs": true,
+   "correct_and_stable": true
+  },
+  "net_income": {
+   "values": [
+    "1056737086.0",
+    "1056737086.0",
+    "1056737086.0"
+   ],
+   "statuses": [
+    "CONFLICT",
+    "CONFLICT",
+    "CONFLICT"
+   ],
+   "value_stable": true,
+   "status_stable": true,
+   "exact_all_runs": true,
+   "correct_and_stable": true
+  },
+  "income_tax_expense": {
+   "values": [
+    "-179626127.0",
+    "-179626127.0",
+    "-179626127.0"
+   ],
+   "statuses": [
+    "MULTI_ROW",
+    "MULTI_ROW",
+    "MULTI_ROW"
+   ],
+   "value_stable": true,
+   "status_stable": true,
+   "exact_all_runs": true,
+   "correct_and_stable": true
+  },
+  "operating_cash_flow": {
+   "values": [
+    "11160.0",
+    "11160.0",
+    "11160.0"
+   ],
+   "statuses": [
+    "UNREADABLE",
+    "UNREADABLE",
+    "UNREADABLE"
+   ],
+   "value_stable": true,
+   "status_stable": true,
+   "exact_all_runs": false,
+   "correct_and_stable": false
+  }
+ }
+}

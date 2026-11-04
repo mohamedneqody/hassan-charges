@@ -23,8 +23,10 @@ def decide(status: str) -> str:
         # explicit human attestation — usable, but always DISCLOSED as
         # human-assisted (never folded into automatic OCR accuracy)
         "VERIFIED_HUMAN": "use_disclosed",
-        # spatial dual attestation (full-page read + focused crop read AGREE)
-        "VERIFIED_CANDIDATE": "use",
+        # spatial agreement = the SAME Indra model read twice under different
+        # segmentation (full page vs row∩column crop) — correlated errors are
+        # possible, so it is usable WITH disclosure, never silent "use"
+        "VERIFIED_CANDIDATE": "use_disclosed",
         "VERIFIED_DERIVED": "use_disclosed",
         # a SINGLE uncorroborated read — never decisive on its own
         "CROP_ONLY": "not_decisive",

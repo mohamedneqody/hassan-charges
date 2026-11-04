@@ -366,10 +366,9 @@ def main() -> None:
     OUT.write_text(json.dumps(rows, ensure_ascii=False, indent=1, default=str),
                    encoding="utf-8")
 
-    BLOCKED_STATUS = ("CONFLICT", "MULTI_ROW", "UNREADABLE")
-    # a SINGLE uncorroborated crop read (CROP_ONLY) is NOT decisive — only
-    # VERIFIED_CANDIDATE (full-page read + focused crop read AGREE) is
-    DECISIVE_STATUS = ("VERIFIED_CANDIDATE",)
+    from src.analysis.financial_gate import decide as _gate_decide
+    # SINGLE SOURCE OF TRUTH for gating: the gate's own decide() mapping.
+    # (The old list-based counter under-counted CROP_ONLY cells.)
 
     def cell_strict(r) -> bool:
         """E2E pass = ALL conditions together: label AND row AND year AND
@@ -377,7 +376,7 @@ def main() -> None:
         return bool(
             r["label_match"] and r["row_match"] and r["year_match"]
             and r.get("cell_bbox") and r["exact_numeric"]
-            and r.get("status_2022") in DECISIVE_STATUS
+            and _gate_decide(r.get("status_2022")) in ("use", "use_disclosed")
         )
 
     def tally(m):
@@ -412,7 +411,7 @@ def main() -> None:
             # count (this is what the report may actually print)
             "usable_decisive": sum(
                 1 for r in sub if r["exact_numeric"]
-                and r.get("status_2022") in DECISIVE_STATUS),
+                and _gate_decide(r.get("status_2022")) in ("use", "use_disclosed")),
             # candidate yield: SOME number came out (correct or NOT) — the old
             # 'readability 100%' was this, NOT a correctness measure
             "candidate_yield_rate": round(read_any / n, 3) if n else None,

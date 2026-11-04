@@ -754,12 +754,24 @@ def build_decision_log(data: FinancialData) -> list[dict]:
             hr = (getattr(data, "human_reviews", {}) or {}).get(
                 (field_name, year))
             if hr and hr.get("status") == "VERIFIED_HUMAN"                     and hr.get("value_final") is not None:
-                status = "VERIFIED_HUMAN"
-                reason = (
-                    f"إقرار بشري موثق — المراجع {hr.get('reviewer')} في "
-                    f"{hr.get('timestamp')}; القيمة الآلية قبل الاعتماد: "
-                    f"{hr.get('value_before')} (سجل التغيير في "
-                    "cell_evidence/human_reviews.json)")
+                from pathlib import Path as _Path
+                from src.extraction.human_review import (
+                    REVIEW_LOG, review_is_trusted)
+
+                if review_is_trusted(
+                        hr, log_path=_Path(getattr(
+                            data, "human_reviews_log", REVIEW_LOG))):
+                    status = "VERIFIED_HUMAN"
+                    reason = (
+                        f"إقرار بشري موثق — المراجع {hr.get('reviewer')} في "
+                        f"{hr.get('timestamp')}; القيمة الآلية قبل الاعتماد: "
+                        f"{hr.get('value_before')} (سجل التغيير المتسلسل في "
+                        "cell_evidence/human_reviews.json)")
+                else:
+                    # forged/stale/voided attestation — never decisive
+                    status = "UNVERIFIED"
+                    reason = ("إقرار بشري غير موثوق (سجل مفقود أو مُعدَّل أو "
+                              "مصدر متغير) — لا يُعتمد")
             if spatial and status == "VERIFIED_EXACT" \
                     and spatial.get("year_assignment") != "confirmed":
                 status = "UNVERIFIED"

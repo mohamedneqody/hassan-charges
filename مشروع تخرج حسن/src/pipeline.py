@@ -106,6 +106,9 @@ def run_pipeline(file_name: str, raw: bytes, company: str, progress_cb=None, pag
                 "notes_text": data.notes_text,
                 "field_sources": getattr(data, "field_sources", {}),
                 "spatial_shadow": getattr(data, "spatial_shadow", None),
+                "human_reviews": {
+                    f"{k[0]}|{k[1]}": v for k, v
+                    in (getattr(data, "human_reviews", {}) or {}).items()},
             })
         except Exception as exc:
             # caching must never break the pipeline — but the failure is no
@@ -170,6 +173,9 @@ def run_pipeline(file_name: str, raw: bytes, company: str, progress_cb=None, pag
         "notes_text": data.notes_text,
         "field_sources": getattr(data, "field_sources", {}),
         "spatial_shadow": getattr(data, "spatial_shadow", None),
+        "human_reviews": {
+            f"{k[0]}|{k[1]}": v for k, v
+            in (getattr(data, "human_reviews", {}) or {}).items()},
     }
 
 

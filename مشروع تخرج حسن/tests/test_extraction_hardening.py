@@ -498,51 +498,128 @@ def test_review_queue_covers_all_non_decisive_cells():
     assert "short_term_debt|5|2022" in ids           # CROP_ONLY is reviewable too
 
 
-def test_human_review_corroboration_and_correction(tmp_path):
+def test_human_review_corroboration_and_correction(tmp_path, monkeypatch):
     from src.extraction.human_review import (
-        REVIEW_LOG, accuracy_separation, apply_review, build_review_queue,
+        apply_review, build_review_queue, separated_metrics, verify_log_integrity,
+    )
+    from pathlib import Path
+
+    proj = Path(__file__).resolve().parents[1]
+    monkeypatch.setenv("REVIEWERS", "auditor-A, auditor-B")
+    log_path = tmp_path / "human_reviews.json"
+    queue = build_review_queue(proj / "cell_evidence/per_cell_strict.json",
+                               proj / "cell_evidence")
+    rec = apply_review(queue, "net_income|6|2022", 1_056_737_086.0,
+                       reviewer="auditor-A", log_path=log_path)
+    assert rec["kind"] == "corroborate"
+    assert rec["reviewer"] == "auditor-A" and rec["timestamp"]
+    assert rec["crop_sha256"] and rec["doc_sha256"]      # crop AND page hashed
+    assert rec["bbox_rel"]                               # position recorded
+    rec2 = apply_review(queue, "operating_cash_flow|9|2022", 1_214_507_839.0,
+                        reviewer="auditor-B", log_path=log_path)
+    assert rec2["kind"] == "correct"
+    assert rec2["value_before"] is not None and rec2["value_before"] != 1_214_507_839.0
+    ok, bad = verify_log_integrity(log_path)
+    assert ok and bad is None                            # chain intact
+    # separation: automatic counters are NOT raised by the human reviews
+    summary = json.loads((proj / "cell_evidence/benchmark_abc_summary.json")
+                         .read_text(encoding="utf-8"))["C_spatial_declared"]
+    before_auto = (summary["exact_numeric"], summary["usable_decisive"])
+    rows = json.loads((proj / "cell_evidence/per_cell_strict.json")
+                      .read_text(encoding="utf-8"))
+    sep = separated_metrics(rows, human_log=log_path)
+    assert round(sep["automatic_exact_accuracy"] * 11) == before_auto[0]
+    assert sep["human_assisted_verified_coverage"] > 0   # trusted human cells
+    assert sep["log_integrity_ok"] is True
+
+
+def test_reviewer_allowlist_blocks_unknown_and_unconfigured(tmp_path, monkeypatch):
+    from src.extraction.human_review import (
+        apply_review, build_review_queue, verify_reviewer,
+    )
+    from pathlib import Path
+
+    proj = Path(__file__).resolve().parents[1]
+    queue = build_review_queue(proj / "cell_evidence/per_cell_strict.json",
+                               proj / "cell_evidence")
+    monkeypatch.delenv("REVIEWERS", raising=False)
+    try:
+        verify_reviewer("anyone")
+        raised_unconfigured = False
+    except PermissionError:
+        raised_unconfigured = True
+    assert raised_unconfigured                    # no allowlist → nothing passes
+    monkeypatch.setenv("REVIEWERS", "auditor-A")
+    try:
+        apply_review(queue, "net_income|6|2022", 1_056_737_086.0,
+                     reviewer="impostor", log_path=tmp_path / "hr.json")
+        raised = False
+    except PermissionError:
+        raised = True
+    assert raised                                  # unknown identity blocked
+    assert not (tmp_path / "hr.json").exists()     # NOTHING was written
+
+
+def test_hash_chain_detects_tampering(tmp_path, monkeypatch):
+    from src.extraction.human_review import (
+        apply_review, build_review_queue, verify_log_integrity,
+    )
+    from pathlib import Path
+
+    proj = Path(__file__).resolve().parents[1]
+    monkeypatch.setenv("REVIEWERS", "auditor-A")
+    log_path = tmp_path / "hr.json"
+    queue = build_review_queue(proj / "cell_evidence/per_cell_strict.json",
+                               proj / "cell_evidence")
+    apply_review(queue, "net_income|6|2022", 1_056_737_086.0,
+                 reviewer="auditor-A", log_path=log_path)
+    apply_review(queue, "revenue|6|2022", 16_665_919_878.0,
+                 reviewer="auditor-A", log_path=log_path)
+    ok, _ = verify_log_integrity(log_path)
+    assert ok
+    log = json.loads(log_path.read_text(encoding="utf-8"))
+    log[0]["value_final"] = 999.0                  # TAMPER with an old record
+    log_path.write_text(json.dumps(log, ensure_ascii=False), encoding="utf-8")
+    ok, bad = verify_log_integrity(log_path)
+    assert not ok and bad == 1                     # detected at the edited seq
+
+
+def test_conflicting_human_reviews_never_decide(tmp_path, monkeypatch):
+    from src.extraction.human_review import (
+        STATUS_CONFLICT_HUMAN, apply_review, build_review_queue, review_is_trusted,
     )
     from src.extraction.normalizer import FinancialData, build_decision_log
     from pathlib import Path
 
     proj = Path(__file__).resolve().parents[1]
-    log_path = tmp_path / "human_reviews.json"
+    monkeypatch.setenv("REVIEWERS", "auditor-A, auditor-B")
+    log_path = tmp_path / "hr.json"
     queue = build_review_queue(proj / "cell_evidence/per_cell_strict.json",
                                proj / "cell_evidence")
-    # net_income: machine CONFLICT selected the exact value — human corroborates
-    rec = apply_review(queue, "net_income|6|2022", 1_056_737_086.0,
-                       reviewer="auditor-A", log_path=log_path)
-    assert rec["corroborates_machine"] is True
-    assert rec["reviewer"] == "auditor-A" and rec["timestamp"]
-    assert rec["crop_sha256"]
-    # a differing value is a CORRECTION with the machine value preserved
-    rec2 = apply_review(queue, "operating_cash_flow|9|2022", 1_214_507_839.0,
-                        reviewer="auditor-B", log_path=log_path)
-    assert rec2["corroborates_machine"] is False
-    assert rec2["value_before"] is not None and rec2["value_before"] != 1_214_507_839.0
-
-    # separation: the automatic counters are NOT raised by human reviews
-    summary = json.loads((proj / "cell_evidence/benchmark_abc_summary.json")
-                         .read_text(encoding="utf-8"))["C_spatial_declared"]
-    before_auto = summary["exact_numeric"], summary["usable_decisive"]
-    sep = accuracy_separation(summary, human_log=log_path,
-                              gt={"net_income": 1_056_737_086,
-                                  "operating_cash_flow": 1_214_507_839})
-    after_auto = (sep["automatic"]["automatic_exact"],
-                  sep["automatic"]["automatic_usable_decisive"])
-    assert after_auto == before_auto                 # immutable by reviews
-    assert sep["human_assisted"]["reviewed"] == 2
-    assert sep["human_assisted"]["human_verified_exact"] == 2
-    assert REVIEW_LOG.name == "human_reviews.json"
+    d = FinancialData()
+    d.values["net_income"] = {2022: 1_056_737_086.0}
+    d.candidates["net_income"] = {2022: [(1_056_737_086.0, 0)]}
+    apply_review(queue, "net_income|6|2022", 1_056_737_086.0,
+                 reviewer="auditor-A", data=d, log_path=log_path)
+    apply_review(queue, "net_income|6|2022", 999_999_999.0,
+                 reviewer="auditor-B", data=d, log_path=log_path)
+    # the SECOND, differing reviewer overwrote data.human_reviews → conflict
+    assert d.human_reviews[("net_income", 2022)]["status"] == STATUS_CONFLICT_HUMAN
+    log1 = build_decision_log(d)
+    e1 = next(e for e in log1 if e["field"] == "net_income")
+    assert e1["status"] != "VERIFIED_HUMAN"        # conflict never decides
+    from src.analysis.financial_gate import decisive_values
+    assert decisive_values(d)[("net_income", 2022)]["usable_decisive"] is False
 
 
-def test_human_review_flows_through_gate_and_health(tmp_path):
+def test_human_review_flows_through_gate_and_health(tmp_path, monkeypatch):
     from src.analysis.financial_gate import decisive_values
     from src.extraction.human_review import apply_review, build_review_queue, review_is_valid
     from src.extraction.normalizer import FinancialData, build_decision_log
     from pathlib import Path
 
     proj = Path(__file__).resolve().parents[1]
+    monkeypatch.setenv("REVIEWERS", "auditor-A")
     queue = build_review_queue(proj / "cell_evidence/per_cell_strict.json",
                                proj / "cell_evidence")
     d = FinancialData()
@@ -570,3 +647,185 @@ def test_human_review_flows_through_gate_and_health(tmp_path):
     assert review_is_valid(rec, crops_dir=proj / "cell_evidence")
     rec["crop_sha256"] = "deadbeef"                  # source replaced
     assert not review_is_valid(rec, crops_dir=proj / "cell_evidence")
+
+
+# ── Dual-read independence audit + full-path integration (P0 أخيرة) ─────────
+
+def test_dual_read_agreement_is_same_model_and_disclosed():
+    """The two agreeing reads are the SAME Indra model under two
+    segmentations — correlated digit confusions are possible, so the gate
+    must DISCLOSE, never silently 'use'."""
+    from src.analysis.financial_gate import decide
+
+    assert decide("VERIFIED_CANDIDATE") == "use_disclosed"
+    assert decide("CROP_ONLY") == "not_decisive"
+
+
+def test_agreeing_but_wrong_rows_still_blocked(monkeypatch):
+    """Detection AND crop agree on a value from a CONTESTED row set — the
+    MULTI_ROW doubt must survive the agreement (agreement proves the number,
+    not the row)."""
+    lines = [
+        L(1396, 100, 1569, 130, "صافي أرباح النشاط"),     # row A
+        L(1396, 118, 1569, 148, "صافي أرباح النشاط"),     # duplicate row
+        L(446, 98, 640, 128, "1,257,960,603"),            # both readers agree
+    ]
+    import src.extraction.local_ocr as LO
+
+    monkeypatch.setattr(SC, "read_page_lines",
+                        lambda conv, png: (1000, 400, lines))
+    monkeypatch.setattr(LO, "_page_markdown",
+                        lambda conv, png: "1,257,960,603")
+    monkeypatch.setattr(SC, "_crop", lambda *a: b"fake")
+    cell = SC.extract_spatial_cell(
+        None, b"", "net_activity_profit", 2022,
+        columns={2022: YearColumn(2022, 0.48, 0.60, 0.543)},
+        columns_source="test")
+    assert cell.status == SC.STATUS_MULTI_ROW            # agreement ≠ row proof
+    assert cell.provenance == "UNVERIFIED"
+
+
+def test_agreement_with_identity_contradiction_stays_visible():
+    """Even when both reads agree, an accounting-identity contradiction must
+    remain visible in the decision log (identity_ok False)."""
+    from src.extraction.normalizer import FinancialData, build_decision_log, reconcile
+
+    d = FinancialData()
+    d.values.update({
+        "net_income": {2022: 1_056_737_086.0},
+        "pretax_income": {2022: 1_236_363_213.0},
+        "income_tax_expense": {2022: -100_000_000.0},   # WRONG tax (printed −179,626,127)
+    })
+    for f, v in (("net_income", 1_056_737_086.0), ("pretax_income", 1_236_363_213.0),
+                 ("income_tax_expense", -100_000_000.0)):
+        d.candidates[f] = {2022: [(v, 0), (v, 0)]}
+        d.confidence[f] = {2022: 2}                      # "both readers agree"
+    reconcile(d)
+    log = build_decision_log(d)
+    # the printed identity CORRECTS the agreed-but-wrong tax and DISCLOSES it
+    # as derived — agreement never overrides arithmetic
+    tax = next(e for e in log if e["field"] == "income_tax_expense"
+               and e["year"] == 2022)
+    assert abs(d.get("income_tax_expense", 2022) - (-179_626_127.0)) <= 1.0
+    assert tax["status"] == "VERIFIED_DERIVED"           # disclosed, not silent
+    assert "identity" in tax["reason"].lower() or "مشتق" in tax["reason"]
+
+
+def test_full_path_human_review_to_report(tmp_path, monkeypatch):
+    """Human Review → Decision Log → FinancialData → metrics → Health Score →
+    Excel/PDF document — the reviewed value reaches the RIGHT metric with an
+    explicit human-assisted disclosure; voiding the review withdraws it."""
+    from pathlib import Path
+
+    proj = Path(__file__).resolve().parents[1]
+    monkeypatch.setenv("REVIEWERS", "auditor-A")
+    from src.analysis.financial_gate import decisive_values
+    from src.extraction.human_review import (
+        apply_review, build_review_queue, review_is_trusted, verify_log_integrity,
+    )
+    from src.extraction.normalizer import FinancialData, build_decision_log
+
+    d = FinancialData()
+    d.values.update({
+        "revenue": {2022: 16_665_919_878.0, 2021: 13_169_656_088.0},
+        "net_income": {2022: 1_056_737_086.0, 2021: 288_152_668.0},
+        "total_assets": {2022: 15_900_000_000.0, 2021: 14_600_000_000.0},
+        "current_assets": {2022: 8_300_000_000.0, 2021: 7_500_000_000.0},
+        "current_liabilities": {2022: 7_900_000_000.0, 2021: 7_030_000_000.0},
+        "total_liabilities": {2022: 9_000_000_000.0, 2021: 8_250_000_000.0},
+        "equity": {2022: 6_900_000_000.0, 2021: 6_300_000_000.0},
+        "operating_cash_flow": {2022: 1_214_507_839.0},
+        "inventory": {2022: 1_000.0, 2021: 900.0},
+    })
+    for f, v in (("revenue", 16_665_919_878.0), ("net_income", 1_056_737_086.0)):
+        d.candidates[f] = {2022: [(v, 0)], 2021: [(v * 0.8, 0)]}
+    d.confidence["net_income"] = {2022: 1}               # single machine read
+    assert decisive_values(d)[("net_income", 2022)]["usable_decisive"] is False
+
+    queue = build_review_queue(proj / "cell_evidence/per_cell_strict.json",
+                               proj / "cell_evidence")
+    log_path = tmp_path / "hr.json"
+    apply_review(queue, "net_income|6|2022", 1_056_737_086.0,
+                 reviewer="auditor-A", data=d, log_path=log_path)
+    ok, _bad = verify_log_integrity(log_path)
+    assert ok
+    assert review_is_trusted(d.human_reviews[("net_income", 2022)],
+                             log_path=log_path)
+    e = next(e for e in build_decision_log(d)
+             if e["field"] == "net_income" and e["year"] == 2022)
+    assert e["status"] == "VERIFIED_HUMAN"
+    dv = decisive_values(d)
+    assert dv[("net_income", 2022)]["gate"] == "use_disclosed"
+    assert "إقرار بشري" in dv[("net_income", 2022)]["disclosure"]
+
+    # → metrics → health score (with the disclosure carried)
+    from src.analysis import calculator as C
+    from src.analysis.score import compute_health_score
+
+    curr = C.compute_year_metrics(2022, d.values, prev_year=2021)
+    hs = compute_health_score(curr)
+    assert hs.total is not None                          # full data → complete
+    assert hs.complete and hs.coverage == 1.0
+
+    # → document (Excel sheet is the report artifact here)
+    from src.dashboard.excel_report import build_excel_report
+    from src.analysis.comparison import build_comparison
+    prev = C.compute_year_metrics(2021, d.values)
+    results = {"company": "تدقيق", "file_name": "x.pdf", "prev_year": 2021,
+               "curr_year": 2022, "prev_metrics": prev, "curr_metrics": curr,
+               "rows": build_comparison(prev, curr), "growth_rows": [],
+               "notes": d.notes, "currency_hint": "ج.م"}
+    import io
+
+    from openpyxl import load_workbook
+
+    wb = load_workbook(io.BytesIO(build_excel_report(results)))
+    flat = {row[0].value: row[1].value for row in wb["ملخص"].iter_rows(min_row=2)
+            if row[0].value}
+    assert isinstance(flat["الدرجة الصحية (0-100)"], (int, float))
+    assert any("Human review" in n for n in d.notes)     # disclosure trail
+
+    # invalidation → the SOURCE crop changes (simulated on a copy of the
+    # evidence tree) → the attestation is void → the log chain itself is
+    # broken (the record no longer matches the chain-recomputed source)
+    ev = tmp_path / "cell_evidence"
+    ev.mkdir(exist_ok=True)
+    crop = proj / "cell_evidence/spatial_net_income_p6_y2022.png"
+    (ev / crop.name).write_bytes(crop.read_bytes() + b"re-scanned")  # source changed
+    rec_log = next(r for r in json.loads(log_path.read_text(encoding="utf-8"))
+                   if r["packet_id"] == "net_income|6|2022")
+    from src.extraction.human_review import review_is_valid as _riv
+
+    assert not _riv(rec_log, crops_dir=ev)               # source change voids
+    # and a tampered LOG record is caught by the chain (edit + re-hash fails)
+    log_recs = json.loads(log_path.read_text(encoding="utf-8"))
+    log_recs[0]["crop_sha256"] = "forged"
+    log_path.write_text(json.dumps(log_recs, ensure_ascii=False), encoding="utf-8")
+    ok, bad = verify_log_integrity(log_path)
+    assert not ok                                        # tamper detected
+    assert not review_is_trusted(d.human_reviews[("net_income", 2022)],
+                                 log_path=log_path)
+    e2 = next(e for e in build_decision_log(d)
+              if e["field"] == "net_income" and e["year"] == 2022)
+    assert e2["status"] == "UNVERIFIED"
+    assert decisive_values(d)[("net_income", 2022)]["usable_decisive"] is False
+
+
+def test_review_ui_view_is_gt_free_and_draws_bbox(tmp_path):
+    from src.dashboard.review_ui import build_review_view
+
+    pkt = {"packet_id": "f|5|2022", "field": "f", "year": 2022,
+           "page_image": None, "crop_image": None, "bbox_rel": [0.2, 0.3, 0.4, 0.5],
+           "machine_selected": 1234.0, "readings": {"crop_variants": [1234.0]},
+           "conflict_reason": "conflict", "decision": None,
+           "gt_value": 999}                              # an accidentally attached GT
+    try:
+        build_review_view(pkt)
+        raised = False
+    except ValueError:
+        raised = True
+    assert raised                                        # GT can NEVER reach the view
+    pkt.pop("gt_value")
+    view = build_review_view(pkt)
+    assert view["actions"] == ("adopt_proposed", "correct_value", "reject_unreadable")
+    assert view["page_with_bbox_png"] is None            # no page image → no draw

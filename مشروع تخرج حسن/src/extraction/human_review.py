@@ -32,7 +32,9 @@ import os
 import time
 from pathlib import Path
 
-REVIEW_LOG = Path("cell_evidence") / "human_reviews.json"
+# isolated test runs override REVIEW_LOG_PATH — production default unchanged
+REVIEW_LOG = Path(os.environ.get("REVIEW_LOG_PATH",
+                                 "cell_evidence/human_reviews.json"))
 PROVENANCE_LADDER_HUMAN = "VISUALLY_VERIFIED"
 STATUS_HUMAN = "VERIFIED_HUMAN"
 STATUS_CONFLICT_HUMAN = "CONFLICT_HUMAN"
@@ -41,30 +43,72 @@ STATUS_REJECTED_HUMAN = "REJECTED_HUMAN"
 
 # ── reviewer identity / permissions ─────────────────────────────────────────
 
-def _allowlist() -> set[str]:
+def _hmac_key() -> bytes | None:
+    """The signing key lives OUTSIDE the log and OUTSIDE the repo (in .env,
+    which is gitignored). Without it: writes are refused and the chain is
+    'unverifiable' — an unsigned chain is NOT called tamper-proof."""
+    raw = os.environ.get("REVIEW_HMAC_KEY", "")
+    return raw.encode("utf-8") if raw else None
+
+
+def _reviewers_file() -> Path:
+    return Path(os.environ.get("REVIEWERS_FILE", "reviewers.json"))
+
+
+def _allowlist() -> list[dict]:
+    """reviewers.json entries: {name, salt, pin_sha256, roles:[...]} — the PIN
+    itself is NEVER stored, only its salted hash."""
+    f = _reviewers_file()
+    if f.exists():
+        try:
+            return json.loads(f.read_text(encoding="utf-8")).get("reviewers", [])
+        except Exception:
+            return []
     raw = os.environ.get("REVIEWERS", "")
-    if not raw:
-        cfg = Path("reviewers.json")
-        if cfg.exists():
-            try:
-                data = json.loads(cfg.read_text(encoding="utf-8"))
-                return {r["name"] for r in data.get("reviewers", [])
-                        if r.get("name")}
-            except Exception:
-                return set()
-        return set()
-    return {x.strip() for x in raw.split(",") if x.strip()}
+    # env fallback: names only, NO credential → no roles → cannot attest
+    return [{"name": x.strip(), "roles": []} for x in raw.split(",") if x.strip()]
 
 
-def verify_reviewer(reviewer: str) -> None:
-    """Unknown or unconfigured reviewer → nothing is written."""
-    allow = _allowlist()
-    if not allow:
-        raise PermissionError(
-            "لا يوجد سجل مراجعين (REVIEWERS env أو reviewers.json) — "
-            "لا تُقبل مراجعة بلا هوية معلنة")
-    if reviewer not in allow:
-        raise PermissionError(f"المراجع '{reviewer}' غير مصرح له")
+def verify_reviewer(reviewer: str, credential: str | None = None,
+                    action: str | None = None) -> dict:
+    """AUTHENTICATION (name + PIN against the salted hash) plus
+    AUTHORIZATION (the action must be in the reviewer's roles). Raises
+    PermissionError — nothing is written on failure."""
+    entry = next((r for r in _allowlist() if r.get("name") == reviewer), None)
+    if entry is None:
+        raise PermissionError(f"المراجع '{reviewer}' غير مسجل")
+    salt, stored = entry.get("salt"), entry.get("pin_sha256")
+    if stored:
+        if not credential:
+            raise PermissionError("اعتماد المراجع يتطلب رمز تحقق (PIN)")
+        if hashlib.sha256(((salt or "") + credential).encode("utf-8")).hexdigest() != stored:
+            raise PermissionError("رمز تحقق غير صحيح")
+    roles = set(entry.get("roles", []))
+    if not roles:
+        raise PermissionError(f"المراجع '{reviewer}' بلا صلاحيات اعتماد")
+    if action and action not in roles:
+        raise PermissionError(f"المراجع '{reviewer}' لا يملك صلاحية '{action}'")
+    return entry
+
+
+def pin_entry(name: str, pin: str, roles: list[str],
+              file_path: Path | None = None) -> None:
+    """Admin helper: store a reviewer with a SALTED pin hash (never the PIN)."""
+    import secrets
+
+    f = file_path or _reviewers_file()
+    salt = secrets.token_hex(8)
+    data = {"reviewers": []}
+    if f.exists():
+        data = json.loads(f.read_text(encoding="utf-8"))
+    data["reviewers"] = [r for r in data.get("reviewers", [])
+                         if r.get("name") != name]
+    data["reviewers"].append({
+        "name": name, "salt": salt,
+        "pin_sha256": hashlib.sha256((salt + pin).encode("utf-8")).hexdigest(),
+        "roles": roles,
+    })
+    f.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
 # ── hash chain ──────────────────────────────────────────────────────────────
@@ -75,8 +119,17 @@ def _canonical(rec: dict) -> str:
 
 
 def _record_hash(rec: dict, prev_hash: str) -> str:
-    return hashlib.sha256(
-        (_canonical(rec) + "|" + prev_hash).encode("utf-8")).hexdigest()[:32]
+    """HMAC-SHA256 with the secret key. An attacker with full file access can
+    recompute a PLAIN hash after rewriting records — with HMAC they cannot
+    re-sign without the key (which never lives in the log or the repo)."""
+    import hmac as _hmac
+
+    key = _hmac_key()
+    if key is None:
+        raise PermissionError(
+            "REVIEW_HMAC_KEY غير مضبوط — سلسلة غير موقعة لا تُدعى tamper-proof")
+    return _hmac.new(key, (_canonical(rec) + "|" + prev_hash).encode("utf-8"),
+                     hashlib.sha256).hexdigest()[:32]
 
 
 def load_log(log_path: Path = REVIEW_LOG) -> list[dict]:
@@ -85,8 +138,10 @@ def load_log(log_path: Path = REVIEW_LOG) -> list[dict]:
 
 
 def verify_log_integrity(log_path: Path = REVIEW_LOG) -> tuple[bool, int | None]:
-    """(ok, first_bad_seq): recompute the whole chain; any tampered record
-    breaks its own hash and every hash after it."""
+    """(ok, first_bad_seq). Missing key → (False, "NO_KEY"): the chain is
+    unverifiable, which the gate treats as NOT trusted."""
+    if _hmac_key() is None:
+        return False, "NO_KEY"
     prev = "GENESIS"
     for rec in load_log(log_path):
         if rec.get("prev_hash") != prev or \
@@ -140,14 +195,28 @@ def build_review_queue(per_cell_json: Path, crops_dir: Path,
 
 # ── apply a decision (secured) ──────────────────────────────────────────────
 
+def value_matches_probe(queue, packet_id, value) -> bool:
+    pkt = next((p for p in queue if p["packet_id"] == packet_id), None)
+    before = pkt.get("machine_selected") if pkt else None
+    return (before is not None and value is not None
+            and abs(value - before) <= max(1.0, 1e-6 * abs(before)))
+
+
 def apply_review(queue: list[dict], packet_id: str,
                  approved_value: float | None, reviewer: str,
+                 credential: str | None = None,
                  data=None, log_path: Path = REVIEW_LOG,
                  decision_note: str = "") -> dict:
     """Record one human decision (identity checked, chain appended). kind:
     corroborate | correct | reject | conflict — conflict when a PRIOR record
     for the same packet holds a DIFFERENT final value."""
-    verify_reviewer(reviewer)
+    kind_probe = "reject" if approved_value is None else (
+        "approve" if value_matches_probe(queue, packet_id, approved_value)
+        else "correct")
+    verify_reviewer(reviewer, credential=credential, action=kind_probe)
+    if _hmac_key() is None:
+        raise PermissionError(
+            "REVIEW_HMAC_KEY غير مضبوط — الاعتماد مرفوض (سلسلة غير موقعة)")
     pkt = next((p for p in queue if p["packet_id"] == packet_id), None)
     if pkt is None:
         raise KeyError(f"unknown packet {packet_id}")
@@ -183,6 +252,7 @@ def apply_review(queue: list[dict], packet_id: str,
         "value_before": value_before,
         "value_final": approved_value,
         "kind": kind, "status": status, "note": decision_note[:200],
+        "security": "hmac_signed",
     }
     rec["prev_hash"] = log[-1]["record_hash"] if log else "GENESIS"
     rec["record_hash"] = _record_hash(rec, rec["prev_hash"])
@@ -257,38 +327,47 @@ def review_is_trusted(record: dict, log_path: Path = REVIEW_LOG,
 def separated_metrics(per_cell_rows: list[dict], human_log: Path = REVIEW_LOG,
                       crops_dir: Path = Path("cell_evidence"),
                       log_integrity: tuple[bool, int | None] | None = None) -> dict:
-    """THREE never-mixed numbers + gate effectiveness:
-    - automatic_exact_accuracy: machine reads that equal GT / n
-    - automatic_decisive_coverage: cells the gate ALLOWED / n
-    - human_assisted_verified_coverage: trusted human-verified cells / n
-    - gate_allowed_wrong_rate: wrong values the gate let through / allowed
-    - gate_abstained_right_rate: correct values the gate held back / gated"""
+    """SIX never-mixed metrics with VISIBLE denominators; any zero-denominator
+    rate returns None (N/A) — never a fabricated percentage:
+    - automatic_exact_match_accuracy
+    - automatic_decisive_coverage
+    - false_acceptance_rate
+    - correct_abstention_rate
+    - human_assisted_verified_coverage
+    - final_report_coverage (decisive + trusted-human) / n"""
     from src.analysis.financial_gate import decide
 
     n = len(per_cell_rows)
     allowed = [r for r in per_cell_rows
                if decide(r["final_status"]) in ("use", "use_disclosed")]
     gated = [r for r in per_cell_rows
-             if decide(r["final_status"]) not in ("use", "use_disclosed")
-             and decide(r["final_status"]) != "missing"]
-    allowed_wrong = sum(1 for r in allowed if not r["exact_value"])
-    abstained_right = sum(1 for r in gated if r["exact_value"])
+             if decide(r["final_status"]) == "not_decisive"]
+    missing = [r for r in per_cell_rows
+               if decide(r["final_status"]) == "missing"]
     trusted = 0
     if log_integrity is None or log_integrity[0]:
         for rec in load_log(human_log):
             if rec.get("status") == STATUS_HUMAN and review_is_valid(rec, crops_dir):
                 trusted += 1
+
+    def rate(num: int, den: int) -> float | None:
+        return round(num / den, 3) if den else None   # zero denominator = N/A
+
+    exact = sum(1 for r in per_cell_rows if r["exact_value"])
+    allowed_wrong = sum(1 for r in allowed if not r["exact_value"])
+    abstained_right = sum(1 for r in gated if r["exact_value"])
+    final_covered = len(allowed) + trusted
     return {
         "n": n,
-        "automatic_exact_accuracy": round(
-            sum(1 for r in per_cell_rows if r["exact_value"]) / n, 3) if n else None,
-        "automatic_decisive_coverage": round(len(allowed) / n, 3) if n else None,
-        "human_assisted_verified_coverage": round(trusted / n, 3) if n else None,
-        "gate_allowed_wrong_rate": round(allowed_wrong / len(allowed), 3)
-            if allowed else 0.0,
-        "gate_abstained_right_rate": round(abstained_right / len(gated), 3)
-            if gated else 0.0,
+        "automatic_exact_match_accuracy": rate(exact, n),
+        "automatic_decisive_coverage": rate(len(allowed), n),
+        "false_acceptance_rate": rate(allowed_wrong, len(allowed)),
+        "correct_abstention_rate": rate(abstained_right, len(gated)),
+        "human_assisted_verified_coverage": rate(trusted, n),
+        "final_report_coverage": rate(min(final_covered, n), n),
+        "gate_partition": {"usable": len(allowed), "not_decisive": len(gated),
+                           "missing": len(missing)},
         "denominators": {"n": n, "allowed": len(allowed), "gated": len(gated),
-                         "human_trusted": trusted},
+                         "missing": len(missing), "human_trusted": trusted},
         "log_integrity_ok": (log_integrity or (True, None))[0],
     }

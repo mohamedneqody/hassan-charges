@@ -1588,9 +1588,12 @@ def dashboard_screen() -> None:
                 for item in r["missing"]:
                     st.markdown(f"- {item}")
 
-    tab_overview, tab_profit, tab_liq, tab_eff, tab_size, tab_table, tab_cmp, tab_ai, tab_notes = st.tabs(
-        ["🏠 نظرة عامة", "📈 الربحية", "💧 السيولة والمديونية", "⚙️ الكفاءة", "🧮 الحجم المشترك", "📋 جدول المؤشرات", "🏢 مقارنة الشركات", "🤖 تحليل الذكاء الاصطناعي", "📖 الإيضاحات المتممة"]
+    tab_overview, tab_profit, tab_liq, tab_eff, tab_size, tab_table, tab_cmp, tab_ai, tab_notes, tab_review = st.tabs(
+        ["🏠 نظرة عامة", "📈 الربحية", "💧 السيولة والمديونية", "⚙️ الكفاءة", "🧮 الحجم المشترك", "📋 جدول المؤشرات", "🏢 مقارنة الشركات", "🤖 تحليل الذكاء الاصطناعي", "📖 الإيضاحات المتممة", "✅ مراجعة الخانات"]
     )
+
+    with tab_review:
+        _render_review_tab_guarded()
     with tab_overview:
         overview_screen(r)
     with tab_profit:
@@ -1690,3 +1693,26 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+def _render_review_tab_guarded() -> None:
+    """Human-review tab — only active when a reviewers file is configured.
+    Ground Truth is never rendered here (review_ui enforces by construction)."""
+    import os
+
+    if not (os.environ.get("REVIEWERS_FILE") or os.environ.get("REVIEWERS")):
+        st.info("تبويب المراجعة البشرية معطل — يتطلب إعداد سجل مراجعين "
+                "(REVIEWERS_FILE) ومفتاح توقيع (REVIEW_HMAC_KEY) في .env.")
+        return
+    from pathlib import Path
+
+    qpath = Path("cell_evidence/review_queue.json")
+    if not qpath.exists():
+        st.warning("لا يوجد طابور مراجعة — شغّل eval_extraction_benchmark.py أولًا.")
+        return
+    import json as _json
+
+    from src.dashboard.review_ui import render_review_tab
+
+    queue = _json.loads(qpath.read_text(encoding="utf-8"))
+    render_review_tab(st, queue, reviewer=os.environ.get("REVIEWER_NAME", ""))

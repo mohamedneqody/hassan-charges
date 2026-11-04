@@ -589,6 +589,11 @@ def reconcile(data: FinancialData) -> None:
             for f, value in best_assignment.items():
                 if data.values.get(f, {}).get(year) != value:
                     if data.values.get(f, {}).get(year) is not None:
+                        # the REPLACED capture is preserved and surfaced in the
+                        # decision log — the original OCR error is never hidden
+                        data.replaced_values = getattr(data, "replaced_values", {})
+                        data.replaced_values.setdefault((f, year), []).append(
+                            data.values.get(f, {}).get(year))
                         data.notes.append(
                             f"Reconciled '{f}' in {year} to {value:,.0f} using the "
                             f"accounting identity ({target} = "
@@ -674,9 +679,22 @@ def reconcile(data: FinancialData) -> None:
         if None not in (activity, financing, dividends):
             pretax = activity - abs(financing) + dividends
             data.values.setdefault("pretax_income", {})[year] = pretax
-            data.derived[("pretax_income", year)] = (
-                "صافي أرباح النشاط − صافي التكاليف التمويلية "
-                "+ توزيعات أرباح من شركات تابعة")
+            # input certainty travels with the derivation: an uncertain input
+            # produces an UNCERTAIN derived value — never a confident one
+            conf = data.confidence
+            uncertain = [name for name, val in (
+                ("صافي أرباح النشاط", ("net_activity_profit",)),
+                ("صافي التكاليف التمويلية", ("interest_expense",)),
+                ("توزيعات أرباح من شركات تابعة", ("dividends_from_subsidiaries",)),
+            ) if conf.get(val[0], {}).get(year, 0) < 2]
+            note = ("صافي أرباح النشاط − صافي التكاليف التمويلية "
+                    "+ توزيعات أرباح من شركات تابعة")
+            if uncertain:
+                note += (f" — مدخلات غير مؤكدة: {', '.join(uncertain)} "
+                         "(قراءات مفردة)")
+                data.derived_uncertain = getattr(data, "derived_uncertain", set())
+                data.derived_uncertain.add(("pretax_income", year))
+            data.derived[("pretax_income", year)] = note
             data.candidates.setdefault("pretax_income", {}).setdefault(
                 year, []).append((pretax, 0))
 
@@ -724,7 +742,13 @@ def build_decision_log(data: FinancialData) -> list[dict]:
             if final is None:
                 status, reason = "MISSING", "لا قيمة معتمدة لهذا الحقل/السنة"
             elif derived_note:
-                status, reason = "VERIFIED_DERIVED", f"مشتق: {derived_note} — موسوم ولا يُعد قراءة مباشرة"
+                if (field_name, year) in (getattr(data, "derived_uncertain", set()) or set()):
+                    status = "UNVERIFIED"
+                    reason = (f"مشتق من مدخلات غير مؤكدة — لا يُصدَّر كمؤكد: "
+                              f"{derived_note}")
+                else:
+                    status, reason = ("VERIFIED_DERIVED",
+                                      f"مشتق: {derived_note} — موسوم ولا يُعد قراءة مباشرة")
             elif len(distinct) >= 2 and conf < 2:
                 status = "CONFLICT"
                 reason = (f"قراءات متضاربة غير محسومة ({len(distinct)} قيمًا مختلفة) "
@@ -787,6 +811,9 @@ def build_decision_log(data: FinancialData) -> list[dict]:
                     [f"{v:,.0f}" for v in values]
                     + ([f"{d:,.0f} (مرفوضة بالتصويت)" for d in vote.get("dissent", [])]
                        if vote else [])
+                    + [f"{rv:,.0f} (مستبدلة بالهوية المحاسبية)"
+                       for rv in (getattr(data, "replaced_values", {}) or {}).get(
+                           (field_name, year), [])]
                 ),
                 "final": final,
                 "distinct_reads": len(distinct),

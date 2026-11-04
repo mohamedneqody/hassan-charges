@@ -10,12 +10,14 @@
   "exact_numeric": 0,
   "false_match": 0,
   "no_value": 11,
-  "gated_not_decisive": 0,
   "usable_decisive": 0,
   "candidate_yield_rate": 0.0,
   "e2e_strict": 0.0,
   "e2e_strict_count": 0,
-  "note_single_read": "CROP_ONLY counts as gated — a single uncorroborated read is never decisive"
+  "note_single_read": "CROP_ONLY counts as gated — a single uncorroborated read is never decisive",
+  "not_decisive": 11,
+  "missing_gate": 0,
+  "gated_total_includes_missing": 11
  },
  "B_strip": {
   "n": 11,
@@ -28,12 +30,14 @@
   "exact_numeric": 0,
   "false_match": 11,
   "no_value": 0,
-  "gated_not_decisive": 11,
   "usable_decisive": 0,
   "candidate_yield_rate": 1.0,
   "e2e_strict": 0.0,
   "e2e_strict_count": 0,
-  "note_single_read": "CROP_ONLY counts as gated — a single uncorroborated read is never decisive"
+  "note_single_read": "CROP_ONLY counts as gated — a single uncorroborated read is never decisive",
+  "not_decisive": 11,
+  "missing_gate": 0,
+  "gated_total_includes_missing": 11
  },
  "C_spatial": {
   "n": 11,
@@ -46,12 +50,14 @@
   "exact_numeric": 0,
   "false_match": 0,
   "no_value": 11,
-  "gated_not_decisive": 0,
   "usable_decisive": 0,
   "candidate_yield_rate": 0.0,
   "e2e_strict": 0.0,
   "e2e_strict_count": 0,
-  "note_single_read": "CROP_ONLY counts as gated — a single uncorroborated read is never decisive"
+  "note_single_read": "CROP_ONLY counts as gated — a single uncorroborated read is never decisive",
+  "not_decisive": 11,
+  "missing_gate": 0,
+  "gated_total_includes_missing": 11
  },
  "C_spatial_declared": {
   "n": 11,
@@ -64,12 +70,14 @@
   "exact_numeric": 8,
   "false_match": 3,
   "no_value": 0,
-  "gated_not_decisive": 11,
   "usable_decisive": 0,
   "candidate_yield_rate": 1.0,
   "e2e_strict": 0.0,
   "e2e_strict_count": 0,
-  "note_single_read": "CROP_ONLY counts as gated — a single uncorroborated read is never decisive"
+  "note_single_read": "CROP_ONLY counts as gated — a single uncorroborated read is never decisive",
+  "not_decisive": 10,
+  "missing_gate": 1,
+  "gated_total_includes_missing": 11
  },
  "C_spatial_gemini_dates": {
   "n": 5,
@@ -82,12 +90,14 @@
   "exact_numeric": 4,
   "false_match": 1,
   "no_value": 0,
-  "gated_not_decisive": 5,
   "usable_decisive": 0,
   "candidate_yield_rate": 1.0,
   "e2e_strict": 0.0,
   "e2e_strict_count": 0,
-  "note_single_read": "CROP_ONLY counts as gated — a single uncorroborated read is never decisive"
+  "note_single_read": "CROP_ONLY counts as gated — a single uncorroborated read is never decisive",
+  "not_decisive": 4,
+  "missing_gate": 1,
+  "gated_total_includes_missing": 5
  },
  "unified_C2_vs_C3": {
   "n": 11,

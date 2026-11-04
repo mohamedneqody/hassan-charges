@@ -1,0 +1,82 @@
+[
+ {
+  "field": "short_term_debt",
+  "gt": 4063400167,
+  "selected": 4063400167.0,
+  "exact": true,
+  "status": "CROP_ONLY",
+  "blocked_because": "CROP_ONLY — قراءة مفردة",
+  "unblock_path": "قارئ مستقل ثانٍ (Gemini) أو مراجعة بشرية",
+  "gemini": "BLOCKED (429)"
+ },
+ {
+  "field": "current_portion_lt_debt",
+  "gt": 299320963,
+  "selected": 299320963.0,
+  "exact": true,
+  "status": "CONFLICT",
+  "blocked_because": "CONFLICT — السطر مشوه والقصاصة دقيقة",
+  "unblock_path": "قارئ مستقل ثانٍ يصدّق قراءة القصاصة",
+  "gemini": "BLOCKED (429)"
+ },
+ {
+  "field": "long_term_debt",
+  "gt": 363974291,
+  "selected": 363974291.0,
+  "exact": true,
+  "status": "CONFLICT",
+  "blocked_because": "CONFLICT — السطر مشوه والقصاصة دقيقة",
+  "unblock_path": "قارئ مستقل ثانٍ يصدّق قراءة القصاصة",
+  "gemini": "BLOCKED (429)"
+ },
+ {
+  "field": "current_lease_liabilities",
+  "gt": 83301722,
+  "selected": 83301722.0,
+  "exact": true,
+  "status": "CROP_ONLY",
+  "blocked_because": "CROP_ONLY — قراءة مفردة",
+  "unblock_path": "قارئ مستقل ثانٍ أو مراجعة بشرية",
+  "gemini": "BLOCKED (429)"
+ },
+ {
+  "field": "revenue",
+  "gt": 16665919878,
+  "selected": 16665919878.0,
+  "exact": true,
+  "status": "CONFLICT",
+  "blocked_because": "CONFLICT — تفاقم بعد المتغيرات",
+  "unblock_path": "قارئ مستقل ثانٍ (up3_clahe أعطت GT)",
+  "gemini": "BLOCKED (429)"
+ },
+ {
+  "field": "net_activity_profit",
+  "gt": 1257960603,
+  "selected": 1257960603.0,
+  "exact": true,
+  "status": "CONFLICT",
+  "blocked_because": "CONFLICT — السطر يلتقط 140K مجاور",
+  "unblock_path": "قارئ مستقل ثانٍ أو مراجعة بشرية",
+  "gemini": "BLOCKED (429)"
+ },
+ {
+  "field": "net_income",
+  "gt": 1056737086,
+  "selected": 1056737086.0,
+  "exact": true,
+  "status": "CONFLICT",
+  "blocked_because": "CONFLICT — السطر يلتقط 1004",
+  "unblock_path": "قارئ مستقل ثانٍ (القيمة الدقيقة في القصاصة)",
+  "gemini": "BLOCKED (429)"
+ },
+ {
+  "field": "income_tax_expense",
+  "gt": -179626127,
+  "selected": -179626127.0,
+  "exact": true,
+  "status": "MULTI_ROW",
+  "blocked_because": "MULTI_ROW — صفان منتجان (ضريبة الدخل + إجماليها)",
+  "unblock_path": "فصل سياق القسم أو مراجعة بشرية",
+  "gemini": "BLOCKED (429)"
+ }
+]

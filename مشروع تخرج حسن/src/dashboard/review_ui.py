@@ -51,6 +51,7 @@ def render_review_tab(st, queue: list[dict], reviewer: str) -> None:
                "كنغير مقروءة — بندًا وسنةً وموضعًا وقيمةً معًا. الإجابات "
                "المرجعية غير معروضة عمدًا.")
     name = st.text_input("اسم المراجع", value=reviewer or "")
+    pin = st.text_input("رمز التحقق (PIN)", type="password")
     for pkt in queue:
         view = build_review_view(pkt)
         with st.expander(f"{view['field']} — {view['year']} "
@@ -70,18 +71,29 @@ def render_review_tab(st, queue: list[dict], reviewer: str) -> None:
             if b1.button("✅ اعتماد المقترح", key=f"ok_{pkt['packet_id']}"):
                 from src.extraction.human_review import apply_review
 
-                apply_review(queue, pkt["packet_id"],
-                             view["proposed_value"], reviewer=name)
-                st.success("سُجل الاعتماد في سلسلة التدقيق")
+                try:
+                    apply_review(queue, pkt["packet_id"],
+                                 view["proposed_value"], reviewer=name,
+                                 credential=pin)
+                    st.success("سُجل الاعتماد في سلسلة التدقيق")
+                except PermissionError as e:
+                    st.error(f"مرفوض: {e}")
             val = b2.number_input("قيمة مصححة", key=f"fix_{pkt['packet_id']}")
             if b2.button("✏️ اعتماد قيمة مصححة", key=f"fixgo_{pkt['packet_id']}"):
                 from src.extraction.human_review import apply_review
 
-                apply_review(queue, pkt["packet_id"], float(val),
-                             reviewer=name)
-                st.success("سُجل التصحيح")
+                try:
+                    apply_review(queue, pkt["packet_id"], float(val),
+                                 reviewer=name, credential=pin)
+                    st.success("سُجل التصحيح")
+                except PermissionError as e:
+                    st.error(f"مرفوض: {e}")
             if b3.button("🚫 رفض — غير مقروءة", key=f"rej_{pkt['packet_id']}"):
                 from src.extraction.human_review import apply_review
 
-                apply_review(queue, pkt["packet_id"], None, reviewer=name)
-                st.warning("سُجل الرفض")
+                try:
+                    apply_review(queue, pkt["packet_id"], None, reviewer=name,
+                                 credential=pin)
+                    st.warning("سُجل الرفض")
+                except PermissionError as e:
+                    st.error(f"مرفوض: {e}")

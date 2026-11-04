@@ -2,6 +2,7 @@
 """Phase-7 hardening tests: date validity, no-digit-loss serialization,
 accounting negatives, provenance ladder, Gemini schema validation, flag-off
 inertness. Every case maps to a mandated checklist item."""
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -479,6 +480,22 @@ def test_stale_cache_values_carry_provenance_or_are_refused():
 
 # ── Human-in-the-loop verification (المهمة: المراجعة البشرية) ───────────────
 
+def _secure_env(tmp_path, monkeypatch):
+    """Test-authorized reviewer accounts with salted PINs + HMAC key OUTSIDE
+    the log (env var). Isolated: reviewers file lives in tmp_path."""
+    from src.extraction.human_review import pin_entry
+
+    rf = tmp_path / "reviewers.json"
+    pin_entry("auditor-A", "pin-A-123", ["approve", "correct", "reject"],
+              file_path=rf)
+    pin_entry("auditor-B", "pin-B-456",
+              ["approve", "correct", "reject"], file_path=rf)
+    monkeypatch.setenv("REVIEWERS_FILE", str(rf))
+    monkeypatch.setenv("REVIEW_HMAC_KEY", "test-signing-key-NOT-in-repo")
+    monkeypatch.delenv("REVIEWERS", raising=False)
+    return {"A": "pin-A-123", "B": "pin-B-456"}
+
+
 def test_review_queue_covers_all_non_decisive_cells():
     from src.extraction.human_review import build_review_queue
     from pathlib import Path
@@ -505,18 +522,20 @@ def test_human_review_corroboration_and_correction(tmp_path, monkeypatch):
     from pathlib import Path
 
     proj = Path(__file__).resolve().parents[1]
-    monkeypatch.setenv("REVIEWERS", "auditor-A, auditor-B")
+    creds = _secure_env(tmp_path, monkeypatch)
     log_path = tmp_path / "human_reviews.json"
     queue = build_review_queue(proj / "cell_evidence/per_cell_strict.json",
                                proj / "cell_evidence")
     rec = apply_review(queue, "net_income|6|2022", 1_056_737_086.0,
-                       reviewer="auditor-A", log_path=log_path)
+                       reviewer="auditor-A", credential=creds["A"],
+                       log_path=log_path)
     assert rec["kind"] == "corroborate"
     assert rec["reviewer"] == "auditor-A" and rec["timestamp"]
     assert rec["crop_sha256"] and rec["doc_sha256"]      # crop AND page hashed
     assert rec["bbox_rel"]                               # position recorded
     rec2 = apply_review(queue, "operating_cash_flow|9|2022", 1_214_507_839.0,
-                        reviewer="auditor-B", log_path=log_path)
+                        reviewer="auditor-B", credential=creds["B"],
+                        log_path=log_path)
     assert rec2["kind"] == "correct"
     assert rec2["value_before"] is not None and rec2["value_before"] != 1_214_507_839.0
     ok, bad = verify_log_integrity(log_path)
@@ -528,7 +547,11 @@ def test_human_review_corroboration_and_correction(tmp_path, monkeypatch):
     rows = json.loads((proj / "cell_evidence/per_cell_strict.json")
                       .read_text(encoding="utf-8"))
     sep = separated_metrics(rows, human_log=log_path)
-    assert round(sep["automatic_exact_accuracy"] * 11) == before_auto[0]
+    assert round(sep["automatic_exact_match_accuracy"] * 11) == before_auto[0]
+    # zero-denominator rates are N/A (None), never fabricated percentages
+    assert sep["false_acceptance_rate"] is None          # allowed = 0 → N/A
+    assert sep["correct_abstention_rate"] == 0.8         # 8 exact held / 10 gated
+    assert sep["gate_partition"] == {"usable": 0, "not_decisive": 10, "missing": 1}
     assert sep["human_assisted_verified_coverage"] > 0   # trusted human cells
     assert sep["log_integrity_ok"] is True
 
@@ -567,14 +590,14 @@ def test_hash_chain_detects_tampering(tmp_path, monkeypatch):
     from pathlib import Path
 
     proj = Path(__file__).resolve().parents[1]
-    monkeypatch.setenv("REVIEWERS", "auditor-A")
+    creds = _secure_env(tmp_path, monkeypatch)
     log_path = tmp_path / "hr.json"
     queue = build_review_queue(proj / "cell_evidence/per_cell_strict.json",
                                proj / "cell_evidence")
     apply_review(queue, "net_income|6|2022", 1_056_737_086.0,
-                 reviewer="auditor-A", log_path=log_path)
+                 reviewer="auditor-A", credential=creds["A"], log_path=log_path)
     apply_review(queue, "revenue|6|2022", 16_665_919_878.0,
-                 reviewer="auditor-A", log_path=log_path)
+                 reviewer="auditor-A", credential=creds["A"], log_path=log_path)
     ok, _ = verify_log_integrity(log_path)
     assert ok
     log = json.loads(log_path.read_text(encoding="utf-8"))
@@ -592,7 +615,7 @@ def test_conflicting_human_reviews_never_decide(tmp_path, monkeypatch):
     from pathlib import Path
 
     proj = Path(__file__).resolve().parents[1]
-    monkeypatch.setenv("REVIEWERS", "auditor-A, auditor-B")
+    creds = _secure_env(tmp_path, monkeypatch)
     log_path = tmp_path / "hr.json"
     queue = build_review_queue(proj / "cell_evidence/per_cell_strict.json",
                                proj / "cell_evidence")
@@ -600,9 +623,11 @@ def test_conflicting_human_reviews_never_decide(tmp_path, monkeypatch):
     d.values["net_income"] = {2022: 1_056_737_086.0}
     d.candidates["net_income"] = {2022: [(1_056_737_086.0, 0)]}
     apply_review(queue, "net_income|6|2022", 1_056_737_086.0,
-                 reviewer="auditor-A", data=d, log_path=log_path)
+                 reviewer="auditor-A", credential=creds["A"], data=d,
+                 log_path=log_path)
     apply_review(queue, "net_income|6|2022", 999_999_999.0,
-                 reviewer="auditor-B", data=d, log_path=log_path)
+                 reviewer="auditor-B", credential=creds["B"], data=d,
+                 log_path=log_path)
     # the SECOND, differing reviewer overwrote data.human_reviews → conflict
     assert d.human_reviews[("net_income", 2022)]["status"] == STATUS_CONFLICT_HUMAN
     log1 = build_decision_log(d)
@@ -619,7 +644,7 @@ def test_human_review_flows_through_gate_and_health(tmp_path, monkeypatch):
     from pathlib import Path
 
     proj = Path(__file__).resolve().parents[1]
-    monkeypatch.setenv("REVIEWERS", "auditor-A")
+    creds = _secure_env(tmp_path, monkeypatch)
     queue = build_review_queue(proj / "cell_evidence/per_cell_strict.json",
                                proj / "cell_evidence")
     d = FinancialData()
@@ -633,7 +658,8 @@ def test_human_review_flows_through_gate_and_health(tmp_path, monkeypatch):
     assert decisive_values(d)[("net_income", 2022)]["usable_decisive"] is False
 
     apply_review(queue, "net_income|6|2022", 1_056_737_086.0,
-                 reviewer="auditor-A", data=d, log_path=tmp_path / "hr.json")
+                 reviewer="auditor-A", credential=creds["A"],
+                 data=d, log_path=tmp_path / "hr.json")
     log1 = build_decision_log(d)
     e1 = next(e for e in log1 if e["field"] == "net_income")
     assert e1["status"] == "VERIFIED_HUMAN"
@@ -718,7 +744,7 @@ def test_full_path_human_review_to_report(tmp_path, monkeypatch):
     from pathlib import Path
 
     proj = Path(__file__).resolve().parents[1]
-    monkeypatch.setenv("REVIEWERS", "auditor-A")
+    creds = _secure_env(tmp_path, monkeypatch)
     from src.analysis.financial_gate import decisive_values
     from src.extraction.human_review import (
         apply_review, build_review_queue, review_is_trusted, verify_log_integrity,
@@ -746,7 +772,8 @@ def test_full_path_human_review_to_report(tmp_path, monkeypatch):
                                proj / "cell_evidence")
     log_path = tmp_path / "hr.json"
     apply_review(queue, "net_income|6|2022", 1_056_737_086.0,
-                 reviewer="auditor-A", data=d, log_path=log_path)
+                 reviewer="auditor-A", credential=creds["A"], data=d,
+                 log_path=log_path)
     ok, _bad = verify_log_integrity(log_path)
     assert ok
     assert review_is_trusted(d.human_reviews[("net_income", 2022)],
@@ -829,3 +856,167 @@ def test_review_ui_view_is_gt_free_and_draws_bbox(tmp_path):
     view = build_review_view(pkt)
     assert view["actions"] == ("adopt_proposed", "correct_value", "reject_unreadable")
     assert view["page_with_bbox_png"] is None            # no page image → no draw
+
+
+def test_role_denial_and_missing_key_refusal(tmp_path, monkeypatch):
+    """Authorization is per-action: a reviewer without 'correct' cannot
+    correct; without the HMAC key NOTHING is written and the chain is
+    unverifiable (explicitly not tamper-proof)."""
+    from src.extraction.human_review import (
+        apply_review, build_review_queue, pin_entry, verify_log_integrity,
+    )
+    from pathlib import Path
+
+    proj = Path(__file__).resolve().parents[1]
+    rf = tmp_path / "reviewers.json"
+    pin_entry("viewer", "pin-V", ["approve", "reject"], file_path=rf)
+    monkeypatch.setenv("REVIEWERS_FILE", str(rf))
+    monkeypatch.setenv("REVIEW_HMAC_KEY", "k-test")
+    queue = build_review_queue(proj / "cell_evidence/per_cell_strict.json",
+                               proj / "cell_evidence")
+    try:
+        apply_review(queue, "operating_cash_flow|9|2022", 1_214_507_839.0,
+                     reviewer="viewer", credential="pin-V",
+                     log_path=tmp_path / "hr.json")
+        denied = False
+    except PermissionError as e:
+        denied = "correct" in str(e)
+    assert denied                                   # role enforced
+
+    monkeypatch.delenv("REVIEW_HMAC_KEY", raising=False)
+    try:
+        apply_review(queue, "net_income|6|2022", 1_056_737_086.0,
+                     reviewer="viewer", credential="pin-V",
+                     log_path=tmp_path / "hr2.json")
+        refused = False
+    except PermissionError:
+        refused = True
+    assert refused and not (tmp_path / "hr2.json").exists()
+    ok, bad = verify_log_integrity(tmp_path / "hr.json")
+    assert ok is False and bad == "NO_KEY"          # unverifiable ≠ trusted
+
+
+def test_attacker_rewriting_whole_chain_fails_without_key(tmp_path, monkeypatch):
+    """An attacker with full FILE access rewrites records and recomputes
+    PLAIN sha256 hashes — verification still fails (HMAC needed), and the
+    key never appears in the log file."""
+    from src.extraction.human_review import (
+        _hmac_key, apply_review, build_review_queue, verify_log_integrity,
+    )
+    from pathlib import Path
+
+    proj = Path(__file__).resolve().parents[1]
+    creds = _secure_env(tmp_path, monkeypatch)
+    log_path = tmp_path / "hr.json"
+    queue = build_review_queue(proj / "cell_evidence/per_cell_strict.json",
+                               proj / "cell_evidence")
+    apply_review(queue, "net_income|6|2022", 1_056_737_086.0,
+                 reviewer="auditor-A", credential=creds["A"], log_path=log_path)
+    # attacker rewrites the value AND recomputes plain hashes
+    log = json.loads(log_path.read_text(encoding="utf-8"))
+    log[0]["value_final"] = 1_234.0
+    log[0]["record_hash"] = hashlib.sha256(
+        json.dumps(log[0], sort_keys=True, default=str).encode()).hexdigest()[:32]
+    log_path.write_text(json.dumps(log, ensure_ascii=False), encoding="utf-8")
+    ok, bad = verify_log_integrity(log_path)
+    assert ok is False                              # HMAC mismatch detected
+    key = _hmac_key().decode()
+    assert key not in log_path.read_text(encoding="utf-8")  # key not in log
+
+
+# ── Accounting-derivation audit (المهمة 4) ──────────────────────────────────
+
+def test_uncertain_inputs_produce_uncertain_derived_value():
+    """A derived pretax from SINGLE-READ inputs is UNVERIFIED — never a
+    confident VERIFIED_DERIVED (uncertainty propagates, honestly)."""
+    from src.analysis.financial_gate import decisive_values
+    from src.extraction.normalizer import FinancialData, build_decision_log, reconcile
+
+    d = FinancialData()
+    d.values.update({
+        "net_activity_profit": {2022: 1_257_960_603.0},
+        "interest_expense": {2022: -771_597_390.0},
+        "dividends_from_subsidiaries": {2022: 750_000_000.0},
+    })
+    for f in ("net_activity_profit", "interest_expense", "dividends_from_subsidiaries"):
+        d.candidates[f] = {2022: [(d.values[f][2022], 0)]}   # single read
+        d.confidence[f] = {2022: 1}
+    reconcile(d)
+    e = next(e for e in build_decision_log(d)
+             if e["field"] == "pretax_income" and e["year"] == 2022)
+    assert e["status"] == "UNVERIFIED"
+    assert "مدخلات غير مؤكدة" in e["reason"]
+    assert decisive_values(d)[("pretax_income", 2022)]["usable_decisive"] is False
+
+
+def test_certain_inputs_produce_disclosed_derived():
+    from src.extraction.normalizer import FinancialData, build_decision_log, reconcile
+
+    d = FinancialData()
+    d.values.update({
+        "net_activity_profit": {2022: 1_257_960_603.0},
+        "interest_expense": {2022: -771_597_390.0},
+        "dividends_from_subsidiaries": {2022: 750_000_000.0},
+    })
+    for f in ("net_activity_profit", "interest_expense", "dividends_from_subsidiaries"):
+        d.candidates[f] = {2022: [(d.values[f][2022], 0), (d.values[f][2022], 0)]}
+        d.confidence[f] = {2022: 2}
+    reconcile(d)
+    e = next(e for e in build_decision_log(d)
+             if e["field"] == "pretax_income" and e["year"] == 2022)
+    assert e["status"] == "VERIFIED_DERIVED"          # disclosed, never EXACT
+    assert e["status"] != "VERIFIED_EXACT"
+
+
+def test_correlated_wrong_numbers_cannot_hide_behind_the_identity():
+    """Adversarial case: two mutually-compensating WRONG reads satisfy the
+    identity. The protection is honest propagation — the derived tax
+    inherits the inputs' uncertainty and the original captures stay in the
+    decision log (nothing silently replaced)."""
+    from src.extraction.normalizer import FinancialData, build_decision_log, reconcile
+
+    d = FinancialData()
+    # NI agreed-wrong by +20,000 and pretax agreed-wrong by +20,000:
+    # the identity NI = pretax − tax then "derives" a tax that fits BOTH
+    d.values.update({
+        "net_income": {2022: 1_056_757_086.0},          # +20,000 vs printed
+        "pretax_income": {2022: 1_236_383_213.0},       # +20,000 vs printed
+        "income_tax_expense": {2022: -179_626_127.0},
+    })
+    for f in ("net_income", "pretax_income"):
+        d.candidates[f] = {2022: [(d.values[f][2022], 0)]}   # single reads
+        d.confidence[f] = {2022: 1}
+    reconcile(d)
+    log = build_decision_log(d)
+    ni = next(e for e in log if e["field"] == "net_income" and e["year"] == 2022)
+    # the wrong NI stays exactly as captured (never "fixed" to the reference)
+    assert abs(d.get("net_income", 2022) - 1_056_757_086.0) <= 1.0
+    # and it remains UNVERIFIED — the gate never presents it as confirmed
+    assert ni["status"] in ("UNVERIFIED", "CONFLICT")
+    assert decisive_values(d)[("net_income", 2022)]["usable_decisive"] is False \
+        if ("net_income", 2022) in decisive_values(d) else True
+
+
+def test_derivation_keeps_the_original_capture_visible():
+    """The bridge corrects a garbled tax through the identity, but the
+    ORIGINAL printed-capture stays in the candidates and the note names the
+    identity — the OCR error is disclosed, not hidden."""
+    from src.extraction.normalizer import FinancialData, build_decision_log, reconcile
+
+    d = FinancialData()
+    d.values.update({
+        "net_income": {2022: 1_056_737_086.0},
+        "pretax_income": {2022: 1_236_363_213.0},
+        "income_tax_expense": {2022: -100_000_000.0},   # the garbled capture
+    })
+    for f in ("net_income", "pretax_income"):
+        d.candidates[f] = {2022: [(d.values[f][2022], 0), (d.values[f][2022], 0)]}
+        d.confidence[f] = {2022: 2}
+    d.candidates["income_tax_expense"] = {2022: [(-100_000_000.0, 0)]}
+    d.confidence["income_tax_expense"] = {2022: 1}
+    reconcile(d)
+    e = next(e for e in build_decision_log(d)
+             if e["field"] == "income_tax_expense" and e["year"] == 2022)
+    # original capture still visible among the candidates
+    assert any("-100,000,000" in c for c in e["candidates"])
+    assert e["status"] == "VERIFIED_DERIVED"            # disclosed derivation

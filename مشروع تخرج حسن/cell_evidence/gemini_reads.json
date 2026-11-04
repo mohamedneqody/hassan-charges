@@ -167,5 +167,22 @@
   "latency_ms": null,
   "attempts": 1,
   "failure": "quota: 429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and "
+ },
+ {
+  "raw_text": "",
+  "normalized_value": null,
+  "year": 2022,
+  "read_status": "BLOCKED",
+  "confidence": null,
+  "bbox": null,
+  "bbox_source": null,
+  "model_bbox": null,
+  "evidence_reference": "cell_spatial_operating_cash_flow_p9_y2022.png (quota probe)",
+  "model_name": "gemini-3.8-flash",
+  "notes": "BLOCKED — recorded, not retried past the pool",
+  "latency_ms": null,
+  "attempts": 1,
+  "failure": "quota: 429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and ",
+  "usage": null
  }
 ]

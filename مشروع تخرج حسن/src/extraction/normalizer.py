@@ -105,7 +105,11 @@ _FIELD_NEGATIVE_PATTERNS: dict[str, tuple[str, ...]] = {
     # 179,626,127 = net income 1,056,737,086. Mixing the rows is a
     # 200M-class error — hard veto both ways. No non-controlling-interest
     # field exists in the standalone statements and none is created.
-    "net_income": ("النشاط", "يضاف"),
+    "net_income": ("النشاط", "يضاف",
+                   # English pretax rows («Net profit for the period BEFORE
+                   # INCOME TAX») hijacked net_income in every run — the
+                   # veto must cover the English phrasing too
+                   "before income tax", "before tax", "before taxes"),
     "pretax_income": ("النشاط", "يضاف"),
     "net_activity_profit": ("العام", "السنه", "قبل ضريبه", "قبل الضريبه",
                             "يضاف", "يخصم"),
@@ -153,7 +157,10 @@ _FIELD_NEGATIVE_PATTERNS: dict[str, tuple[str, ...]] = {
              # «النقدية وما في حكمها في أول العام» holds the PRIOR year's
              # ending balance — a live run shipped it as the reporting-year
              # cash (595M) while the printed ending row was 1,804,894,141.
-             "في اول العام", "في اول الفتره", "في بدايه العام", "في بدايه الفتره"),
+             "في اول العام", "في اول الفتره", "في بدايه العام", "في بدايه الفتره",
+             # the cash-flow SUBTOTAL «Cash provided by operating activities»
+             # is not the balance-sheet cash line (TE holdout root cause)
+             "provided by operating activities", "operating activities"),
 }
 
 # A raw cell containing a percent sign is a ratio, never an absolute amount.
@@ -182,6 +189,13 @@ def match_field(label: object) -> str | None:
     # ("صافي ربح العام قبل ضريبة الدخل" / "قبل الضريبة" are pretax, not net).
     if field == "net_income" and ("قبل الضريبه" in norm or "قبل ضريبه" in norm):
         return None
+    # English pretax rows are PRETAX INCOME, not a hijacked net income —
+    # remap instead of dropping («Net profit for the period before income
+    # tax» is the printed pretax line on TE-style statements)
+    if field == "net_income" and ("before income tax" in norm
+                                  or "before tax" in norm
+                                  or "before taxes" in norm):
+        field = "pretax_income"
     # The Ezz-style statement prints BOTH a pre-financing subtotal
     # («النقدية الناتجة من أنشطة التشغيل») AND the true net line
     # («صافي النقدية الناتجة…») — first-capture-wins then shipped the
@@ -625,6 +639,23 @@ def reconcile(data: FinancialData) -> None:
             continue
         if (data.confidence.get("net_income", {}) or {}).get(year, 0) < 2:
             continue
+        # المهمة: المشتق لا يرقّى بمدخلات غير موثوقة — when the anchor NI's
+        # agreement came from ONE layer on an UNTRUSTED document, the bridge
+        # may still APPEND the implied candidate (identity scoring may use
+        # it) but the derived tax is flagged derived_uncertain → the
+        # decision log shows UNVERIFIED, never a confident VERIFIED_DERIVED
+        _profile_untrusted = not (getattr(data, "document_profile", {})
+                                  or {}).get("text_layer_trusted", True)
+        _ni_vote = (getattr(data, "vote_outcomes", {}) or {}).get(
+            ("net_income", year)) or {}
+        _ni_layers = set(_ni_vote.get("winner_layers") or [])
+        if not _ni_layers:
+            _ni_layers = set(l for l in
+                             ((getattr(data, "candidate_layers", {}) or {})
+                              .get("net_income", {}).get(year) or []) if l)
+        if _profile_untrusted and len(_ni_layers) < 2:
+            data.derived_uncertain = getattr(data, "derived_uncertain", set())
+            data.derived_uncertain.add(("income_tax_expense", year))
         implied = ni - pretax
         cands = data.candidates.setdefault("income_tax_expense", {}).setdefault(year, [])
         if not any(_digit_close(v, implied) for v, _ in cands):
@@ -728,6 +759,29 @@ def reconcile(data: FinancialData) -> None:
                             f"identity ({target} = "
                             + " + ".join(c for c, _ in comps) + ")"
                         )
+                        # المهمة: المشتق لا يرقّى بمدخلات غير موثوقة — when the
+                        # identity's INPUT values are backed by ONE layer on an
+                        # UNTRUSTED document, the derived value is flagged
+                        # derived_uncertain → UNVERIFIED in the decision log
+                        _profile_untrusted = not (
+                            getattr(data, "document_profile", {}) or {}
+                        ).get("text_layer_trusted", True)
+                        if _profile_untrusted:
+                            _input_layers = set()
+                            for _cf, _s in comps:
+                                _v = (getattr(data, "vote_outcomes", {})
+                                      or {}).get((_cf, year)) or {}
+                                _input_layers.update(
+                                    _v.get("winner_layers") or [])
+                                _input_layers.update(
+                                    l for l in
+                                    ((getattr(data, "candidate_layers", {})
+                                      or {}).get(_cf, {}).get(year) or [])
+                                    if l)
+                            if len(_input_layers) < 2:
+                                data.derived_uncertain = getattr(
+                                    data, "derived_uncertain", set())
+                                data.derived_uncertain.add((f, year))
                     data.values.setdefault(f, {})[year] = value
                 # downstream groups should see the reconciled value only
                 data.candidates[f][year] = [(value, 0)]
@@ -774,6 +828,23 @@ def reconcile(data: FinancialData) -> None:
             data.values.setdefault("borrowings_excl_leases", {})[year] = borrowings
             data.derived[("borrowings_excl_leases", year)] = (
                 "تسهيلات بنكية + أقساط قروض متداولة + قروض غير متداولة")
+            # المهمة: نفس قاعدة انتشار عدم اليقين — single-layer inputs on an
+            # untrusted document keep the derived debt mapping UNVERIFIED
+            _prof_untrusted = not (getattr(data, "document_profile", {})
+                                   or {}).get("text_layer_trusted", True)
+            if _prof_untrusted:
+                _in_layers = set()
+                for _cf in ("short_term_debt", "current_portion_lt_debt",
+                            "long_term_debt"):
+                    _in_layers.update(
+                        l for l in
+                        ((getattr(data, "candidate_layers", {}) or {})
+                         .get(_cf, {}).get(year) or []) if l)
+                if len(_in_layers) < 2:
+                    data.derived_uncertain = getattr(
+                        data, "derived_uncertain", set())
+                    data.derived_uncertain.add(("borrowings_excl_leases", year))
+                    data.derived_uncertain.add(("total_debt", year))
             data.candidates.setdefault("borrowings_excl_leases", {}).setdefault(
                 year, []).append((borrowings, 0))
             data.values.setdefault("total_debt", {})[year] = borrowings

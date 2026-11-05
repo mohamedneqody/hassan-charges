@@ -51,6 +51,7 @@ FIELD_ALIASES: dict[str, list[str]] = {
         "الايرادات", "ايرادات العمليات", "صافي المبيعات", "المبيعات",
     ],
     "cost_of_revenue": [
+        "operating costs",
         "cost of revenue", "total cost of revenue", "cost of goods sold",
         "cogs", "cost of sales", "direct costs",
         # Arabic
@@ -264,6 +265,8 @@ FIELD_ALIASES: dict[str, list[str]] = {
         "صافي التكاليف التمويلية", "فوائد ومصروفات تمويلية",
     ],
     "pretax_income": [
+        "before taxes",
+        "before income tax",
         "income before tax", "income before income tax", "income before taxes",
         "profit before tax", "earnings before tax", "pre tax income",
         "pretax income", "profit before taxation",
@@ -300,6 +303,7 @@ FIELD_ALIASES: dict[str, list[str]] = {
         "الذمم المدينة", "المدينون", "اذمم مدينة", "العملاء",
     ],
     "accounts_payable": [
+        "creditors and other credit balances",
         "accounts payable", "trade payables", "payables",
         # Arabic
         "الذمم الدائنة", "الدائنون", "اذمم دائنة", "الموردون", "الموردين",

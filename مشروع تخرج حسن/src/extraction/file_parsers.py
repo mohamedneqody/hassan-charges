@@ -279,10 +279,17 @@ def _adaptive_local_reread_scan(raw: bytes, notes: list[str]) -> tuple[
             except Exception as exc:
                 if _attempt == 1:
                     notes.append(f"Local re-read failed twice: {exc}")
+        import re as _tag_re
+
         for pno in pages:
             text = md.get(pno)
             if not text:
                 continue
+            # Indra's markdown wraps tables in HTML tags — the tag words
+            # («tr», «th», «colspan») would be counted as label words and
+            # the year header rejected. Strip the tags; cell boundaries
+            # become plain spaces and the line parser sees clean rows.
+            text = _tag_re.sub(r"<[^>]+>", " ", text)
             try:
                 frames = _parse_pdf_text_lines(text.splitlines())
             except Exception:
@@ -321,6 +328,11 @@ def load_financial_data(file_name: str, raw: bytes, progress_cb=None, page_range
         raise UnsupportedFormatError()
     if not raw:
         raise EmptyFileError()
+
+    from src.extraction.provenance import (
+        SOURCE_NATIVE_PDF_TEXT, SOURCE_NATIVE_SPREADSHEET_CELL,
+        SOURCE_SCANNED_OCR,
+    )
 
     pdf_profile = None
     if ext == ".pdf":
@@ -384,8 +396,6 @@ def load_financial_data(file_name: str, raw: bytes, progress_cb=None, page_range
         frames = [f for _name, f in named_frames]
 
     from src.extraction.provenance import (
-        SOURCE_NATIVE_PDF_TEXT, SOURCE_NATIVE_SPREADSHEET_CELL,
-        SOURCE_SCANNED_OCR,
         CellEvidence, sniff_consolidation, sniff_scale_words,
     )
 

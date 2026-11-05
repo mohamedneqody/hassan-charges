@@ -1104,7 +1104,7 @@ def extract_via_vision(
                 if progress_cb:
                     progress_cb(f"📚 وصلنا للصفحة {done_pages} من {n_pages}…")
 
-        accumulated = merge_parsed(parts, [])
+        accumulated = merge_parsed(parts, [], part_layers=["vision"] * len(parts))
         if _enough_core(accumulated):
             stopped_early = True
             notes.append(
@@ -1156,7 +1156,7 @@ def extract_via_vision(
             except ExtractionError as exc:
                 notes.append(f"Vision page {page_number} failed again (skipped).")
                 failure_reasons.append(str(exc))
-        accumulated = merge_parsed(parts, [])
+        accumulated = merge_parsed(parts, [], part_layers=["vision"] * len(parts))
 
     # Focused double-read of the four core balance-sheet totals: replaces
     # captures that disagree with a fresh, focused read of their source page
@@ -1169,7 +1169,7 @@ def extract_via_vision(
         )
     # Cash-flow recovery: re-ask adjacent pages with a focused CF prompt
     # when the cash-flow statement exists but wasn't captured.
-    pre_merge = merge_parsed(parts, [])
+    pre_merge = merge_parsed(parts, [], part_layers=["vision"] * len(parts))
     _recover_cash_flow(
         pre_merge,
         parts,
@@ -1251,7 +1251,7 @@ def extract_via_vision(
             ),
             encoding="utf-8",
         )
-    data = merge_parsed(parts, notes)
+    data = merge_parsed(parts, notes, part_layers=["vision"] * len(parts))
     # Confidence must reach reconcile BEFORE it runs: the tax bridge anchors
     # on a multiply-verified net income, which is only known here.
     for (field_name, year), level in confidence.items():
@@ -1272,6 +1272,26 @@ def extract_via_vision(
     # Provenance: which page each field was captured from — surfaces in the
     # UI and lets the pipeline flag balance fields sourced from notes pages.
     data.field_sources = field_sources
+    # Source-aware honesty (المهمة 1 — سد الاستثناء غير الآمن): a pure scan
+    # has NO trusted text layer — every value here came from ONE model layer
+    # (vision). The profile marks that, so the decision log's correlated-
+    # source gate treats same-layer agreement as an echo, and only a SECOND
+    # independent layer (local_ocr) can attest.
+    from src.extraction.document_profiler import KIND_SCANNED_NO_TEXT
+
+    data.document_profile = {
+        "kind": KIND_SCANNED_NO_TEXT,
+        "text_layer_trusted": False,
+        "note": "pure scan — every value read by the vision model layer; "
+                "same-layer agreement is an echo until an independent layer "
+                "(local OCR) confirms",
+    }
+    # Focused local cell verification (المهمة 3/4 — استعادة الأدلة): free
+    # local row-band reads of the non-decisive cells. Candidates only —
+    # cross-layer agreement attests through the normal vote, conflicts stay
+    # gated for human review. Never a silent replacement.
+    _focused_local_cell_verification(data, raw, field_sources, doc_years_holder,
+                                     selected, pages_png, notes)
     # ── Spatial shadow mode (FEATURE FLAG: SPATIAL_SHADOW=1) ──
     # Runs the spatial cell extractor on the rendered pages and RECORDS its
     # findings without touching any captured value or decision-log status
@@ -1286,7 +1306,10 @@ def extract_via_vision(
     if _os.getenv("SPATIAL_SHADOW") == "1"             or _os.getenv("ENABLE_SPATIAL_EXTRACTION") == "1":
         if caller is None:
             run_spatial_shadow(data, list(zip(selected, pages_png)), notes)
-    # ── Cell-crop verification (الخانة المقتطعة) ──
+    
+
+
+# ── Cell-crop verification (الخانة المقتطعة) ──
     # Core fields whose decision-log status is CONFLICT or UNVERIFIED get ONE
     # focused strip re-read each (max 2 per run). Confidence-UPGRADE only: a
     # disagreeing crop read is RECORDED as CONFLICT, never auto-applied — per
@@ -1373,6 +1396,186 @@ def extract_via_vision(
 
     data.extraction_source = SOURCE_VISION_MODEL
     return data
+
+# ── Focused local cell verification (المهمة 3/4) ──
+import re as _re
+
+_NUMBER_TOKENS = _re.compile(
+    r"\(?\s*-?\s*(?:\d{1,3}(?:[,\s]\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)\s*\)?%?")
+FOCUSED_LOCAL_TIME_BUDGET_S = 120.0
+
+
+def _focused_local_cell_verification(data, raw, field_sources, doc_years,
+                                     selected, pages_png, notes,
+                                     time_budget_s: float = FOCUSED_LOCAL_TIME_BUDGET_S,
+                                     line_reader=None) -> None:
+    """Free LOCAL row re-reads of the non-decisive cells (المهمة 3/4).
+
+    Real geometry, not text-order guesses: one full-page local Indra read
+    gives LineBoxes; the printed YEAR-HEADER lines fix the year columns'
+    x-centers; the row line matching a field's alias keywords contributes
+    its number groups, each assigned to the NEAREST year column. Every
+    value lands as a local_ocr CANDIDATE — a genuinely different error
+    layer than the vision model. Consequences flow through the normal vote
+    + gate only: cross-layer agreement attests, conflicts stay gated for
+    human review. Zero API; time-budgeted; FOCUSED_LOCAL_VERIFY=0 disables.
+    """
+    import os
+    import time as _time
+
+    if os.getenv("FOCUSED_LOCAL_VERIFY", "1") != "1":
+        return
+    try:
+        from src.config import FIELD_ALIASES
+        from src.extraction.local_ocr import indra_available
+        from src.extraction.normalizer import (
+            _majority_vote, build_decision_log, parse_number,
+        )
+        from src.extraction import spatial_cells as _SC
+    except Exception as exc:                       # pragma: no cover
+        if notes is not None:
+            notes.append(f"Focused local verification unavailable: {exc}")
+        return
+    if not indra_available():
+        return
+    years = (doc_years or {}).get("years") or []
+    if not years:
+        return
+    try:
+        decisions = build_decision_log(data)
+    except Exception:
+        return
+    targets = {(d["field"], d["year"]) for d in decisions
+               if d["status"] in ("CONFLICT", "UNVERIFIED", "CROP_ONLY")}
+    if not targets:
+        return
+    target_fields = {f for f, _y in targets}
+    by_page = dict(zip(selected, pages_png))
+    t0 = _time.time()
+    order = max((o for cands in data.candidates.values()
+                 for ys in cands.values() for _v, o in ys), default=0) + 1
+    appended = 0
+    import threading
+
+    tls = threading.local()
+
+    def _conv():
+        conv = getattr(tls, "conv", None)
+        if conv is None:
+            import indra_ocr
+
+            conv = indra_ocr.load()
+            tls.conv = conv
+        return conv
+
+    def _default_reader(png):
+        return _SC.read_page_lines(_conv(), png)
+
+    reader = line_reader or _default_reader
+
+    def _keyword_hits(text: str, field: str) -> bool:
+        low = (text or "").lower()
+        return any(kw in low for kw in
+                   (k.lower() for k in FIELD_ALIASES.get(field, [])[:3]
+                    if len(k) >= 4))
+
+    for page, png in list(by_page.items()):
+        if _time.time() - t0 > time_budget_s:
+            if notes is not None:
+                notes.append("Focused local verification stopped at the "
+                             "time budget (free local reads).")
+            break
+        page_fields = sorted({f for (f, _y) in targets
+                              if page in (field_sources.get(f) or [])})
+        if not page_fields:
+            continue
+        try:
+            _w, _h, lines = reader(png)
+        except Exception as exc:
+            if notes is not None:
+                import traceback as _tb
+
+                notes.append(f"Focused local verification: page {page} "
+                             f"local read failed ({type(exc).__name__}: "
+                             f"{_tb.format_exc(limit=2)[-200:]})")
+            continue
+        if not lines:
+            continue
+        # year columns from the printed year-header lines: each year token's
+        # PAGE x = line x0 + (char midpoint / line length) * line width
+        def _tok_page_x(ln, char_mid: float) -> float:
+            n = max(len(ln.text), 1)
+            return ln.x0 + (char_mid / n) * (ln.x1 - ln.x0)
+
+        year_cols: dict[int, float] = {}
+        for ln in lines:
+            for m in _re.finditer(r"\S+", ln.text):
+                y = _extract_year_token(m.group(0))
+                if y in years:
+                    year_cols.setdefault(y, _tok_page_x(
+                        ln, (m.start() + m.end()) / 2.0))
+        if not year_cols:
+            continue
+        col_years = sorted(year_cols)
+        for ln in lines:
+            fld = next((f for f in page_fields
+                        if _keyword_hits(ln.text, f)), None)
+            if fld is None:
+                continue
+            # numeric token groups in this row line, with PAGE x-centers
+            nums = [(m.group(0), _tok_page_x(ln, (m.start() + m.end()) / 2.0))
+                    for m in _NUMBER_TOKENS.finditer(ln.text)]
+            nums = [(t, cx) for t, cx in nums
+                    if parse_number(t) is not None]
+            if not nums:
+                continue
+            # group consecutive tokens into magnitudes (3-digit groups chain)
+            mags: list[tuple[float, float]] = []   # (value, cx)
+            cur_toks: list[tuple[str, float]] = []
+            for t, cx in nums + [("|", 1e18)]:
+                if cur_toks and _chains(cur_toks[-1][0], t):
+                    cur_toks.append((t, cx))
+                else:
+                    if cur_toks:
+                        joined = " ".join(t for t, _ in cur_toks)
+                        v = parse_number(joined)
+                        if v is not None:
+                            mags.append((v, sum(c for _t, c in
+                                                cur_toks) / len(cur_toks)))
+                    cur_toks = [(t, cx)] if t != "|" else []
+            for v, cx in mags:
+                year = min(col_years, key=lambda yy: abs(year_cols[yy] - cx))
+                if (fld, year) not in targets:
+                    continue
+                data.candidates.setdefault(fld, {}).setdefault(year, [])                     .append((v, order))
+                data.candidate_labels.setdefault(fld, {}).setdefault(year, [])                     .append((ln.text or "")[:48].strip())
+                data.candidate_layers.setdefault(fld, {}).setdefault(year, [])                     .append("local_ocr")
+                order += 1
+                appended += 1
+    if appended:
+        if notes is not None:
+            notes.append(
+                f"Focused local verification: {appended} local_ocr "
+                "candidates from geometric row reads (zero API) — "
+                "cross-layer agreement attests, conflicts stay gated for "
+                "human review.")
+        _majority_vote(data)
+
+
+def _chains(prev_tok: str, next_tok: str) -> bool:
+    """A 3-digit token CHAINS the running magnitude when the previous token
+    ended a group and this one is exactly 3 digits («169 497 056»); a
+    1-3 digit token starts a NEW magnitude after a comma-grouped one."""
+    return bool(_re.fullmatch(r"\d{3}", next_tok)) and         not (_re.search(r"[,.]", prev_tok) and
+             _re.fullmatch(r"\d{1,3}", prev_tok) and
+             len(_re.sub(r"\D", "", prev_tok)) <= 3)
+
+
+def _extract_year_token(tok: str) -> int | None:
+    m = _re.search(r"(?:19|20)\d{2}", tok or "")
+    return int(m.group(0)) if m else None
+
+
 
 
 def _absorb_batch(

@@ -329,6 +329,21 @@ def load_financial_data(file_name: str, raw: bytes, progress_cb=None, page_range
                 data.document_profile = pdf_profile.as_dict()
                 data.extraction_source = SOURCE_SCANNED_OCR
                 reconcile(data)
+                # the focused local pass applies here too: cross-cell band
+                # reads strengthen/contradict within the SAME layer, so no
+                # attestation is possible (single layer) — candidates only
+                try:
+                    from src.extraction.vision_ocr import (
+                        _focused_local_cell_verification,
+                    )
+
+                    _focused_local_cell_verification(
+                        data, raw,
+                        getattr(data, "field_sources", {}) or {},
+                        {"years": sorted(data.years)},
+                        [], [], notes)
+                except Exception:
+                    pass
                 return data
         frames, notes = _load_pdf(raw)
         pdf_profile = _profile_pdf_bytes(raw)

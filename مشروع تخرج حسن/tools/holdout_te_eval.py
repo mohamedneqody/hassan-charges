@@ -117,6 +117,11 @@ def main() -> dict:
         "wrong_values_blocked": sum(1 for r in gated
                                     if not r["magnitude_match"]),
         "critical_field_coverage": rate(len(crit_ok), len(crit_rows)),
+        "verified_correct_coverage": rate(
+            sum(1 for r in allowed if r["magnitude_match"]), n),
+        "missing_values": sum(1 for r in rows if r["captured"] is None),
+        "far_note": "FAR is N/A (null) when ZERO values are decisive — "
+                    "never reported as 0.0 without a denominator",
         "human_assisted_coverage": 0.0,
         "source_mix": {},
         "metrics_definitions": {

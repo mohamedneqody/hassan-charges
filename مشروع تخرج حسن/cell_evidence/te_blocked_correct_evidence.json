@@ -1,0 +1,122 @@
+[
+ {
+  "field": "fixed_assets",
+  "year": 2024,
+  "status": "UNVERIFIED",
+  "missing_evidence": "قراءة واحدة / اتفاق داخل طبقة الرؤية فقط (echo) — لا طبقة ثانية"
+ },
+ {
+  "field": "inventory",
+  "year": 2024,
+  "status": "UNVERIFIED",
+  "missing_evidence": "قراءة واحدة / اتفاق داخل طبقة الرؤية فقط (echo) — لا طبقة ثانية"
+ },
+ {
+  "field": "accounts_receivable",
+  "year": 2024,
+  "status": "UNVERIFIED",
+  "missing_evidence": "قراءة واحدة / اتفاق داخل طبقة الرؤية فقط (echo) — لا طبقة ثانية"
+ },
+ {
+  "field": "cash",
+  "year": 2024,
+  "status": "UNVERIFIED",
+  "missing_evidence": "قراءة واحدة / اتفاق داخل طبقة الرؤية فقط (echo) — لا طبقة ثانية"
+ },
+ {
+  "field": "current_assets",
+  "year": 2024,
+  "status": "UNVERIFIED",
+  "missing_evidence": "قراءة واحدة / اتفاق داخل طبقة الرؤية فقط (echo) — لا طبقة ثانية"
+ },
+ {
+  "field": "equity",
+  "year": 2024,
+  "status": "UNVERIFIED",
+  "missing_evidence": "قراءة واحدة / اتفاق داخل طبقة الرؤية فقط (echo) — لا طبقة ثانية"
+ },
+ {
+  "field": "total_liabilities",
+  "year": 2024,
+  "status": "UNVERIFIED",
+  "missing_evidence": "قراءة واحدة / اتفاق داخل طبقة الرؤية فقط (echo) — لا طبقة ثانية"
+ },
+ {
+  "field": "revenue",
+  "year": 2024,
+  "status": "UNVERIFIED",
+  "missing_evidence": "قراءة واحدة / اتفاق داخل طبقة الرؤية فقط (echo) — لا طبقة ثانية"
+ },
+ {
+  "field": "gross_profit",
+  "year": 2024,
+  "status": "UNVERIFIED",
+  "missing_evidence": "قراءة واحدة / اتفاق داخل طبقة الرؤية فقط (echo) — لا طبقة ثانية"
+ },
+ {
+  "field": "income_tax_expense",
+  "year": 2024,
+  "status": "CONFLICT",
+  "missing_evidence": "قراءتان متضاربتان (طبقة واحدة — لا حكم)"
+ },
+ {
+  "field": "fixed_assets",
+  "year": 2023,
+  "status": "UNVERIFIED",
+  "missing_evidence": "قراءة واحدة / اتفاق داخل طبقة الرؤية فقط (echo) — لا طبقة ثانية"
+ },
+ {
+  "field": "inventory",
+  "year": 2023,
+  "status": "UNVERIFIED",
+  "missing_evidence": "قراءة واحدة / اتفاق داخل طبقة الرؤية فقط (echo) — لا طبقة ثانية"
+ },
+ {
+  "field": "accounts_receivable",
+  "year": 2023,
+  "status": "UNVERIFIED",
+  "missing_evidence": "قراءة واحدة / اتفاق داخل طبقة الرؤية فقط (echo) — لا طبقة ثانية"
+ },
+ {
+  "field": "cash",
+  "year": 2023,
+  "status": "UNVERIFIED",
+  "missing_evidence": "قراءة واحدة / اتفاق داخل طبقة الرؤية فقط (echo) — لا طبقة ثانية"
+ },
+ {
+  "field": "current_assets",
+  "year": 2023,
+  "status": "UNVERIFIED",
+  "missing_evidence": "قراءة واحدة / اتفاق داخل طبقة الرؤية فقط (echo) — لا طبقة ثانية"
+ },
+ {
+  "field": "equity",
+  "year": 2023,
+  "status": "UNVERIFIED",
+  "missing_evidence": "قراءة واحدة / اتفاق داخل طبقة الرؤية فقط (echo) — لا طبقة ثانية"
+ },
+ {
+  "field": "total_liabilities",
+  "year": 2023,
+  "status": "UNVERIFIED",
+  "missing_evidence": "قراءة واحدة / اتفاق داخل طبقة الرؤية فقط (echo) — لا طبقة ثانية"
+ },
+ {
+  "field": "revenue",
+  "year": 2023,
+  "status": "UNVERIFIED",
+  "missing_evidence": "قراءة واحدة / اتفاق داخل طبقة الرؤية فقط (echo) — لا طبقة ثانية"
+ },
+ {
+  "field": "gross_profit",
+  "year": 2023,
+  "status": "UNVERIFIED",
+  "missing_evidence": "قراءة واحدة / اتفاق داخل طبقة الرؤية فقط (echo) — لا طبقة ثانية"
+ },
+ {
+  "field": "income_tax_expense",
+  "year": 2023,
+  "status": "CONFLICT",
+  "missing_evidence": "قراءتان متضاربتان (طبقة واحدة — لا حكم)"
+ }
+]

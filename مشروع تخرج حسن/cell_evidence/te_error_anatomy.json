@@ -1,0 +1,154 @@
+[
+ {
+  "field": "total_assets",
+  "year": 2024,
+  "gt": 169497056.0,
+  "captured": 20327981.0,
+  "status": "UNVERIFIED",
+  "failure": "DIGIT_COUNT(9->8)"
+ },
+ {
+  "field": "accounts_payable",
+  "year": 2024,
+  "gt": 33524304.0,
+  "captured": null,
+  "status": "NOT_CAPTURED",
+  "failure": "NOT_CAPTURED"
+ },
+ {
+  "field": "current_liabilities",
+  "year": 2024,
+  "gt": 91625404.0,
+  "captured": 50666774.0,
+  "status": "UNVERIFIED",
+  "failure": "OCR_RECOGNITION"
+ },
+ {
+  "field": "cost_of_revenue",
+  "year": 2024,
+  "gt": -18799203.0,
+  "captured": null,
+  "status": "NOT_CAPTURED",
+  "failure": "NOT_CAPTURED"
+ },
+ {
+  "field": "operating_income",
+  "year": 2024,
+  "gt": 5040128.0,
+  "captured": 11374911.0,
+  "status": "CONFLICT",
+  "failure": "DIGIT_COUNT(7->8)"
+ },
+ {
+  "field": "pretax_income",
+  "year": 2024,
+  "gt": 3143601.0,
+  "captured": null,
+  "status": "NOT_CAPTURED",
+  "failure": "NOT_CAPTURED"
+ },
+ {
+  "field": "net_income",
+  "year": 2024,
+  "gt": 4416350.0,
+  "captured": 3143601.0,
+  "status": "CONFLICT",
+  "failure": "WRONG_ROW(=GT pretax_income 2024)"
+ },
+ {
+  "field": "operating_cash_flow",
+  "year": 2024,
+  "gt": 11329526.0,
+  "captured": null,
+  "status": "NOT_CAPTURED",
+  "failure": "NOT_CAPTURED"
+ },
+ {
+  "field": "investing_cash_flow",
+  "year": 2024,
+  "gt": -26010844.0,
+  "captured": null,
+  "status": "NOT_CAPTURED",
+  "failure": "NOT_CAPTURED"
+ },
+ {
+  "field": "financing_cash_flow",
+  "year": 2024,
+  "gt": 10246257.0,
+  "captured": null,
+  "status": "NOT_CAPTURED",
+  "failure": "NOT_CAPTURED"
+ },
+ {
+  "field": "total_assets",
+  "year": 2023,
+  "gt": 134358541.0,
+  "captured": 14964829.0,
+  "status": "UNVERIFIED",
+  "failure": "DIGIT_COUNT(9->8)"
+ },
+ {
+  "field": "accounts_payable",
+  "year": 2023,
+  "gt": 25538574.0,
+  "captured": null,
+  "status": "NOT_CAPTURED",
+  "failure": "NOT_CAPTURED"
+ },
+ {
+  "field": "current_liabilities",
+  "year": 2023,
+  "gt": 64166416.0,
+  "captured": 34039174.0,
+  "status": "UNVERIFIED",
+  "failure": "OCR_RECOGNITION"
+ },
+ {
+  "field": "cost_of_revenue",
+  "year": 2023,
+  "gt": -13227521.0,
+  "captured": null,
+  "status": "NOT_CAPTURED",
+  "failure": "NOT_CAPTURED"
+ },
+ {
+  "field": "operating_income",
+  "year": 2023,
+  "gt": 5451938.0,
+  "captured": 5081497.0,
+  "status": "CONFLICT",
+  "failure": "OCR_RECOGNITION"
+ },
+ {
+  "field": "pretax_income",
+  "year": 2023,
+  "gt": 6098328.0,
+  "captured": null,
+  "status": "NOT_CAPTURED",
+  "failure": "NOT_CAPTURED"
+ },
+ {
+  "field": "operating_cash_flow",
+  "year": 2023,
+  "gt": 8543713.0,
+  "captured": null,
+  "status": "NOT_CAPTURED",
+  "failure": "NOT_CAPTURED"
+ },
+ {
+  "field": "investing_cash_flow",
+  "year": 2023,
+  "gt": -11935977.0,
+  "captured": null,
+  "status": "NOT_CAPTURED",
+  "failure": "NOT_CAPTURED"
+ },
+ {
+  "field": "financing_cash_flow",
+  "year": 2023,
+  "gt": 6112704.0,
+  "captured": null,
+  "status": "NOT_CAPTURED",
+  "failure": "NOT_CAPTURED"
+ }
+]

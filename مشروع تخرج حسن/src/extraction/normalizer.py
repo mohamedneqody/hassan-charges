@@ -571,10 +571,18 @@ def _majority_vote(data: FinancialData) -> None:
             # had two digit-close WRONG reads outvote the correct one; the
             # decision log must preserve that dissent, never fold it away.
             dissent = [v for v in vals if not _digit_close(v, best_val)]
-            if dissent:
+            # the audit trail records the outcome whenever an INDEPENDENT
+            # majority exists — dissent or not (the audited TE cell had none)
+            if best_count >= 2:
+                layers_all = (data.candidate_layers.get(field, {}).get(year)
+                              or [])
+                winner_layers = sorted({l for (v, _o), l in zip(cands, layers_all)
+                                        if v is not None
+                                        and _digit_close(v, best_val)})
                 data.vote_outcomes[(field, year)] = {
                     "winner": best_val, "votes": best_count,
                     "total": len(vals), "witnesses": len(witness_vals),
+                    "winner_layers": winner_layers,
                     "replaced": current, "dissent": dissent,
                     "contested": current is not None and not _digit_close(current, best_val),
                 }
@@ -948,19 +956,28 @@ def build_decision_log(data: FinancialData) -> list[dict]:
                 # an echo of one corrupted source — never an attestation.
                 if not (getattr(data, "document_profile", {}) or {}).get(
                         "text_layer_trusted", True):
-                    layers = {l for l in
-                              ((getattr(data, "candidate_layers", {}) or {})
-                               .get(field_name, {}).get(year) or [])
-                              if l}
-                    # attestation needs TWO DISTINCT layers agreeing (text +
-                    # vision, text + local_ocr…) — agreement inside ONE layer
-                    # is an echo of that layer, whatever the layer is
-                    if len(layers) < 2:
+                    # attestation needs TWO DISTINCT layers behind the
+                    # WINNING value (text + vision, vision + local_ocr…) —
+                    # agreement inside ONE layer is that layer's echo,
+                    # whatever the layer is. The layers are read from the
+                    # vote outcome (the raw candidates pre-collapse).
+                    vote = votes.get((field_name, year))
+                    winner_layers = (vote or {}).get("winner_layers")
+                    if winner_layers is None:
+                        # no vote outcome recorded — derive from the raw
+                        # candidates that digit-match the FINAL value only
+                        layers_all = ((getattr(data, "candidate_layers", {})
+                                       or {}).get(field_name, {})
+                                      .get(year) or [])
+                        winner_layers = sorted({
+                            l for (v, _o), l in zip(cands, layers_all)
+                            if v is not None and _digit_close(v, final)})
+                    if len(set(winner_layers)) < 2:
                         status = "UNVERIFIED"
                         reason = ("اتفاق قراءات داخل طبقة واحدة "
-                                  f"({sorted(layers) or ['غير معروفة']}) على "
-                                  "مستند مصنَّف غير موثوق — الاتفاق صدى لمصدر "
-                                  "واحد وليس تصديقًا مستقلًا")
+                                  f"({sorted(set(winner_layers)) or ['غير معروفة']}) "
+                                  "على مستند مصنَّف غير موثوق — الاتفاق صدى "
+                                  "لمصدر واحد وليس تصديقًا مستقلًا")
             elif len(values) >= 2 and conf >= 1:
                 status, reason = "UNVERIFIED", "قراءتان بلا تحقق مستقل حاسم"
             else:

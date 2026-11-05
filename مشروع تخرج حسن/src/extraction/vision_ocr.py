@@ -1409,16 +1409,23 @@ def _focused_local_cell_verification(data, raw, field_sources, doc_years,
                                      selected, pages_png, notes,
                                      time_budget_s: float = FOCUSED_LOCAL_TIME_BUDGET_S,
                                      line_reader=None) -> None:
-    """Free LOCAL row re-reads of the non-decisive cells (المهمة 3/4).
+    """Free LOCAL cell re-reads of the non-decisive cells (المهمة 3/4 v3).
 
-    Real geometry, not text-order guesses: one full-page local Indra read
-    gives LineBoxes; the printed YEAR-HEADER lines fix the year columns'
-    x-centers; the row line matching a field's alias keywords contributes
-    its number groups, each assigned to the NEAREST year column. Every
-    value lands as a local_ocr CANDIDATE — a genuinely different error
-    layer than the vision model. Consequences flow through the normal vote
-    + gate only: cross-layer agreement attests, conflicts stay gated for
-    human review. Zero API; time-budgeted; FOCUSED_LOCAL_VERIFY=0 disables.
+    REAL segment geometry — no text-order or char-offset assumptions:
+      - one free local Indra page read returns a LineBox PER PRINTED SEGMENT
+        («30/6/2024», «Total Assets», «169 497 056» each carry their own box);
+      - the year-HEADER segments fix each year column's x-center;
+      - a field's label segment (matched by the field's OWN alias keywords)
+        defines the row's y-band; every numeric segment in that band belongs
+        to the row;
+      - numeric SEGMENTS chain horizontally (adjacent boxes, 1-3 digit
+        groups) into magnitudes, and each magnitude goes to the NEAREST
+        year column by its own box center.
+    Every value lands as a local_ocr CANDIDATE carrying its bbox, page and
+    render scale (الإحداثيات والمصدر والدقة محفوظة). Cross-layer agreement
+    attests through the normal vote + gate; conflicts stay gated for human
+    review. Never a silent replacement. Zero API; FOCUSED_LOCAL_VERIFY=0
+    disables; reader injectable for tests.
     """
     import os
     import time as _time
@@ -1449,7 +1456,6 @@ def _focused_local_cell_verification(data, raw, field_sources, doc_years,
                if d["status"] in ("CONFLICT", "UNVERIFIED", "CROP_ONLY")}
     if not targets:
         return
-    target_fields = {f for f, _y in targets}
     by_page = dict(zip(selected, pages_png))
     t0 = _time.time()
     order = max((o for cands in data.candidates.values()
@@ -1472,12 +1478,13 @@ def _focused_local_cell_verification(data, raw, field_sources, doc_years,
         return _SC.read_page_lines(_conv(), png)
 
     reader = line_reader or _default_reader
+    render_scale = float(os.getenv("FOCUSED_LOCAL_RENDER_SCALE", "2.0"))
 
-    def _keyword_hits(text: str, field: str) -> bool:
-        low = (text or "").lower()
-        return any(kw in low for kw in
-                   (k.lower() for k in FIELD_ALIASES.get(field, [])[:3]
-                    if len(k) >= 4))
+    def _cx(seg):
+        return (seg.box[0] + seg.box[2]) / 2.0
+
+    def _cy(seg):
+        return (seg.box[1] + seg.box[3]) / 2.0
 
     for page, png in list(by_page.items()):
         if _time.time() - t0 > time_budget_s:
@@ -1490,76 +1497,127 @@ def _focused_local_cell_verification(data, raw, field_sources, doc_years,
         if not page_fields:
             continue
         try:
-            _w, _h, lines = reader(png)
+            _w, _h, segs = reader(png)
         except Exception as exc:
             if notes is not None:
                 import traceback as _tb
 
                 notes.append(f"Focused local verification: page {page} "
                              f"local read failed ({type(exc).__name__}: "
-                             f"{_tb.format_exc(limit=2)[-200:]})")
+                             f"{_tb.format_exc(limit=2)[-160:]})")
             continue
-        if not lines:
+        if not segs:
             continue
-        # year columns from the printed year-header lines: each year token's
-        # PAGE x = line x0 + (char midpoint / line length) * line width
-        def _tok_page_x(ln, char_mid: float) -> float:
-            n = max(len(ln.text), 1)
-            return ln.x0 + (char_mid / n) * (ln.x1 - ln.x0)
+        # accept BOTH segment shapes: indra_ocr Line (.box/.text/.conf) and
+        # spatial_cells LineBox (.x0/.y0/.x1/.y1/.text)
+        class _Seg:
+            __slots__ = ("box", "text", "conf")
 
-        year_cols: dict[int, float] = {}
-        for ln in lines:
-            for m in _re.finditer(r"\S+", ln.text):
-                y = _extract_year_token(m.group(0))
-                if y in years:
-                    year_cols.setdefault(y, _tok_page_x(
-                        ln, (m.start() + m.end()) / 2.0))
+            def __init__(self, sg):
+                if hasattr(sg, "box"):
+                    self.box = list(sg.box)
+                else:
+                    self.box = [sg.x0, sg.y0, sg.x1, sg.y1]
+                self.text = sg.text or ""
+                self.conf = getattr(sg, "conf", None)
+
+        segs = [_Seg(x) for x in segs]
+        # year columns from the printed year-header SEGMENTS
+        year_cols: dict[int, list[float]] = {}
+        for seg in segs:
+            y = _extract_year_token(seg.text or "")
+            if y in years:
+                year_cols.setdefault(y, []).append(_cx(seg))
         if not year_cols:
             continue
-        col_years = sorted(year_cols)
-        for ln in lines:
+        col_cx = {y: sum(v) / len(v) for y, v in year_cols.items()}
+        col_years = sorted(col_cx)
+
+        # label segments for the page's target fields
+        for seg in segs:
+            text = (seg.text or "").strip()
+            if not text or _is_number_text(text):
+                continue
             fld = next((f for f in page_fields
-                        if _keyword_hits(ln.text, f)), None)
+                        if any(kw in text.lower()
+                               for kw in (k.lower() for k in
+                                          FIELD_ALIASES.get(f, [])[:3]
+                                          if len(k) >= 4))), None)
             if fld is None:
                 continue
-            # numeric token groups in this row line, with PAGE x-centers
-            nums = [(m.group(0), _tok_page_x(ln, (m.start() + m.end()) / 2.0))
-                    for m in _NUMBER_TOKENS.finditer(ln.text)]
-            nums = [(t, cx) for t, cx in nums
-                    if parse_number(t) is not None]
-            if not nums:
+            band_cy, band_h = _cy(seg), max(seg.box[3] - seg.box[1], 4.0)
+            row_nums = [sg for sg in segs
+                        if sg is not seg and _is_number_text(sg.text or "")
+                        and abs(_cy(sg) - band_cy) <= band_h * 1.5 + 6.0]
+            if not row_nums:
                 continue
-            # group consecutive tokens into magnitudes (3-digit groups chain)
-            mags: list[tuple[float, float]] = []   # (value, cx)
-            cur_toks: list[tuple[str, float]] = []
-            for t, cx in nums + [("|", 1e18)]:
-                if cur_toks and _chains(cur_toks[-1][0], t):
-                    cur_toks.append((t, cx))
+            # chain horizontally-adjacent 1-3 digit fragments into magnitudes;
+            # each magnitude keeps ITS OWN segment group (for the bbox)
+            row_nums.sort(key=lambda sg: sg.box[0])
+            mags: list[tuple[float, float, list]] = []   # (value, cx, group)
+            cur: list = []
+            for sg in row_nums + [None]:
+                if sg is not None and cur and _chains_box(cur[-1], sg):
+                    cur.append(sg)
                 else:
-                    if cur_toks:
-                        joined = " ".join(t for t, _ in cur_toks)
+                    if cur:
+                        joined = " ".join(x.text.strip() for x in cur)
                         v = parse_number(joined)
                         if v is not None:
-                            mags.append((v, sum(c for _t, c in
-                                                cur_toks) / len(cur_toks)))
-                    cur_toks = [(t, cx)] if t != "|" else []
-            for v, cx in mags:
-                year = min(col_years, key=lambda yy: abs(year_cols[yy] - cx))
+                            mags.append((v, sum(_cx(x) for x in cur)
+                                         / len(cur), list(cur)))
+                    cur = [sg] if sg is not None else []
+            for v, cx, grp in mags:
+                year = min(col_years, key=lambda yy: abs(col_cx[yy] - cx))
                 if (fld, year) not in targets:
                     continue
-                data.candidates.setdefault(fld, {}).setdefault(year, [])                     .append((v, order))
-                data.candidate_labels.setdefault(fld, {}).setdefault(year, [])                     .append((ln.text or "")[:48].strip())
-                data.candidate_layers.setdefault(fld, {}).setdefault(year, [])                     .append("local_ocr")
+                # the provenance bbox is the VALUE segment's own box (the
+                # union of the chained group when fragments were joined)
+                ubox = [min(x.box[0] for x in grp),
+                        min(x.box[1] for x in grp),
+                        max(x.box[2] for x in grp),
+                        max(x.box[3] for x in grp)]
+                data.candidates.setdefault(fld, {}).setdefault(year, []) \
+                    .append((v, order))
+                data.candidate_labels.setdefault(fld, {}).setdefault(year, []) \
+                    .append(text[:48])
+                data.candidate_layers.setdefault(fld, {}).setdefault(year, []) \
+                    .append("local_ocr")
+                data.candidate_bbox.setdefault(fld, {}).setdefault(year, []) \
+                    .append({"page": page,
+                             "bbox_px": [round(x, 1) for x in ubox],
+                             "render_scale": render_scale})
                 order += 1
                 appended += 1
     if appended:
         if notes is not None:
             notes.append(
                 f"Focused local verification: {appended} local_ocr "
-                "candidates from geometric row reads (zero API) — "
+                "candidates from geometric segment reads (zero API) — "
                 "cross-layer agreement attests, conflicts stay gated for "
                 "human review.")
         _majority_vote(data)
+
+
+def _is_number_text(text: str) -> bool:
+    import re as _re
+
+    return bool(_re.fullmatch(r"[\d,.()\s]+", (text or "").strip())
+                and _re.search(r"\d", text or ""))
+
+
+def _chains_box(prev_seg, next_seg) -> bool:
+    """Horizontal chaining: same row, adjacent boxes, 1-3 digit fragments
+    («169» «497» «056»)."""
+    import re as _re
+
+    gap = next_seg.box[0] - prev_seg.box[2]
+    h = max(prev_seg.box[3] - prev_seg.box[1], 4.0)
+    if gap > h * 1.6 or gap < -h * 0.5:
+        return False
+    pt = (prev_seg.text or "").strip()
+    nt = (next_seg.text or "").strip()
+    return bool(_re.fullmatch(r"\d{1,3}", pt) and _re.fullmatch(r"\d{1,3}", nt))
 
 
 def _chains(prev_tok: str, next_tok: str) -> bool:

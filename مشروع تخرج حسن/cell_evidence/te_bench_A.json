@@ -1,0 +1,167 @@
+{
+ "route": "A",
+ "seconds": 91.0,
+ "cells": {
+  "cash|2024": {
+   "captured": 18329749.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "VISION_MODEL",
+   "layers": [
+    "vision"
+   ],
+   "local_bbox": null
+  },
+  "cash|2023": {
+   "captured": 15632807.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "VISION_MODEL",
+   "layers": [
+    "vision"
+   ],
+   "local_bbox": null
+  },
+  "income_tax_expense|2024": {
+   "captured": -3869466.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "VISION_MODEL",
+   "layers": [
+    "vision"
+   ],
+   "local_bbox": null
+  },
+  "income_tax_expense|2023": {
+   "captured": -2061440.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "VISION_MODEL",
+   "layers": [
+    "vision"
+   ],
+   "local_bbox": null
+  },
+  "operating_cash_flow|2024": {
+   "captured": 11329526.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "VISION_MODEL",
+   "layers": [
+    "vision"
+   ],
+   "local_bbox": null
+  },
+  "operating_cash_flow|2023": {
+   "captured": 8543713.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "VISION_MODEL",
+   "layers": [
+    "vision"
+   ],
+   "local_bbox": null
+  },
+  "capex|2024": {
+   "captured": -19927966.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "VISION_MODEL",
+   "layers": [
+    "vision"
+   ],
+   "local_bbox": null
+  },
+  "capex|2023": {
+   "captured": -9722228.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "VISION_MODEL",
+   "layers": [
+    "vision"
+   ],
+   "local_bbox": null
+  },
+  "total_assets|2024": {
+   "captured": 6475490.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "VISION_MODEL",
+   "layers": [
+    "vision"
+   ],
+   "local_bbox": null
+  },
+  "total_assets|2023": {
+   "captured": 2780130.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "VISION_MODEL",
+   "layers": [
+    "vision"
+   ],
+   "local_bbox": null
+  },
+  "investing_cash_flow|2024": {
+   "captured": -26010844.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "VISION_MODEL",
+   "layers": [
+    "vision"
+   ],
+   "local_bbox": null
+  },
+  "investing_cash_flow|2023": {
+   "captured": -11935977.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "VISION_MODEL",
+   "layers": [
+    "vision"
+   ],
+   "local_bbox": null
+  },
+  "total_debt|2024": {
+   "captured": 1839708.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "VISION_MODEL",
+   "layers": [
+    "vision"
+   ],
+   "local_bbox": null
+  },
+  "total_debt|2023": {
+   "captured": 2116729.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "VISION_MODEL",
+   "layers": [
+    "vision"
+   ],
+   "local_bbox": null
+  },
+  "financing_cash_flow|2024": {
+   "captured": 10246257.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "VISION_MODEL",
+   "layers": [
+    "vision"
+   ],
+   "local_bbox": null
+  },
+  "financing_cash_flow|2023": {
+   "captured": 6112704.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "VISION_MODEL",
+   "layers": [
+    "vision"
+   ],
+   "local_bbox": null
+  }
+ },
+ "notes_tail": []
+}

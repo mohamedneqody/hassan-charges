@@ -304,6 +304,9 @@ class FinancialData:
     # (text | local_ocr | vision) — the vote independence guard needs both
     candidate_labels: dict = field(default_factory=dict)
     candidate_layers: dict = field(default_factory=dict)
+    # per-candidate snippet geometry: bbox in page pixels + page + render
+    # scale (المهمة 3 — إحداثيات القصاصة والمصدر والدقة محفوظة)
+    candidate_bbox: dict = field(default_factory=dict)
     # document source profile (document_profiler): kind, text-quality
     # metrics and text_layer_trusted — set for PDFs, absent for Excel
     document_profile: dict = field(default_factory=dict)

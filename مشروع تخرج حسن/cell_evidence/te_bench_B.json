@@ -1,0 +1,339 @@
+{
+ "route": "B",
+ "seconds": 71.5,
+ "cells": {
+  "revenue|2024": {
+   "captured": 774921.0,
+   "status": "VERIFIED_EXACT",
+   "gate": "use",
+   "source": "VISION_MODEL",
+   "layers": [
+    "local_ocr",
+    "vision"
+   ],
+   "local_bbox": {
+    "page": 17,
+    "bbox_px": [
+     663.3,
+     545.7,
+     746.1,
+     560.1
+    ],
+    "render_scale": 2.0
+   }
+  },
+  "revenue|2023": {
+   "captured": 21899104.0,
+   "status": "CONFLICT",
+   "gate": "not_decisive",
+   "source": "VISION_MODEL",
+   "layers": [
+    "local_ocr",
+    "vision"
+   ],
+   "local_bbox": {
+    "page": 17,
+    "bbox_px": [
+     1048.8,
+     545.5,
+     1115.7,
+     559.4
+    ],
+    "render_scale": 2.0
+   }
+  },
+  "depreciation_amortization|2024": {
+   "captured": 5948924.0,
+   "status": "VERIFIED_EXACT",
+   "gate": "use",
+   "source": "VISION_MODEL",
+   "layers": [
+    "local_ocr",
+    "vision"
+   ],
+   "local_bbox": {
+    "page": 18,
+    "bbox_px": [
+     820.7,
+     524.3,
+     877.5,
+     538.1
+    ],
+    "render_scale": 2.0
+   }
+  },
+  "depreciation_amortization|2023": {
+   "captured": 18604.0,
+   "status": "VERIFIED_EXACT",
+   "gate": "use",
+   "source": "VISION_MODEL",
+   "layers": [
+    "local_ocr",
+    "vision"
+   ],
+   "local_bbox": {
+    "page": 18,
+    "bbox_px": [
+     1064.3,
+     489.3,
+     1111.0,
+     502.3
+    ],
+    "render_scale": 2.0
+   }
+  },
+  "total_assets|2024": {
+   "captured": 80000.0,
+   "status": "VERIFIED_EXACT",
+   "gate": "use",
+   "source": "VISION_MODEL",
+   "layers": [
+    "local_ocr",
+    "vision"
+   ],
+   "local_bbox": {
+    "page": 17,
+    "bbox_px": [
+     802.7,
+     488.3,
+     857.6,
+     499.5
+    ],
+    "render_scale": 2.0
+   }
+  },
+  "total_assets|2023": {
+   "captured": 46818.0,
+   "status": "CONFLICT",
+   "gate": "not_decisive",
+   "source": "VISION_MODEL",
+   "layers": [
+    "local_ocr",
+    "vision"
+   ],
+   "local_bbox": {
+    "page": 17,
+    "bbox_px": [
+     1051.4,
+     488.4,
+     1106.3,
+     499.6
+    ],
+    "render_scale": 2.0
+   }
+  },
+  "net_income|2024": {
+   "captured": 4416350.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "VISION_MODEL",
+   "layers": [
+    "vision"
+   ],
+   "local_bbox": null
+  },
+  "net_income|2023": {
+   "captured": 5724683.0,
+   "status": "VERIFIED_EXACT",
+   "gate": "use",
+   "source": "VISION_MODEL",
+   "layers": [
+    "local_ocr",
+    "vision"
+   ],
+   "local_bbox": {
+    "page": 19,
+    "bbox_px": [
+     1063.8,
+     707.8,
+     1128.0,
+     724.3
+    ],
+    "render_scale": 2.0
+   }
+  },
+  "cash|2024": {
+   "captured": -19.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "VISION_MODEL",
+   "layers": [
+    "local_ocr",
+    "vision"
+   ],
+   "local_bbox": {
+    "page": 9,
+    "bbox_px": [
+     886.5,
+     1475.8,
+     972.9,
+     1489.6
+    ],
+    "render_scale": 2.0
+   }
+  },
+  "cash|2023": {
+   "captured": 2720440.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "VISION_MODEL",
+   "layers": [
+    "local_ocr",
+    "vision"
+   ],
+   "local_bbox": {
+    "page": 9,
+    "bbox_px": [
+     1031.4,
+     1476.3,
+     1120.9,
+     1489.5
+    ],
+    "render_scale": 2.0
+   }
+  },
+  "income_tax_expense|2024": {
+   "captured": -3869466.0,
+   "status": "VERIFIED_EXACT",
+   "gate": "use",
+   "source": "VISION_MODEL",
+   "layers": [
+    "local_ocr",
+    "vision"
+   ],
+   "local_bbox": {
+    "page": 9,
+    "bbox_px": [
+     873.1,
+     873.2,
+     983.1,
+     888.9
+    ],
+    "render_scale": 2.0
+   }
+  },
+  "income_tax_expense|2023": {
+   "captured": -2061440.0,
+   "status": "VERIFIED_EXACT",
+   "gate": "use",
+   "source": "VISION_MODEL",
+   "layers": [
+    "local_ocr",
+    "vision"
+   ],
+   "local_bbox": {
+    "page": 9,
+    "bbox_px": [
+     1030.8,
+     844.3,
+     1124.8,
+     861.2
+    ],
+    "render_scale": 2.0
+   }
+  },
+  "operating_cash_flow|2024": {
+   "captured": 11329526.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "VISION_MODEL",
+   "layers": [
+    "vision"
+   ],
+   "local_bbox": null
+  },
+  "operating_cash_flow|2023": {
+   "captured": 8543713.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "VISION_MODEL",
+   "layers": [
+    "vision"
+   ],
+   "local_bbox": null
+  },
+  "capex|2024": {
+   "captured": -19927966.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "VISION_MODEL",
+   "layers": [
+    "vision"
+   ],
+   "local_bbox": null
+  },
+  "capex|2023": {
+   "captured": -9722228.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "VISION_MODEL",
+   "layers": [
+    "vision"
+   ],
+   "local_bbox": null
+  },
+  "investing_cash_flow|2024": {
+   "captured": -26010844.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "VISION_MODEL",
+   "layers": [
+    "vision"
+   ],
+   "local_bbox": null
+  },
+  "investing_cash_flow|2023": {
+   "captured": -11935977.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "VISION_MODEL",
+   "layers": [
+    "vision"
+   ],
+   "local_bbox": null
+  },
+  "total_debt|2024": {
+   "captured": 1839708.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "VISION_MODEL",
+   "layers": [
+    "vision"
+   ],
+   "local_bbox": null
+  },
+  "total_debt|2023": {
+   "captured": 2116729.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "VISION_MODEL",
+   "layers": [
+    "vision"
+   ],
+   "local_bbox": null
+  },
+  "financing_cash_flow|2024": {
+   "captured": 10246257.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "VISION_MODEL",
+   "layers": [
+    "vision"
+   ],
+   "local_bbox": null
+  },
+  "financing_cash_flow|2023": {
+   "captured": 6112704.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "VISION_MODEL",
+   "layers": [
+    "vision"
+   ],
+   "local_bbox": null
+  }
+ },
+ "notes_tail": [
+  "Focused local verification: 78 local_ocr candidates from geometric segment reads (zero API) — cross-layer agreement attests, conflicts stay gated for human review."
+ ]
+}

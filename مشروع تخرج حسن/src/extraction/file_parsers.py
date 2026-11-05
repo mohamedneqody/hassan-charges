@@ -131,9 +131,16 @@ def _adaptive_local_reread(raw: bytes, profile, notes: list[str]) -> tuple[
             return pno, _page_markdown(_conv(), png)
 
         md: dict[int, str | None] = {}
-        with ThreadPoolExecutor(max_workers=4) as ex:
-            for pno, text in ex.map(_read, pngs.items()):
-                md[pno] = text
+        for _attempt in range(2):              # the local model load is
+            try:                               # occasionally flaky (OpenBLAS)
+                md = {}
+                with ThreadPoolExecutor(max_workers=4) as ex:
+                    for pno, text in ex.map(_read, pngs.items()):
+                        md[pno] = text
+                break
+            except Exception as exc:
+                if _attempt == 1:
+                    notes.append(f"Local re-read failed twice: {exc}")
         for pno in pages:
             text = md.get(pno)
             if not text:
@@ -217,12 +224,13 @@ def _financialdata_to_parts(data) -> tuple[
 
 
 def _adaptive_local_reread_scan(raw: bytes, notes: list[str]) -> tuple[
-        list[dict[int, dict[str, float]]], list[list[dict]]]:
+        list[dict[int, dict[str, float]]], list[list[dict]], dict]:
     """Local re-read for PURE scans (no text layer): the first
     LOCAL_REREAD_MAX_PAGES pages through local Indra OCR (zero API) — the
     degradation path when the vision layer is BLOCKED."""
     out_parts: list[dict[int, dict[str, float]]] = []
     out_caps: list[list[dict]] = []
+    out_sources: dict[str, list[int]] = {}
     try:
         import threading
         from concurrent.futures import ThreadPoolExecutor
@@ -235,11 +243,18 @@ def _adaptive_local_reread_scan(raw: bytes, notes: list[str]) -> tuple[
         if not indra_available():
             notes.append("Local-only degradation impossible: local Indra "
                          "OCR unavailable.")
-            return out_parts, out_caps
+            return out_parts, out_caps, out_sources
         pdf = pdfium.PdfDocument(io.BytesIO(raw))
         pages = list(range(1, min(len(pdf), LOCAL_REREAD_MAX_PAGES) + 1))
-        pngs = {p: pdf[p - 1].render(scale=2.0).to_pil().tobytes()
-                for p in pages if p - 1 < len(pdf)}
+        import io as _io
+
+        pngs: dict[int, bytes] = {}
+        for p in pages:
+            if p - 1 < len(pdf):
+                buf = _io.BytesIO()
+                pdf[p - 1].render(scale=2.0).to_pil().convert("RGB")                     .save(buf, format="PNG")           # ENCODED png — the
+                pngs[p] = buf.getvalue()               # reader needs a file
+
         tls = threading.local()
 
         def _conv():
@@ -254,9 +269,16 @@ def _adaptive_local_reread_scan(raw: bytes, notes: list[str]) -> tuple[
             return pno, _page_markdown(_conv(), png)
 
         md: dict[int, str | None] = {}
-        with ThreadPoolExecutor(max_workers=4) as ex:
-            for pno, text in ex.map(_read, pngs.items()):
-                md[pno] = text
+        for _attempt in range(2):              # the local model load is
+            try:                               # occasionally flaky (OpenBLAS)
+                md = {}
+                with ThreadPoolExecutor(max_workers=4) as ex:
+                    for pno, text in ex.map(_read, pngs.items()):
+                        md[pno] = text
+                break
+            except Exception as exc:
+                if _attempt == 1:
+                    notes.append(f"Local re-read failed twice: {exc}")
         for pno in pages:
             text = md.get(pno)
             if not text:
@@ -273,6 +295,12 @@ def _adaptive_local_reread_scan(raw: bytes, notes: list[str]) -> tuple[
                 if result:
                     out_parts.append(result)
                     out_caps.append(caps)
+                    for cap in caps:     # page provenance for the focused pass
+                        f = cap.get("field")
+                        if f:
+                            out_sources.setdefault(f, [])
+                            if pno not in out_sources[f]:
+                                out_sources[f].append(pno)
         notes.append(
             f"Local-only degradation: Indra re-read of pages {pages[0]}-"
             f"{pages[-1]} → {len(out_parts)} tables (layer local_ocr, zero "
@@ -281,7 +309,7 @@ def _adaptive_local_reread_scan(raw: bytes, notes: list[str]) -> tuple[
     except Exception as exc:
         notes.append(f"Local-only degradation failed: {type(exc).__name__}: "
                      f"{str(exc)[:120]}")
-    return out_parts, out_caps
+    return out_parts, out_caps, out_sources
 
 
 def load_financial_data(file_name: str, raw: bytes, progress_cb=None, page_range=None, fast_mode: bool = False) -> FinancialData:
@@ -319,8 +347,7 @@ def load_financial_data(file_name: str, raw: bytes, progress_cb=None, page_range
                     kind=KIND_SCANNED_NO_TEXT, pages_total=0,
                     pages_with_text=0, quality_score=0.0,
                     text_layer_trusted=False)
-                local_parts, local_caps = _adaptive_local_reread_scan(
-                    raw, notes)
+                local_parts, local_caps, local_sources =                     _adaptive_local_reread_scan(raw, notes)
                 if not local_parts:
                     raise
                 data = merge_parsed(local_parts, notes,
@@ -328,6 +355,7 @@ def load_financial_data(file_name: str, raw: bytes, progress_cb=None, page_range
                                     part_layers=["local_ocr"] * len(local_parts))
                 data.document_profile = pdf_profile.as_dict()
                 data.extraction_source = SOURCE_SCANNED_OCR
+                data.field_sources = local_sources
                 reconcile(data)
                 # the focused local pass applies here too: cross-cell band
                 # reads strengthen/contradict within the SAME layer, so no
@@ -477,11 +505,21 @@ def load_financial_data(file_name: str, raw: bytes, progress_cb=None, page_range
                         captures_per_part=captures_per_part,
                         part_layers=part_layers)
     if ext == ".pdf":
-        data.document_profile = data_profile
+        # UNKNOWN source is UNTRUSTED by default (المهمة 6): a PDF whose
+        # profiling failed gets no trust — its values stay on the gated
+        # ladder until a layer proves otherwise
+        data.document_profile = data_profile or {
+            "kind": "UNKNOWN_PDF", "text_layer_trusted": False,
+            "note": "profiling failed — untrusted by default"}
         data.extraction_source = (SOURCE_NATIVE_PDF_TEXT
                                   if data_profile.get("text_layer_trusted")
                                   else SOURCE_SCANNED_OCR)
     else:
+        data.document_profile = {"kind": "NATIVE_SPREADSHEET",
+                                 "text_layer_trusted": False,
+                                 "note": "spreadsheet values are decided by "
+                                         "the VERIFIED_SOURCE_EXACT evidence "
+                                         "checklist, not by layer trust"}
         data.extraction_source = SOURCE_NATIVE_SPREADSHEET_CELL
     reconcile(data)
     data.currency_hint = _currency_hint_from_frames(frames)

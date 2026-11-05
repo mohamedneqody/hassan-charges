@@ -1,0 +1,66 @@
+{
+  "round": "false-acceptance elimination + evidence-based routing (2026-11-05)",
+  "note": "development sets only — the holdout (Telecom Egypt) is reported separately and was NEVER used to tune anything",
+  "hadid_ezz_2022_scanned_arabic": {
+    "source_type": "Arabic scanned PDF (no text layer) — spatial/local path",
+    "before_c301f54": {
+      "gate_partition": {"usable": 0, "not_decisive": 10, "missing": 1},
+      "automatic_decisive_coverage": 0.0,
+      "automatic_exact_match_accuracy": 0.727,
+      "false_acceptance_rate": null
+    },
+    "after_this_round": {
+      "gate_partition": {"usable": 0, "not_decisive": 10, "missing": 1},
+      "automatic_decisive_coverage": 0.0,
+      "automatic_exact_match_accuracy": 0.727,
+      "false_acceptance_rate": null,
+      "note": "UNCHANGED — the scanned/local ladder was not touched; its values still wait for human review"
+    }
+  },
+  "abuqir_2025_searchable_scanned": {
+    "source_type": "searchable scanned PDF (hidden OCR layer, garbled)",
+    "before_c301f54": {
+      "automatic_exact_match_accuracy_magnitude": 0.325,
+      "automatic_decisive_coverage": 0.125,
+      "false_acceptance_rate": 0.2,
+      "false_acceptances": [
+        {"field": "income_tax_expense", "year": 2024, "accepted": 1715662071.0,
+         "gt": -3631829544.0, "status": "VERIFIED_EXACT",
+         "mechanism": "the tax note's «Current income tax» row echoed by two "
+                      "note tables outvoted the printed P&L line (2-against-1 "
+                      "majority vote over correlated captures)"}
+      ],
+      "correct_values_blocked": 9,
+      "wrong_values_blocked": 26
+    },
+    "after_this_round": {
+      "automatic_exact_match_accuracy_magnitude": 0.3,
+      "automatic_decisive_coverage": 0.0,
+      "false_acceptance_rate": null,
+      "false_acceptances": [],
+      "correct_values_blocked": 12,
+      "wrong_values_blocked": 28,
+      "extraction_source": "SCANNED_OCR (reclassified by the profiler)",
+      "document_profile": "SEARCHABLE_SCANNED_PDF, text_layer_trusted=false",
+      "incident_cell_now": {
+        "field": "income_tax_expense", "year": 2024,
+        "captured": -3631829544.0, "status": "gated (not decisive)",
+        "note": "the CORRECT printed value is captured and BLOCKED — the "
+                "false acceptance is gone; the cell waits for human review"
+      },
+      "fixes_applied": [
+        "vocabulary: tax note components/bridges/rates no longer alias to "
+        "income_tax_expense (generic IFRS, EN+AR)",
+        "vote independence: repeated same-(label,value) captures collapse to "
+        "ONE witness — echoes never outvote the primary statement",
+        "correlated-source gate: agreement from a profiler-untrusted layer "
+        "is UNVERIFIED unless a different layer (vision/local_ocr) agrees",
+        "adaptive routing: untrusted text layer -> free local spatial "
+        "re-read of the worst pages; vision only behind a flag, budget and "
+        "usable pool (BLOCKED recorded otherwise)"
+      ]
+    }
+  },
+  "cost_of_safety": "decisive coverage on the corrupted layer dropped 0.125 -> 0.0 — by design: values from a source the profiler cannot trust wait for a human instead of deciding reports",
+  "regression_suite": "262 tests pass (was 249 at c301f54); the false-acceptance replay, echo-collapse, correlated-source gate, routing governance, historical year headers and per-table column counts are pinned as tests"
+}

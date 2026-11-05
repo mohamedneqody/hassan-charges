@@ -67,6 +67,223 @@ def _company_hint_from_frames(frames: list[pd.DataFrame]) -> str | None:
 # Dispatch
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Adaptive routing helpers (المهمة 3 — source-aware document routing)
+# ---------------------------------------------------------------------------
+
+# budgets (frozen policy parameters — documented, never unlimited)
+LOCAL_REREAD_MAX_PAGES = 12
+VISION_FALLBACK_DEFAULT_MAX_PAGES = 6
+
+
+def _profile_pdf_bytes(raw: bytes):
+    """Document Source Profiler over the raw PDF bytes (None on failure)."""
+    try:
+        import pdfplumber
+
+        from src.extraction.document_profiler import profile_pdf
+
+        with pdfplumber.open(io.BytesIO(raw)) as pdf:
+            return profile_pdf(pdf)
+    except Exception:
+        return None
+
+
+def _adaptive_local_reread(raw: bytes, profile, notes: list[str]) -> tuple[
+        list[dict[int, dict[str, float]]], list[list[dict]]]:
+    """Free Spatial-Local-OCR re-read of the WORST-profiled pages (a layer
+    genuinely independent from the embedded text). Pure-local: zero API."""
+    out_parts: list[dict[int, dict[str, float]]] = []
+    out_caps: list[list[dict]] = []
+    try:
+        import threading
+        from concurrent.futures import ThreadPoolExecutor
+
+        import indra_ocr
+        import pypdfium2 as pdfium
+
+        from src.extraction.document_profiler import worst_text_pages
+        from src.extraction.local_ocr import indra_available
+
+        if not indra_available():
+            notes.append("Adaptive routing: local Indra OCR unavailable — "
+                         "local re-read skipped.")
+            return out_parts, out_caps
+        pages = worst_text_pages(profile, budget=LOCAL_REREAD_MAX_PAGES)
+        pdf = pdfium.PdfDocument(io.BytesIO(raw))
+        pngs: dict[int, bytes] = {}
+        for pno in pages:
+            if pno - 1 < len(pdf):
+                pngs[pno] = pdf[pno - 1].render(scale=2.0).to_pil().tobytes()
+        tls = threading.local()
+
+        def _conv():
+            conv = getattr(tls, "conv", None)
+            if conv is None:
+                conv = indra_ocr.load()
+                tls.conv = conv
+            return conv
+
+        from src.extraction.local_ocr import _page_markdown
+
+        def _read(item: tuple[int, bytes]):
+            pno, png = item
+            return pno, _page_markdown(_conv(), png)
+
+        md: dict[int, str | None] = {}
+        with ThreadPoolExecutor(max_workers=4) as ex:
+            for pno, text in ex.map(_read, pngs.items()):
+                md[pno] = text
+        for pno in pages:
+            text = md.get(pno)
+            if not text:
+                continue
+            try:
+                frames = _parse_pdf_text_lines(text.splitlines())
+            except Exception:
+                continue
+            for frame in frames:
+                try:
+                    result, caps = parse_table_full(frame)
+                except Exception:
+                    continue
+                if result:
+                    out_parts.append(result)
+                    out_caps.append(caps)
+        notes.append(
+            f"Adaptive routing: local spatial re-read of {len(pages)} "
+            f"worst-text pages → {len(out_parts)} extra tables (layer "
+            "local_ocr, zero API).")
+    except Exception as exc:
+        notes.append(f"Adaptive local re-read failed: {type(exc).__name__}: "
+                     f"{str(exc)[:120]}")
+    return out_parts, out_caps
+
+
+def _vision_fallback(raw: bytes, profile, notes: list[str]):
+    """Focused vision re-read — GOVERNED: requires ENABLE_VISION_FALLBACK=1,
+    a usable key pool, and stays inside VISION_FALLBACK_MAX_PAGES. When the
+    flag is off or the pool is empty the run continues locally and the
+    BLOCKED decision is recorded (never key-rotating past service limits)."""
+    import os
+
+    if os.getenv("ENABLE_VISION_FALLBACK") != "1":
+        notes.append("Vision fallback BLOCKED: ENABLE_VISION_FALLBACK flag "
+                     "is off — continuing with local layers only.")
+        return None
+    try:
+        from src.ai.gemini_agent import get_pool
+
+        pool = get_pool()
+        if not pool.has_usable_pairs():
+            notes.append("Vision fallback BLOCKED: no usable (key, model) "
+                         "pairs in the pool — continuing locally.")
+            return None
+        budget = int(os.getenv("VISION_FALLBACK_MAX_PAGES",
+                               str(VISION_FALLBACK_DEFAULT_MAX_PAGES)))
+        from src.extraction.document_profiler import worst_text_pages
+        from src.extraction.vision_ocr import extract_via_vision
+
+        pages = worst_text_pages(profile, budget=budget)
+        page_range = (min(pages) - 1, max(pages))
+        notes.append(f"Vision fallback: {len(pages)} pages (budget "
+                     f"{budget}) via the governed pool, fast_mode.")
+        return extract_via_vision(raw, [], page_range=page_range,
+                                  fast_mode=True)
+    except Exception as exc:
+        notes.append(f"Vision fallback failed (BLOCKED): "
+                     f"{type(exc).__name__}: {str(exc)[:140]}")
+        return None
+
+
+def _financialdata_to_parts(data) -> tuple[
+        list[dict[int, dict[str, float]]], list[list[dict]]]:
+    """Flatten a FinancialData's captured values back into (parts, captures)
+    so the adaptive merge can route its candidates through merge_parsed with
+    the right layer metadata."""
+    part: dict[int, dict[str, float]] = {}
+    caps: list[dict] = []
+    for field, by_year in (getattr(data, "candidates", {}) or {}).items():
+        for year, cands in by_year.items():
+            if cands:
+                v = cands[0][0]
+                if v is not None:
+                    part.setdefault(year, {})[field] = v
+                    caps.append({"field": field, "year": year,
+                                 "value": v, "label_text": "",
+                                 "row": None, "col": None,
+                                 "transposed": False})
+    return ([part] if part else []), (caps if part else [])
+
+
+def _adaptive_local_reread_scan(raw: bytes, notes: list[str]) -> tuple[
+        list[dict[int, dict[str, float]]], list[list[dict]]]:
+    """Local re-read for PURE scans (no text layer): the first
+    LOCAL_REREAD_MAX_PAGES pages through local Indra OCR (zero API) — the
+    degradation path when the vision layer is BLOCKED."""
+    out_parts: list[dict[int, dict[str, float]]] = []
+    out_caps: list[list[dict]] = []
+    try:
+        import threading
+        from concurrent.futures import ThreadPoolExecutor
+
+        import indra_ocr
+        import pypdfium2 as pdfium
+
+        from src.extraction.local_ocr import indra_available, _page_markdown
+
+        if not indra_available():
+            notes.append("Local-only degradation impossible: local Indra "
+                         "OCR unavailable.")
+            return out_parts, out_caps
+        pdf = pdfium.PdfDocument(io.BytesIO(raw))
+        pages = list(range(1, min(len(pdf), LOCAL_REREAD_MAX_PAGES) + 1))
+        pngs = {p: pdf[p - 1].render(scale=2.0).to_pil().tobytes()
+                for p in pages if p - 1 < len(pdf)}
+        tls = threading.local()
+
+        def _conv():
+            conv = getattr(tls, "conv", None)
+            if conv is None:
+                conv = indra_ocr.load()
+                tls.conv = conv
+            return conv
+
+        def _read(item: tuple[int, bytes]):
+            pno, png = item
+            return pno, _page_markdown(_conv(), png)
+
+        md: dict[int, str | None] = {}
+        with ThreadPoolExecutor(max_workers=4) as ex:
+            for pno, text in ex.map(_read, pngs.items()):
+                md[pno] = text
+        for pno in pages:
+            text = md.get(pno)
+            if not text:
+                continue
+            try:
+                frames = _parse_pdf_text_lines(text.splitlines())
+            except Exception:
+                continue
+            for frame in frames:
+                try:
+                    result, caps = parse_table_full(frame)
+                except Exception:
+                    continue
+                if result:
+                    out_parts.append(result)
+                    out_caps.append(caps)
+        notes.append(
+            f"Local-only degradation: Indra re-read of pages {pages[0]}-"
+            f"{pages[-1]} → {len(out_parts)} tables (layer local_ocr, zero "
+            "API) — values stay GATED until a trusted layer or a human "
+            "review confirms them.")
+    except Exception as exc:
+        notes.append(f"Local-only degradation failed: {type(exc).__name__}: "
+                     f"{str(exc)[:120]}")
+    return out_parts, out_caps
+
+
 def load_financial_data(file_name: str, raw: bytes, progress_cb=None, page_range=None, fast_mode: bool = False) -> FinancialData:
     """Main entry: bytes -> canonical FinancialData. Raises AppError subclasses.
     `fast_mode` (scanned PDFs only) skips the paid verification layers —
@@ -77,15 +294,44 @@ def load_financial_data(file_name: str, raw: bytes, progress_cb=None, page_range
     if not raw:
         raise EmptyFileError()
 
+    pdf_profile = None
     if ext == ".pdf":
         # Scanned PDF? Skip pdfplumber entirely — extracting tables/text from
         # a scan yields nothing and only adds seconds before the vision path.
         from src.extraction.vision_ocr import extract_via_vision, is_scanned_pdf
 
         if is_scanned_pdf(file_name, raw):
-            return extract_via_vision(raw, [], progress_cb=progress_cb,
-                                      page_range=page_range, fast_mode=fast_mode)
+            try:
+                return extract_via_vision(raw, [], progress_cb=progress_cb,
+                                          page_range=page_range,
+                                          fast_mode=fast_mode)
+            except Exception as exc:
+                # Adaptive-routing completion (المهمة 3): when the vision
+                # layer is unavailable (quota/503/no pool) the run CONTINUES
+                # LOCALLY with BLOCKED recorded — a pure scan must not kill
+                # the whole extraction. Values stay gated (no trusted layer).
+                notes = [f"Vision path BLOCKED: {type(exc).__name__}: "
+                         f"{str(exc)[:160]}"]
+                from src.extraction.document_profiler import (
+                    DocumentProfile, KIND_SCANNED_NO_TEXT,
+                )
+                pdf_profile = DocumentProfile(
+                    kind=KIND_SCANNED_NO_TEXT, pages_total=0,
+                    pages_with_text=0, quality_score=0.0,
+                    text_layer_trusted=False)
+                local_parts, local_caps = _adaptive_local_reread_scan(
+                    raw, notes)
+                if not local_parts:
+                    raise
+                data = merge_parsed(local_parts, notes,
+                                    captures_per_part=local_caps,
+                                    part_layers=["local_ocr"] * len(local_parts))
+                data.document_profile = pdf_profile.as_dict()
+                data.extraction_source = SOURCE_SCANNED_OCR
+                reconcile(data)
+                return data
         frames, notes = _load_pdf(raw)
+        pdf_profile = _profile_pdf_bytes(raw)
     elif ext == ".csv":
         frames, notes = _load_csv(raw)
         named_frames = [("", f) for f in frames]
@@ -96,6 +342,7 @@ def load_financial_data(file_name: str, raw: bytes, progress_cb=None, page_range
 
     from src.extraction.provenance import (
         SOURCE_NATIVE_PDF_TEXT, SOURCE_NATIVE_SPREADSHEET_CELL,
+        SOURCE_SCANNED_OCR,
         CellEvidence, sniff_consolidation, sniff_scale_words,
     )
 
@@ -105,11 +352,16 @@ def load_financial_data(file_name: str, raw: bytes, progress_cb=None, page_range
         openpyxl = None
 
     parts: list[dict[int, dict[str, float]]] = []
+    captures_per_part: list[list[dict]] = []
+    part_layers: list[str] = []
     evidences: list[dict] = []
     if ext == ".pdf":
         for frame in frames:
             try:
-                parts.append(parse_table(frame))
+                result, caps = parse_table_full(frame)
+                parts.append(result)
+                captures_per_part.append(caps)
+                part_layers.append("text")
             except Exception as exc:  # a broken table must not kill the run
                 notes.append(f"Skipped an unparseable table: {exc}")
     else:
@@ -172,9 +424,50 @@ def load_financial_data(file_name: str, raw: bytes, progress_cb=None, page_range
     if not parts:
         raise ExtractionError("no readable tables were found.")
 
-    data = merge_parsed(parts, notes, evidences=evidences)
-    data.extraction_source = (SOURCE_NATIVE_PDF_TEXT if ext == ".pdf"
-                              else SOURCE_NATIVE_SPREADSHEET_CELL)
+    # ── Adaptive extraction routing (التوجيه التكيفي — المهمة 3) ────────────
+    # The profiler decides whether the text layer may auto-decide values.
+    # Untrusted layer → (1) values stay gated, (2) the WORST pages get a
+    # free local Indra re-read (a genuinely different layer whose agreement
+    # with anything counts), (3) focused vision ONLY behind the
+    # ENABLE_VISION_FALLBACK flag, a page budget and a usable key pool —
+    # never unlimited, never key-rotating past service limits. When vision
+    # is unavailable the run CONTINUES locally and records BLOCKED.
+    pdf_profile = pdf_profile if ext == ".pdf" else None
+    if ext == ".pdf" and pdf_profile is not None:
+        data_profile = pdf_profile.as_dict()
+        notes.append(
+            f"Document profile: {pdf_profile.kind} — text quality "
+            f"{pdf_profile.quality_score:.2f} (magnitude validity "
+            f"{pdf_profile.metrics.get('magnitude_validity', 0):.2f}, "
+            f"continuity {pdf_profile.metrics.get('number_group_continuity', 0):.2f}) "
+            f"→ text layer {'TRUSTED' if pdf_profile.text_layer_trusted else 'NOT trusted'}")
+        if not pdf_profile.text_layer_trusted:
+            local_parts, local_caps = _adaptive_local_reread(raw, pdf_profile,
+                                                             notes)
+            parts.extend(local_parts)
+            captures_per_part.extend(local_caps)
+            part_layers.extend(["local_ocr"] * len(local_parts))
+            vision_data = _vision_fallback(raw, pdf_profile, notes)
+            if vision_data is not None:
+                # the vision reading is the ONLY trusted layer here — its
+                # candidates go FIRST so first-wins prefers them
+                v_parts, v_caps = _financialdata_to_parts(vision_data)
+                parts = v_parts + parts
+                captures_per_part = v_caps + captures_per_part
+                part_layers = ["vision"] * len(v_parts) + part_layers
+    else:
+        data_profile = {}
+
+    data = merge_parsed(parts, notes, evidences=evidences,
+                        captures_per_part=captures_per_part,
+                        part_layers=part_layers)
+    if ext == ".pdf":
+        data.document_profile = data_profile
+        data.extraction_source = (SOURCE_NATIVE_PDF_TEXT
+                                  if data_profile.get("text_layer_trusted")
+                                  else SOURCE_SCANNED_OCR)
+    else:
+        data.extraction_source = SOURCE_NATIVE_SPREADSHEET_CELL
     reconcile(data)
     data.currency_hint = _currency_hint_from_frames(frames)
     data.company_hint = _company_hint_from_frames(frames)
@@ -337,6 +630,25 @@ def _load_pdf(raw: bytes) -> tuple[list[pd.DataFrame], list[str]]:
     return frames, notes  # nothing from text either; let structuring report empty
 
 
+def _looks_like_year_header(line: str, years: list[int]) -> bool:
+    """Structural header test — position-in-table proxies, NO absolute year
+    floor (a 2005 historical document is supported)."""
+    if len(years) < 2 or max(years) - min(years) > 6:
+        return False
+    alpha_words = re.findall(r"[A-Za-z؀-ۿ]{2,}", line)
+    if len(alpha_words) > 6:
+        return False                      # prose, not a header
+    tokens = re.split(r"\s+", line)
+    year_positions = [i for i, t in enumerate(tokens)
+                      if extract_year(t) is not None]
+    if len(year_positions) < len(set(years)):
+        return False                      # some year never stands alone
+    for a, b in zip(year_positions, year_positions[1:]):
+        if b - a - 1 > 4:                 # too many words between years
+            return False
+    return True
+
+
 def _parse_pdf_text_lines(lines: list[str]) -> list[pd.DataFrame]:
     """Fallback for text-only PDFs.
 
@@ -364,12 +676,24 @@ def _parse_pdf_text_lines(lines: list[str]) -> list[pd.DataFrame]:
         years = [extract_year(tok) for tok in re.split(r"\s+", line) if extract_year(tok)]
         if sum(y is not None for y in years) >= 2:
             new_years = [y for y in years if y is not None]
-            # A real comparison header holds RECENT ADJACENT fiscal years;
-            # prose enumerations (tax-dispute years 1995..2014, law numbers)
-            # span decades or reference distant pasts and must never become
-            # column headers. Header years are bounded to the last decade+;
-            # extract_year itself keeps the full 1990..2099 range.
-            if max(new_years) - min(new_years) > 6 or min(new_years) < 2015:
+            # Structural year-header rule (المهمة 4 — no absolute year floor:
+            # a 2005/2010 historical statement is perfectly valid). A line is
+            # a comparison header when the years are STRUCTURALLY header-like:
+            #   - all year tokens are standalone (not embedded in longer
+            #     numbers like Law No. 117 of 2014 → «117» is not a year but
+            #     «2014» inside a law reference still appears standalone, so
+            #     the prose tests below carry the weight)
+            #   - the years are adjacent fiscal columns (span ≤ 6 — a
+            #     balance sheet may show 3 columns; income statement 2; both
+            #     independently supported)
+            #   - the line is SHORT (≤ 8 alphabetic words) — headers are
+            #     «30 June 2025 30 June 2024», never a sentence
+            #   - few tokens sit BETWEEN consecutive years (prose such as
+            #     «… 2008 and amended by Law No. 117 of 2014» interleaves
+            #     many words; headers interleave none)
+            # Note-section year enumerations fail the length/gap tests and
+            # never become column headers, whatever their year values are.
+            if not _looks_like_year_header(line, new_years):
                 continue
             if active_years and new_years != active_years:
                 _flush()   # a new year set → a new table, never merge ragged

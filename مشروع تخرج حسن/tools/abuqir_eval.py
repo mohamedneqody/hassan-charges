@@ -120,6 +120,36 @@ def main() -> dict:
             out["source_mix"][r["source"]] = \
                 out["source_mix"].get(r["source"], 0) + 1
 
+    # the document profile rides along — the routing decision is evidence
+    try:
+        from src.extraction.document_profiler import profile_pdf
+        import io as _io
+        import pdfplumber as _pl
+
+        with _pl.open(_io.BytesIO(raw)) as _pdf:
+            prof = profile_pdf(_pdf)
+        out["document_profile"] = prof.as_dict()
+    except Exception as exc:
+        out["document_profile"] = {"error": str(exc)[:120]}
+
+    # metrics definitions (المهمة 5 — تدقيق المقاييس): explicit denominators
+    out["metrics_definitions"] = {
+        "gt_cells": "40 = 20 fields x 2 fiscal years (total, not per year)",
+        "direct_vs_derived_gt": "38 direct (printed) + 2 derived "
+                                "(total_liabilities = non-current + current "
+                                "totals; not printed as one line)",
+        "signed_exact": "field AND year AND printed sign AND value all match",
+        "magnitude_match": "absolute value matches — sign convention may "
+                           "differ; NEVER counted as signed-exact",
+        "false_acceptance_rate": "decisive-and-wrong / all decisive "
+                                 "(gate-allowed values only)",
+        "end_to_end_accuracy": "decisive AND correct: field mapping + year "
+                               "assignment + signed value together (cell "
+                               "position is only measurable in the spatial "
+                               "path and is NOT part of this metric)",
+        "abstention": "correct_values_blocked / (correct+wrong blocked)",
+    }
+
     # ── vision-path comparison (الموجود أصلًا — لا طبقة جديدة) ──
     # The production dispatch only reaches the vision path when the text
     # layer yields NO tables; this document has a pathological-but-nonempty

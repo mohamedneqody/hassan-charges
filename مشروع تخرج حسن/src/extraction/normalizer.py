@@ -122,7 +122,30 @@ _FIELD_NEGATIVE_PATTERNS: dict[str, tuple[str, ...]] = {
     "short_term_debt": ("مكشوف",),
     # «ضريبة الدخل المؤجلة» is not the period's income-tax expense.
     # (normalize_label unifies ؤ→و: المؤجلة → الموجله)
-    "income_tax_expense": ("موجله",),
+    # AbuQir root-cause fix (2026-11-05): the income-tax NOTE carries
+    # components and bridges that aliased to the P&L total and OUTVOTED it —
+    # «Current income tax 1,715,662,071» (×2 repeated note tables) beat the
+    # printed «Income tax expense (3,631,829,544)». Components, OCI tax,
+    # tax-law bridges and the effective rate are DIFFERENT accounting
+    # concepts from the statement expense — generic IFRS vocabulary, both
+    # languages (the same note structure exists in Arabic statements).
+    "income_tax_expense": (
+        "موجله",                                   # deferred (مؤجلة)
+        "current income tax",                       # BS balance / note component
+        "deferred income tax", "deferred tax",
+        "income tax for other comprehensive",
+        "deferred tax on other comprehensive",
+        "tax on other comprehensive",
+        "effective income tax rate",                # a ratio row
+        "income tax according to tax law",          # tax-law bridge
+        "income tax at income statement",           # note→P&L bridge row
+        "income taxes paid", "paid income tax",
+        "ضريبه الدخل الحاليه", "الضريبه الحاليه",
+        "الضريبه الموجله", "ضريبه مؤجله",
+        "معدل الضريبه", "ضريبه الدخل عن عناصر",
+        "ضريبه الدخل طبقا", "ضريبه الدخل حسب قانون",
+        "الضرايب المدفوعه", "ضريبه الدخل المدفوعه",
+    ),
     # «إيرادات التشغيل الأخرى» is not the sales line.
     "revenue": ("اخري", "أخرى"),
     "cash": ("صافي الزياده", "صافي النقص",
@@ -276,6 +299,14 @@ class FinancialData:
     # label, year, data type). Source is metadata — verification stays with
     # the status ladder; never conflated.
     cell_provenance: dict = field(default_factory=dict)
+    # per-candidate provenance aligned with candidates order: the normalized
+    # LABEL each capture came from and the extraction LAYER it was read by
+    # (text | local_ocr | vision) — the vote independence guard needs both
+    candidate_labels: dict = field(default_factory=dict)
+    candidate_layers: dict = field(default_factory=dict)
+    # document source profile (document_profiler): kind, text-quality
+    # metrics and text_layer_trusted — set for PDFs, absent for Excel
+    document_profile: dict = field(default_factory=dict)
     # the pipeline path that produced this data (SCANNED_OCR | NATIVE_PDF_TEXT
     # | NATIVE_SPREADSHEET_CELL | VISION_MODEL) — the fallback source label
     # for values without cell-level provenance
@@ -410,19 +441,38 @@ def parse_table_full(
 
 
 def merge_parsed(parts: list[dict[int, dict[str, float]]], notes: list[str],
-                 evidences: list[dict] | None = None) -> FinancialData:
+                 evidences: list[dict] | None = None,
+                 captures_per_part: list[list[dict]] | None = None,
+                 part_layers: list[str] | None = None) -> FinancialData:
     """Merge per-table parses, keeping every candidate for reconciliation.
-    `evidences` (optional, CellEvidence.as_dict() per capture) attaches
-    source provenance to the FIRST capture of each (field, year)."""
+    `evidences` attaches source provenance to the FIRST capture of each
+    (field, year); `captures_per_part` (parse_table_full output per part)
+    records each candidate's normalized LABEL, and `part_layers` names the
+    extraction layer per part (text | local_ocr | vision) — both are kept
+    ALIGNED with the candidates order so the majority vote can tell an
+    independent witness from the same note table echoed twice."""
     data = FinancialData(notes=notes)
     order = 0
-    for part in parts:
+    for pi, part in enumerate(parts):
+        caps = (captures_per_part[pi] if captures_per_part
+                and pi < len(captures_per_part) else [])
+        cap_by_key: dict[tuple[int, str], str] = {}
+        for c in caps:
+            for cyear in ([c["year"]] if isinstance(c.get("year"), int) else []):
+                cap_by_key[(cyear, c["field"])] = normalize_label(
+                    c.get("label_text") or "")
+        layer = (part_layers[pi] if part_layers and pi < len(part_layers)
+                 else "text")
         for year, fields in part.items():
             for canonical, value in fields.items():
                 if canonical in _ABSOLUTE_FIELDS and value is not None:
                     value = abs(value)  # balance-sheet items are magnitudes
                 by_year = data.candidates.setdefault(canonical, {})
                 by_year.setdefault(year, []).append((value, order))
+                data.candidate_labels.setdefault(canonical, {}).setdefault(
+                    year, []).append(cap_by_key.get((year, canonical), ""))
+                data.candidate_layers.setdefault(canonical, {}).setdefault(
+                    year, []).append(layer)
                 order += 1
                 # first-wins base; reconcile() may override with better values
                 data.values.setdefault(canonical, {}).setdefault(year, value)
@@ -476,20 +526,45 @@ def _majority_vote(data: FinancialData) -> None:
     """Cross-statement voting: a figure printed on several statements (net
     income appears on the income statement, the equity statement AND the
     first line of the cash-flow statement) is captured several times. When
-    ≥2 independent captures agree digit-exactly, they outvote a disagreeing
-    minority capture — free verification with zero extra API calls."""
+    ≥2 INDEPENDENT witnesses agree digit-exactly, they outvote a disagreeing
+    minority capture — free verification with zero extra API calls.
+
+    Independence guard (AbuQir root cause, 2026-11-05): candidates are
+    deduplicated to WITNESSES first — the same note line echoed by repeated
+    tables («Current income tax 1,715,662,071» in two note sections) is ONE
+    witness, not two. Echoed copies of one source must never outvote the
+    primary statement; only ≥2 DISTINCT (label, value) witnesses count."""
     for field, by_year in data.candidates.items():
         for year, cands in list(by_year.items()):
             vals = [v for v, _ in cands if v is not None]
             if len(vals) < 2:
                 continue
+            labels = (data.candidate_labels.get(field, {}).get(year) or [])
+            labels = labels + [""] * (len(cands) - len(labels))
+            # witnesses: distinct (normalized label, digit-class value).
+            # The echo-collapse applies ONLY when the labels are KNOWN —
+            # without label knowledge two agreeing captures are counted as
+            # two witnesses (the pre-provenance semantics).
+            seen: list[tuple[str, float]] = []
+            labels_known = any(lbl for lbl in labels)
+            for (v, _o), lbl in zip(cands, labels):
+                if v is None:
+                    continue
+                if labels_known and lbl:
+                    w = next((i for i, (wl, wv) in enumerate(seen)
+                              if wl == lbl and _digit_close(wv, v)), None)
+                    if w is None:
+                        seen.append((lbl, v))
+                else:
+                    seen.append(("", v))
+            witness_vals = [sv for _l, sv in seen]
             best_val, best_count = None, 1
-            for v in vals:
-                count = sum(1 for w in vals if _digit_close(v, w))
+            for v in witness_vals:
+                count = sum(1 for w in witness_vals if _digit_close(v, w))
                 if count > best_count:
                     best_val, best_count = v, count
             if best_val is None or best_count < 2:
-                continue  # no agreement — keep first-capture semantics
+                continue  # no INDEPENDENT agreement — keep first-capture
             current = data.values.get(field, {}).get(year)
             # Record EVERY majority outcome that has a dissenting capture —
             # even when the winner equals the current value. A live run once
@@ -498,7 +573,8 @@ def _majority_vote(data: FinancialData) -> None:
             dissent = [v for v in vals if not _digit_close(v, best_val)]
             if dissent:
                 data.vote_outcomes[(field, year)] = {
-                    "winner": best_val, "votes": best_count, "total": len(vals),
+                    "winner": best_val, "votes": best_count,
+                    "total": len(vals), "witnesses": len(witness_vals),
                     "replaced": current, "dissent": dissent,
                     "contested": current is not None and not _digit_close(current, best_val),
                 }
@@ -506,8 +582,8 @@ def _majority_vote(data: FinancialData) -> None:
                 data.values.setdefault(field, {})[year] = best_val
                 data.notes.append(
                     f"Cross-statement majority vote: '{field}' in {year} set to "
-                    f"{best_val:,.0f} ({best_count} agreeing captures) — replaced "
-                    f"a disagreeing capture of {current:,.0f}."
+                    f"{best_val:,.0f} ({best_count} INDEPENDENT witnesses) — "
+                    f"replaced a disagreeing capture of {current:,.0f}."
                 )
             data.bump_confidence(field, year, min(best_count, 3))
             # downstream identity groups should see the winner only
@@ -866,6 +942,25 @@ def build_decision_log(data: FinancialData) -> list[dict]:
                 else:
                     status = "VERIFIED_EXACT"
                     reason = f"اتفاق {conf} قراءات/تحقق مستقل"
+                # Correlated-source guard (حارس اتفاق المصدر الواحد): when the
+                # document profiler classified the text layer UNTRUSTED and
+                # every agreeing witness came from THAT layer, agreement is
+                # an echo of one corrupted source — never an attestation.
+                if not (getattr(data, "document_profile", {}) or {}).get(
+                        "text_layer_trusted", True):
+                    layers = {l for l in
+                              ((getattr(data, "candidate_layers", {}) or {})
+                               .get(field_name, {}).get(year) or [])
+                              if l}
+                    # attestation needs TWO DISTINCT layers agreeing (text +
+                    # vision, text + local_ocr…) — agreement inside ONE layer
+                    # is an echo of that layer, whatever the layer is
+                    if len(layers) < 2:
+                        status = "UNVERIFIED"
+                        reason = ("اتفاق قراءات داخل طبقة واحدة "
+                                  f"({sorted(layers) or ['غير معروفة']}) على "
+                                  "مستند مصنَّف غير موثوق — الاتفاق صدى لمصدر "
+                                  "واحد وليس تصديقًا مستقلًا")
             elif len(values) >= 2 and conf >= 1:
                 status, reason = "UNVERIFIED", "قراءتان بلا تحقق مستقل حاسم"
             else:

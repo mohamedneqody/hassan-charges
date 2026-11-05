@@ -579,6 +579,32 @@ def test_human_review_corroboration_and_correction(tmp_path, monkeypatch):
     assert sep["log_integrity_ok"] is True
 
 
+def test_gemini_cell_reader_rotates_key_model_pairs():
+    """The cell reader sweeps EVERY configured (key, model) pair — quotas are
+    per MODEL, so a 429/503 on one model moves to the next instead of dying;
+    an auth-rejected key is skipped for all its models; the requested model
+    is tried first."""
+    from src.extraction.gemini_cell_reader import build_pairs
+
+    keys = ["k1", "k2"]
+    models = ["m-3.8", "m-3.7", "m-3.5"]
+    # default order: model-major round-robin over keys
+    assert build_pairs(keys, models) == [
+        ("k1", "m-3.8"), ("k2", "m-3.8"),
+        ("k1", "m-3.7"), ("k2", "m-3.7"),
+        ("k1", "m-3.5"), ("k2", "m-3.5"),
+    ]
+    # a preferred model goes first, then the configured rotation (no dupes)
+    assert build_pairs(keys, models, preferred="m-3.5") == [
+        ("k1", "m-3.5"), ("k2", "m-3.5"),
+        ("k1", "m-3.8"), ("k2", "m-3.8"),
+        ("k1", "m-3.7"), ("k2", "m-3.7"),
+    ]
+    # 7 keys x 5 configured models = 35 pairs (the documented pool size)
+    assert len(build_pairs([f"k{i}" for i in range(7)],
+                           ["a", "b", "c", "d", "e"])) == 35
+
+
 def test_separated_metrics_zero_denominators_and_exclusivity(tmp_path, monkeypatch):
     """P0-1: every denominator is visible; zero-denominator rates are None
     (never fabricated); the gate partition is EXCLUSIVE (no cell counted

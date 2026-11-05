@@ -465,10 +465,6 @@ def analyze_financials(
             break
         transient_only = True
         for _ in range(max_attempts):
-            if time.time() - started > COMMENTARY_BUDGET:
-                break
-        transient_only = True
-        for _ in range(max_attempts):
             picked = pool.pick()
             if picked is None:
                 break

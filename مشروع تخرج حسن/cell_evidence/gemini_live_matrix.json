@@ -1,0 +1,310 @@
+{
+ "generated": "2026-11-05T19:15:46",
+ "pairs_total": 35,
+ "pairs_ok": 14,
+ "per_model": {
+  "gemini-flash-latest": {
+   "ok": 0,
+   "total": 7
+  },
+  "gemini-3.8-flash": {
+   "ok": 0,
+   "total": 7
+  },
+  "gemini-3.7-flash": {
+   "ok": 0,
+   "total": 7
+  },
+  "gemini-3.6-flash": {
+   "ok": 7,
+   "total": 7
+  },
+  "gemini-3.5-flash": {
+   "ok": 7,
+   "total": 7
+  }
+ },
+ "note": "1 tiny request per (key, model); 'in_key_model_list' comes from the free models.list endpoint (no generate quota)",
+ "matrix": [
+  {
+   "key": "AQ.Ab8…vb_Q",
+   "model": "gemini-flash-latest",
+   "status": "HTTP_503",
+   "ms": 2353,
+   "reply": "UNAVAILABLE",
+   "in_key_model_list": true
+  },
+  {
+   "key": "AQ.Ab8…vb_Q",
+   "model": "gemini-3.8-flash",
+   "status": "HTTP_503",
+   "ms": 4055,
+   "reply": "UNAVAILABLE",
+   "in_key_model_list": true
+  },
+  {
+   "key": "AQ.Ab8…vb_Q",
+   "model": "gemini-3.7-flash",
+   "status": "CONN_FAIL",
+   "ms": 45204,
+   "reply": "TimeoutError: The re",
+   "in_key_model_list": true
+  },
+  {
+   "key": "AQ.Ab8…vb_Q",
+   "model": "gemini-3.6-flash",
+   "status": "OK",
+   "ms": 1799,
+   "reply": "",
+   "in_key_model_list": true
+  },
+  {
+   "key": "AQ.Ab8…vb_Q",
+   "model": "gemini-3.5-flash",
+   "status": "OK",
+   "ms": 1404,
+   "reply": "OK",
+   "in_key_model_list": true
+  },
+  {
+   "key": "AQ.Ab8…EFpg",
+   "model": "gemini-flash-latest",
+   "status": "CONN_FAIL",
+   "ms": 45166,
+   "reply": "TimeoutError: The re",
+   "in_key_model_list": true
+  },
+  {
+   "key": "AQ.Ab8…EFpg",
+   "model": "gemini-3.8-flash",
+   "status": "HTTP_503",
+   "ms": 25798,
+   "reply": "UNAVAILABLE",
+   "in_key_model_list": true
+  },
+  {
+   "key": "AQ.Ab8…EFpg",
+   "model": "gemini-3.7-flash",
+   "status": "HTTP_503",
+   "ms": 3674,
+   "reply": "UNAVAILABLE",
+   "in_key_model_list": true
+  },
+  {
+   "key": "AQ.Ab8…EFpg",
+   "model": "gemini-3.6-flash",
+   "status": "OK",
+   "ms": 1335,
+   "reply": "OK",
+   "in_key_model_list": true
+  },
+  {
+   "key": "AQ.Ab8…EFpg",
+   "model": "gemini-3.5-flash",
+   "status": "OK",
+   "ms": 1948,
+   "reply": "",
+   "in_key_model_list": true
+  },
+  {
+   "key": "AQ.Ab8…m-Gw",
+   "model": "gemini-flash-latest",
+   "status": "HTTP_503",
+   "ms": 5048,
+   "reply": "UNAVAILABLE",
+   "in_key_model_list": true
+  },
+  {
+   "key": "AQ.Ab8…m-Gw",
+   "model": "gemini-3.8-flash",
+   "status": "HTTP_503",
+   "ms": 1991,
+   "reply": "UNAVAILABLE",
+   "in_key_model_list": true
+  },
+  {
+   "key": "AQ.Ab8…m-Gw",
+   "model": "gemini-3.7-flash",
+   "status": "HTTP_503",
+   "ms": 22174,
+   "reply": "UNAVAILABLE",
+   "in_key_model_list": true
+  },
+  {
+   "key": "AQ.Ab8…m-Gw",
+   "model": "gemini-3.6-flash",
+   "status": "OK",
+   "ms": 1238,
+   "reply": "",
+   "in_key_model_list": true
+  },
+  {
+   "key": "AQ.Ab8…m-Gw",
+   "model": "gemini-3.5-flash",
+   "status": "OK",
+   "ms": 1967,
+   "reply": "OK",
+   "in_key_model_list": true
+  },
+  {
+   "key": "AQ.Ab8…dqUw",
+   "model": "gemini-flash-latest",
+   "status": "HTTP_503",
+   "ms": 2003,
+   "reply": "UNAVAILABLE",
+   "in_key_model_list": true
+  },
+  {
+   "key": "AQ.Ab8…dqUw",
+   "model": "gemini-3.8-flash",
+   "status": "HTTP_503",
+   "ms": 15094,
+   "reply": "UNAVAILABLE",
+   "in_key_model_list": true
+  },
+  {
+   "key": "AQ.Ab8…dqUw",
+   "model": "gemini-3.7-flash",
+   "status": "HTTP_503",
+   "ms": 3427,
+   "reply": "UNAVAILABLE",
+   "in_key_model_list": true
+  },
+  {
+   "key": "AQ.Ab8…dqUw",
+   "model": "gemini-3.6-flash",
+   "status": "OK",
+   "ms": 1422,
+   "reply": "OK",
+   "in_key_model_list": true
+  },
+  {
+   "key": "AQ.Ab8…dqUw",
+   "model": "gemini-3.5-flash",
+   "status": "OK",
+   "ms": 4537,
+   "reply": "OK",
+   "in_key_model_list": true
+  },
+  {
+   "key": "AQ.Ab8…fidA",
+   "model": "gemini-flash-latest",
+   "status": "HTTP_503",
+   "ms": 3974,
+   "reply": "UNAVAILABLE",
+   "in_key_model_list": true
+  },
+  {
+   "key": "AQ.Ab8…fidA",
+   "model": "gemini-3.8-flash",
+   "status": "HTTP_503",
+   "ms": 2963,
+   "reply": "UNAVAILABLE",
+   "in_key_model_list": true
+  },
+  {
+   "key": "AQ.Ab8…fidA",
+   "model": "gemini-3.7-flash",
+   "status": "HTTP_503",
+   "ms": 2950,
+   "reply": "UNAVAILABLE",
+   "in_key_model_list": true
+  },
+  {
+   "key": "AQ.Ab8…fidA",
+   "model": "gemini-3.6-flash",
+   "status": "OK",
+   "ms": 3719,
+   "reply": "",
+   "in_key_model_list": true
+  },
+  {
+   "key": "AQ.Ab8…fidA",
+   "model": "gemini-3.5-flash",
+   "status": "OK",
+   "ms": 1400,
+   "reply": "OK",
+   "in_key_model_list": true
+  },
+  {
+   "key": "AQ.Ab8…L86g",
+   "model": "gemini-flash-latest",
+   "status": "HTTP_503",
+   "ms": 4974,
+   "reply": "UNAVAILABLE",
+   "in_key_model_list": true
+  },
+  {
+   "key": "AQ.Ab8…L86g",
+   "model": "gemini-3.8-flash",
+   "status": "HTTP_503",
+   "ms": 2168,
+   "reply": "UNAVAILABLE",
+   "in_key_model_list": true
+  },
+  {
+   "key": "AQ.Ab8…L86g",
+   "model": "gemini-3.7-flash",
+   "status": "HTTP_503",
+   "ms": 8643,
+   "reply": "UNAVAILABLE",
+   "in_key_model_list": true
+  },
+  {
+   "key": "AQ.Ab8…L86g",
+   "model": "gemini-3.6-flash",
+   "status": "OK",
+   "ms": 1124,
+   "reply": "",
+   "in_key_model_list": true
+  },
+  {
+   "key": "AQ.Ab8…L86g",
+   "model": "gemini-3.5-flash",
+   "status": "OK",
+   "ms": 2295,
+   "reply": "OK",
+   "in_key_model_list": true
+  },
+  {
+   "key": "AQ.Ab8…NAGg",
+   "model": "gemini-flash-latest",
+   "status": "HTTP_503",
+   "ms": 2447,
+   "reply": "UNAVAILABLE",
+   "in_key_model_list": true
+  },
+  {
+   "key": "AQ.Ab8…NAGg",
+   "model": "gemini-3.8-flash",
+   "status": "HTTP_503",
+   "ms": 1989,
+   "reply": "UNAVAILABLE",
+   "in_key_model_list": true
+  },
+  {
+   "key": "AQ.Ab8…NAGg",
+   "model": "gemini-3.7-flash",
+   "status": "HTTP_503",
+   "ms": 1759,
+   "reply": "UNAVAILABLE",
+   "in_key_model_list": true
+  },
+  {
+   "key": "AQ.Ab8…NAGg",
+   "model": "gemini-3.6-flash",
+   "status": "OK",
+   "ms": 29934,
+   "reply": "OK",
+   "in_key_model_list": true
+  },
+  {
+   "key": "AQ.Ab8…NAGg",
+   "model": "gemini-3.5-flash",
+   "status": "OK",
+   "ms": 9025,
+   "reply": "OK",
+   "in_key_model_list": true
+  }
+ ]
+}

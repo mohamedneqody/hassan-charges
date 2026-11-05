@@ -42,11 +42,43 @@ def _keys() -> list[str]:
     return [k.strip() for k in raw.split(",") if k.strip()]
 
 
+def build_pairs(keys: list[str], models: list[str],
+                preferred: str | None = None) -> list[tuple[str, str]]:
+    """The (key, model) attempt order: the requested model first (if any),
+    then the configured rotation — keys interleaved round-robin per model so
+    one exhausted model never starves the others. Free quotas are PER MODEL,
+    so switching models on a 429/503 doubles-to-quintuples the allowance
+    (20 req × 5 models × 7 keys = up to 700 reads/pool instead of 140)."""
+    seen: list[str] = []
+    for m in ([preferred] if preferred else []) + models:
+        if m and m not in seen:
+            seen.append(m)
+    pairs: list[tuple[str, str]] = []
+    for m in seen:
+        for k in keys:
+            pairs.append((k, m))
+    return pairs
+
+
+def _model_list() -> list[str]:
+    """All configured models (GEMINI_MODELS), falling back to GEMINI_MODEL."""
+    import os
+
+    import src.config  # noqa: F401  (import runs load_dotenv)
+    from src.config import GEMINI_MODEL
+
+    raw = os.environ.get("GEMINI_MODELS", "")
+    models = [m.strip() for m in raw.split(",") if m.strip()]
+    return models or [GEMINI_MODEL]
+
+
 def read_crop(png: bytes, label: str, year: int | None, what: str,
               model: str | None = None,
               bbox: list | None = None) -> dict:
     """One structured read of one crop. Schema-validated; BLOCKED on
-    quota/auth/absent-keys with the failure reason recorded."""
+    quota/auth/absent-keys with the failure reason recorded. Rotates over
+    EVERY configured (key, model) pair — a 429/503 on one model moves the
+    call to the next model (per-model quotas), a bad key is skipped."""
     from src.ai.gemini_agent import classify_gemini_error
     from src.config import GEMINI_MODEL
 
@@ -82,8 +114,13 @@ def read_crop(png: bytes, label: str, year: int | None, what: str,
             max_output_tokens=512,
             thinking_config=types.ThinkingConfig(thinking_budget=0),
         )
+        pairs = build_pairs(keys, _model_list(), preferred=model)
         failures: list[str] = []
-        for key in keys:
+        dead_keys: set[str] = set()
+        max_attempts = len(pairs) + 2
+        for key, model_name in pairs:
+            if key in dead_keys:
+                continue                      # auth-rejected key — skip fast
             result["attempts"] += 1
             t0 = time.perf_counter()
             try:
@@ -92,7 +129,7 @@ def read_crop(png: bytes, label: str, year: int | None, what: str,
                     http_options=types.HttpOptions(timeout=60000),
                 )
                 resp = client.models.generate_content(
-                    model=result["model_name"], contents=content, config=cfg,
+                    model=model_name, contents=content, config=cfg,
                 )
                 result["latency_ms"] = int((time.perf_counter() - t0) * 1000)
                 u = getattr(resp, "usage_metadata", None)
@@ -103,17 +140,21 @@ def read_crop(png: bytes, label: str, year: int | None, what: str,
                         "total_tokens": getattr(u, "total_token_count", None),
                         "cost": None,  # no price table in-repo; tokens only
                     }
+                result["model_name"] = model_name   # the model that answered
                 return _validate(result, resp.text or "", label, what)
             except Exception as exc:  # noqa: BLE001 — every failure recorded
                 kind = classify_gemini_error(exc)
                 transient = kind == "other" or "deadline" in str(exc).lower() \
                     or "unavailable" in str(exc).lower() \
                     or "getaddrinfo" in str(exc).lower()
-                failures.append(f"{kind}: {str(exc)[:120]}")
-                if kind in ("quota", "auth"):
-                    break  # other keys will fail the same way for this key type
-                if transient and result["attempts"] < len(keys) + 2:
-                    time.sleep(3)
+                failures.append(f"{model_name}/{kind}: {str(exc)[:120]}")
+                if kind == "auth":
+                    dead_keys.add(key)        # this key is bad for EVERY model
+                    continue
+                if kind == "quota":
+                    continue                  # per-MODEL quota — next model/key
+                if transient and result["attempts"] < max_attempts:
+                    time.sleep(2)
                     continue
         result["failure"] = "; ".join(failures) or "unknown"
         result["notes"] = "BLOCKED — recorded, not retried past the pool"

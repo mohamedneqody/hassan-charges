@@ -1,0 +1,520 @@
+{
+ "document": "sample_financials.xlsx",
+ "scope_note": "born-digital synthetic sample workbook — different company AND format; proves text-pipeline generalization only, NOT scanned-Arabic OCR",
+ "gt_cells": 54,
+ "field_mapping_rate": 1.0,
+ "year_assignment": {
+  "detected": [
+   2025,
+   2026
+  ],
+  "expected": [
+   2025,
+   2026
+  ],
+  "ok": true
+ },
+ "automatic_exact_match_accuracy": 1.0,
+ "automatic_decisive_coverage": 0.0,
+ "false_acceptance_rate": null,
+ "false_acceptances": 0,
+ "correct_values_blocked": 54,
+ "wrong_values_blocked": 0,
+ "missing_values": 0,
+ "end_to_end_accuracy": 0.0,
+ "human_assisted_coverage": 0.0,
+ "human_assisted_note": "no image evidence exists for a born-digital file — the review chain is crop-based and no packets apply (0/N, not N/A)",
+ "gate_partition": {
+  "usable": 0,
+  "not_decisive": 54,
+  "missing": 0
+ },
+ "rows": [
+  {
+   "field": "accounts_payable",
+   "year": 2025,
+   "gt": 140000.0,
+   "captured": 140000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "accounts_payable",
+   "year": 2026,
+   "gt": 160000.0,
+   "captured": 160000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "accounts_receivable",
+   "year": 2025,
+   "gt": 180000.0,
+   "captured": 180000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "accounts_receivable",
+   "year": 2026,
+   "gt": 220000.0,
+   "captured": 220000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "capex",
+   "year": 2025,
+   "gt": -120000.0,
+   "captured": -120000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "capex",
+   "year": 2026,
+   "gt": -160000.0,
+   "captured": -160000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "cash",
+   "year": 2025,
+   "gt": 150000.0,
+   "captured": 150000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "cash",
+   "year": 2026,
+   "gt": 120000.0,
+   "captured": 120000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "cost_of_revenue",
+   "year": 2025,
+   "gt": 420000.0,
+   "captured": 420000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "cost_of_revenue",
+   "year": 2026,
+   "gt": 520000.0,
+   "captured": 520000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "current_assets",
+   "year": 2025,
+   "gt": 600000.0,
+   "captured": 600000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "current_assets",
+   "year": 2026,
+   "gt": 560000.0,
+   "captured": 560000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "current_liabilities",
+   "year": 2025,
+   "gt": 250000.0,
+   "captured": 250000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "current_liabilities",
+   "year": 2026,
+   "gt": 340000.0,
+   "captured": 340000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "depreciation_amortization",
+   "year": 2025,
+   "gt": 90000.0,
+   "captured": 90000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "depreciation_amortization",
+   "year": 2026,
+   "gt": 105000.0,
+   "captured": 105000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "equity",
+   "year": 2025,
+   "gt": 800000.0,
+   "captured": 800000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "equity",
+   "year": 2026,
+   "gt": 800000.0,
+   "captured": 800000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "financing_cash_flow",
+   "year": 2025,
+   "gt": -40000.0,
+   "captured": -40000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "financing_cash_flow",
+   "year": 2026,
+   "gt": 60000.0,
+   "captured": 60000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "fixed_assets",
+   "year": 2025,
+   "gt": 700000.0,
+   "captured": 700000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "fixed_assets",
+   "year": 2026,
+   "gt": 850000.0,
+   "captured": 850000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "gross_profit",
+   "year": 2025,
+   "gt": 580000.0,
+   "captured": 580000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "gross_profit",
+   "year": 2026,
+   "gt": 660000.0,
+   "captured": 660000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "income_tax_expense",
+   "year": 2025,
+   "gt": 45000.0,
+   "captured": 45000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "income_tax_expense",
+   "year": 2026,
+   "gt": 40000.0,
+   "captured": 40000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "interest_expense",
+   "year": 2025,
+   "gt": 45000.0,
+   "captured": 45000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "interest_expense",
+   "year": 2026,
+   "gt": 60000.0,
+   "captured": 60000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "inventory",
+   "year": 2025,
+   "gt": 120000.0,
+   "captured": 120000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "inventory",
+   "year": 2026,
+   "gt": 150000.0,
+   "captured": 150000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "investing_cash_flow",
+   "year": 2025,
+   "gt": -150000.0,
+   "captured": -150000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "investing_cash_flow",
+   "year": 2026,
+   "gt": -210000.0,
+   "captured": -210000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "net_income",
+   "year": 2025,
+   "gt": 180000.0,
+   "captured": 180000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "net_income",
+   "year": 2026,
+   "gt": 165000.0,
+   "captured": 165000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "operating_cash_flow",
+   "year": 2025,
+   "gt": 220000.0,
+   "captured": 220000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "operating_cash_flow",
+   "year": 2026,
+   "gt": 190000.0,
+   "captured": 190000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "operating_expenses",
+   "year": 2025,
+   "gt": 300000.0,
+   "captured": 300000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "operating_expenses",
+   "year": 2026,
+   "gt": 360000.0,
+   "captured": 360000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "operating_income",
+   "year": 2025,
+   "gt": 280000.0,
+   "captured": 280000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "operating_income",
+   "year": 2026,
+   "gt": 300000.0,
+   "captured": 300000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "pretax_income",
+   "year": 2025,
+   "gt": 225000.0,
+   "captured": 225000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "pretax_income",
+   "year": 2026,
+   "gt": 205000.0,
+   "captured": 205000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "rd_expenses",
+   "year": 2025,
+   "gt": 60000.0,
+   "captured": 60000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "rd_expenses",
+   "year": 2026,
+   "gt": 75000.0,
+   "captured": 75000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "revenue",
+   "year": 2025,
+   "gt": 1000000.0,
+   "captured": 1000000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "revenue",
+   "year": 2026,
+   "gt": 1180000.0,
+   "captured": 1180000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "selling_expenses",
+   "year": 2025,
+   "gt": 140000.0,
+   "captured": 140000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "selling_expenses",
+   "year": 2026,
+   "gt": 165000.0,
+   "captured": 165000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "total_assets",
+   "year": 2025,
+   "gt": 1500000.0,
+   "captured": 1500000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "total_assets",
+   "year": 2026,
+   "gt": 1650000.0,
+   "captured": 1650000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "total_debt",
+   "year": 2025,
+   "gt": 400000.0,
+   "captured": 400000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "total_debt",
+   "year": 2026,
+   "gt": 520000.0,
+   "captured": 520000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "total_liabilities",
+   "year": 2025,
+   "gt": 700000.0,
+   "captured": 700000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  },
+  {
+   "field": "total_liabilities",
+   "year": 2026,
+   "gt": 850000.0,
+   "captured": 850000.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "exact": true
+  }
+ ]
+}

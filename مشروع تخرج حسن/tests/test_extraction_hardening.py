@@ -492,8 +492,15 @@ def _secure_env(tmp_path, monkeypatch):
               ["approve", "correct", "reject"], file_path=rf)
     monkeypatch.setenv("REVIEWERS_FILE", str(rf))
     monkeypatch.setenv("REVIEW_HMAC_KEY", "test-signing-key-NOT-in-repo")
+    monkeypatch.setenv("REVIEW_ATTEMPTS_PATH", str(tmp_path / ".review_attempts.json"))
     monkeypatch.delenv("REVIEWERS", raising=False)
     return {"A": "pin-A-123", "B": "pin-B-456"}
+
+
+# the five explicit confirmations (value included) / identity-only (reject)
+CONF_ALL = {"document": True, "field": True, "year": True,
+            "position": True, "value": True}
+CONF_IDENTITY = {k: v for k, v in CONF_ALL.items() if k != "value"}
 
 
 def test_review_queue_covers_all_non_decisive_cells():
@@ -511,6 +518,13 @@ def test_review_queue_covers_all_non_decisive_cells():
         assert pkt["decision"] is None              # reviewer fills it
         assert pkt["crop_image"], pkt["field"]       # crop image attached
         assert pkt["conflict_reason"]
+        # full source context (P0-3): year header + label + hashes + version
+        assert pkt["context"]["context_complete"] is True, pkt["field"]
+        assert pkt["date_header_image"] and pkt["label_text"]
+        assert pkt["pdf_sha256"] and pkt["page_image_sha256"] and pkt["crop_sha256"]
+        assert pkt["extraction_version"]
+        assert set(pkt["confirmations"]) == {"document", "field", "year",
+                                             "position", "value"}
     ids = {p["packet_id"] for p in queue}
     assert "short_term_debt|5|2022" in ids           # CROP_ONLY is reviewable too
 
@@ -528,14 +542,14 @@ def test_human_review_corroboration_and_correction(tmp_path, monkeypatch):
                                proj / "cell_evidence")
     rec = apply_review(queue, "net_income|6|2022", 1_056_737_086.0,
                        reviewer="auditor-A", credential=creds["A"],
-                       log_path=log_path)
+                       log_path=log_path, confirmations=CONF_ALL)
     assert rec["kind"] == "corroborate"
     assert rec["reviewer"] == "auditor-A" and rec["timestamp"]
     assert rec["crop_sha256"] and rec["doc_sha256"]      # crop AND page hashed
     assert rec["bbox_rel"]                               # position recorded
     rec2 = apply_review(queue, "operating_cash_flow|9|2022", 1_214_507_839.0,
                         reviewer="auditor-B", credential=creds["B"],
-                        log_path=log_path)
+                        log_path=log_path, confirmations=CONF_ALL)
     assert rec2["kind"] == "correct"
     assert rec2["value_before"] is not None and rec2["value_before"] != 1_214_507_839.0
     ok, bad = verify_log_integrity(log_path)
@@ -550,10 +564,77 @@ def test_human_review_corroboration_and_correction(tmp_path, monkeypatch):
     assert round(sep["automatic_exact_match_accuracy"] * 11) == before_auto[0]
     # zero-denominator rates are N/A (None), never fabricated percentages
     assert sep["false_acceptance_rate"] is None          # allowed = 0 → N/A
-    assert sep["correct_abstention_rate"] == 0.8         # 8 exact held / 10 gated
+    assert sep["withheld_correct_share"] == 0.8          # 8 correct held / 10 gated
+    assert "correct_abstention_rate" not in sep          # misleading name removed
+    assert sep["counts"]["correct_values_blocked"] == 8
+    assert sep["counts"]["wrong_values_blocked"] == 2
+    assert sep["counts"]["missing_values"] == 1
+    assert sep["counts"]["false_acceptances"] == 0
     assert sep["gate_partition"] == {"usable": 0, "not_decisive": 10, "missing": 1}
     assert sep["human_assisted_verified_coverage"] > 0   # trusted human cells
+    assert sep["reviewer_accuracy_unreviewed_sample"] is None  # N/A by definition
+    # exclusive partition: usable + not_decisive + missing == n, no overlap
+    part = sep["gate_partition"]
+    assert part["usable"] + part["not_decisive"] + part["missing"] == sep["n"]
     assert sep["log_integrity_ok"] is True
+
+
+def test_separated_metrics_zero_denominators_and_exclusivity(tmp_path, monkeypatch):
+    """P0-1: every denominator is visible; zero-denominator rates are None
+    (never fabricated); the gate partition is EXCLUSIVE (no cell counted
+    twice); the separated counters never share a numerator."""
+    from src.extraction.human_review import separated_metrics
+
+    rows = [
+        {"field": "f_ok", "page": 1, "final_status": "VERIFIED_CANDIDATE",
+         "exact_value": True},
+        {"field": "f_false", "page": 1, "final_status": "VERIFIED_CANDIDATE",
+         "exact_value": False},                      # allowed but WRONG
+        {"field": "f_block_ok", "page": 1, "final_status": "CONFLICT",
+         "exact_value": True},                       # withheld correct
+        {"field": "f_block_bad", "page": 1, "final_status": "CONFLICT",
+         "exact_value": False},                      # withheld wrong
+        {"field": "f_missing", "page": 1, "final_status": "UNREADABLE",
+         "exact_value": False},
+    ]
+    monkeypatch.setenv("REVIEW_HMAC_KEY", "metrics-test-key")
+    sep = separated_metrics(rows, human_log=tmp_path / "none.json",
+                            log_integrity=(True, None))
+    assert sep["n"] == 5
+    # exclusive partition: usable 2 + not_decisive 2 + missing 1 = 5
+    assert sep["gate_partition"] == {"usable": 2, "not_decisive": 2,
+                                     "missing": 1}
+    assert sum(sep["gate_partition"].values()) == sep["n"]
+    # separated counters, one numerator each
+    c = sep["counts"]
+    assert c["false_acceptances"] == 1 and c["correct_values_blocked"] == 1
+    assert c["wrong_values_blocked"] == 1 and c["missing_values"] == 1
+    # rates with real denominators
+    assert sep["false_acceptance_rate"] == 0.5       # 1 wrong / 2 allowed
+    assert sep["withheld_correct_share"] == 0.5      # 1 correct / 2 gated
+    assert sep["automatic_decisive_coverage"] == 0.4
+    # human coverage with NO reviews at all = 0/5 (a ZERO, not N/A)
+    assert sep["human_assisted_verified_coverage"] == 0.0
+    assert sep["counts"]["human_verified_values"] == 0
+    # reviewer accuracy on an unreviewed sample is undefined — never faked
+    assert sep["reviewer_accuracy_unreviewed_sample"] is None
+    # all-gated edge: no allowed rows → false-acceptance rate is N/A (None)
+    rows_gated = [r for r in rows if r["final_status"] == "CONFLICT"]
+    sep2 = separated_metrics(rows_gated, human_log=tmp_path / "none.json",
+                             log_integrity=(True, None))
+    assert sep2["false_acceptance_rate"] is None     # denominator 0 → N/A
+    assert sep2["automatic_decisive_coverage"] == 0.0
+    # empty input: every rate is N/A, nothing invented
+    sep3 = separated_metrics([], human_log=tmp_path / "none.json",
+                             log_integrity=(True, None))
+    assert sep3["n"] == 0
+    assert all(v is None for k, v in sep3.items()
+               if k.endswith(("_rate", "_share", "_accuracy", "_coverage")))
+    # tampered log → human coverage stays 0 (untrusted chains count nothing)
+    sep4 = separated_metrics(rows, human_log=tmp_path / "none.json",
+                             log_integrity=(False, 3))
+    assert sep4["counts"]["human_verified_values"] == 0
+    assert sep4["log_integrity_ok"] is False
 
 
 def test_reviewer_allowlist_blocks_unknown_and_unconfigured(tmp_path, monkeypatch):
@@ -566,6 +647,7 @@ def test_reviewer_allowlist_blocks_unknown_and_unconfigured(tmp_path, monkeypatc
     queue = build_review_queue(proj / "cell_evidence/per_cell_strict.json",
                                proj / "cell_evidence")
     monkeypatch.delenv("REVIEWERS", raising=False)
+    monkeypatch.setenv("REVIEW_ATTEMPTS_PATH", str(tmp_path / ".attempts.json"))
     try:
         verify_reviewer("anyone")
         raised_unconfigured = False
@@ -595,9 +677,11 @@ def test_hash_chain_detects_tampering(tmp_path, monkeypatch):
     queue = build_review_queue(proj / "cell_evidence/per_cell_strict.json",
                                proj / "cell_evidence")
     apply_review(queue, "net_income|6|2022", 1_056_737_086.0,
-                 reviewer="auditor-A", credential=creds["A"], log_path=log_path)
+                 reviewer="auditor-A", credential=creds["A"], log_path=log_path,
+                 confirmations=CONF_ALL)
     apply_review(queue, "revenue|6|2022", 16_665_919_878.0,
-                 reviewer="auditor-A", credential=creds["A"], log_path=log_path)
+                 reviewer="auditor-A", credential=creds["A"], log_path=log_path,
+                 confirmations=CONF_ALL)
     ok, _ = verify_log_integrity(log_path)
     assert ok
     log = json.loads(log_path.read_text(encoding="utf-8"))
@@ -624,10 +708,10 @@ def test_conflicting_human_reviews_never_decide(tmp_path, monkeypatch):
     d.candidates["net_income"] = {2022: [(1_056_737_086.0, 0)]}
     apply_review(queue, "net_income|6|2022", 1_056_737_086.0,
                  reviewer="auditor-A", credential=creds["A"], data=d,
-                 log_path=log_path)
+                 log_path=log_path, confirmations=CONF_ALL)
     apply_review(queue, "net_income|6|2022", 999_999_999.0,
                  reviewer="auditor-B", credential=creds["B"], data=d,
-                 log_path=log_path)
+                 log_path=log_path, confirmations=CONF_ALL)
     # the SECOND, differing reviewer overwrote data.human_reviews → conflict
     assert d.human_reviews[("net_income", 2022)]["status"] == STATUS_CONFLICT_HUMAN
     log1 = build_decision_log(d)
@@ -659,7 +743,7 @@ def test_human_review_flows_through_gate_and_health(tmp_path, monkeypatch):
 
     apply_review(queue, "net_income|6|2022", 1_056_737_086.0,
                  reviewer="auditor-A", credential=creds["A"],
-                 data=d, log_path=tmp_path / "hr.json")
+                 data=d, log_path=tmp_path / "hr.json", confirmations=CONF_ALL)
     log1 = build_decision_log(d)
     e1 = next(e for e in log1 if e["field"] == "net_income")
     assert e1["status"] == "VERIFIED_HUMAN"
@@ -773,7 +857,7 @@ def test_full_path_human_review_to_report(tmp_path, monkeypatch):
     log_path = tmp_path / "hr.json"
     apply_review(queue, "net_income|6|2022", 1_056_737_086.0,
                  reviewer="auditor-A", credential=creds["A"], data=d,
-                 log_path=log_path)
+                 log_path=log_path, confirmations=CONF_ALL)
     ok, _bad = verify_log_integrity(log_path)
     assert ok
     assert review_is_trusted(d.human_reviews[("net_income", 2022)],
@@ -872,6 +956,7 @@ def test_role_denial_and_missing_key_refusal(tmp_path, monkeypatch):
     pin_entry("viewer", "pin-V", ["approve", "reject"], file_path=rf)
     monkeypatch.setenv("REVIEWERS_FILE", str(rf))
     monkeypatch.setenv("REVIEW_HMAC_KEY", "k-test")
+    monkeypatch.setenv("REVIEW_ATTEMPTS_PATH", str(tmp_path / ".attempts.json"))
     queue = build_review_queue(proj / "cell_evidence/per_cell_strict.json",
                                proj / "cell_evidence")
     try:
@@ -911,7 +996,8 @@ def test_attacker_rewriting_whole_chain_fails_without_key(tmp_path, monkeypatch)
     queue = build_review_queue(proj / "cell_evidence/per_cell_strict.json",
                                proj / "cell_evidence")
     apply_review(queue, "net_income|6|2022", 1_056_737_086.0,
-                 reviewer="auditor-A", credential=creds["A"], log_path=log_path)
+                 reviewer="auditor-A", credential=creds["A"], log_path=log_path,
+                 confirmations=CONF_ALL)
     # attacker rewrites the value AND recomputes plain hashes
     log = json.loads(log_path.read_text(encoding="utf-8"))
     log[0]["value_final"] = 1_234.0

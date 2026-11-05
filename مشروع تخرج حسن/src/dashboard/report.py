@@ -125,6 +125,18 @@ def build_html_report(
         else '<p class="muted">None — all available metrics were computed.</p>'
     )
 
+    # Human-review trail (أثر المراجعة البشرية): every value a human attested
+    # carries the reviewer, the machine value before, and the final verdict —
+    # taken from the pipeline notes (the chain itself lives in the review log)
+    review_lines = [n for n in (results.get("notes") or [])
+                    if "Human review" in n]
+    reviews = (
+        "<ul>" + "".join(f'<li dir="auto">{ESC(m)}</li>' for m in review_lines)
+        + "</ul>"
+        if review_lines
+        else '<p class="muted">لا مراجعات بشرية على هذه القيم.</p>'
+    )
+
     interpreter = "Gemini AI" if analysis.ok else "deterministic rule-based engine"
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
@@ -142,6 +154,8 @@ Interpreted by: {ESC(interpreter)} ({ESC(analysis.model)}) · All numbers comput
 {recs}
 <h2>Missing Data</h2>
 {missing}
+<h2>Human Review Trail — أثر المراجعة البشرية</h2>
+{reviews}
 <p class="muted">Benchmark mentions, if any, refer to widely accepted general guideline
 levels — not sector averages. This report does not constitute investment advice.</p>
 </div></body></html>"""

@@ -1,0 +1,61 @@
+{
+ "passed": 11,
+ "total": 11,
+ "results": [
+  {
+   "case": "testbed-up",
+   "pass": true,
+   "detail": "chain_ok=True, log_len=0"
+  },
+  {
+   "case": "wrong-pin-rejected",
+   "pass": true,
+   "detail": "error shown, no session, no log writes"
+  },
+  {
+   "case": "approve-correct-value",
+   "pass": true,
+   "detail": "decision_log=VERIFIED_HUMAN, value=1056737086.0, log_len=1, trusted=True, alerts=['جلسة المراجع auditor-A نشطة — تنتهي بعد ~29 دقيقة', '']"
+  },
+  {
+   "case": "correct-wrong-value",
+   "pass": true,
+   "detail": "value=9027315979.0, kind=correct, before=418441944.0, decision=VERIFIED_HUMAN"
+  },
+  {
+   "case": "reject-unreadable",
+   "pass": true,
+   "detail": "record=REJECTED_HUMAN, decision=UNVERIFIED, value_unchanged=1214507839.0"
+  },
+  {
+   "case": "reload-clears-session-only",
+   "pass": true,
+   "detail": "login shown again, log_len stable at 3"
+  },
+  {
+   "case": "conflicting-reviews-never-decide",
+   "pass": true,
+   "detail": "records=['VERIFIED_HUMAN', 'CONFLICT_HUMAN'], decision=UNVERIFIED, trusted=False"
+  },
+  {
+   "case": "no-role-no-record",
+   "pass": true,
+   "detail": "backend refused, revenue records=0"
+  },
+  {
+   "case": "source-change-voids-attestation",
+   "pass": true,
+   "detail": "trusted=False, decision=UNVERIFIED"
+  },
+  {
+   "case": "stale-record-replay-refused",
+   "pass": true,
+   "detail": "probe_message_shown=True, decision=UNVERIFIED"
+  },
+  {
+   "case": "session-expiry-enforced",
+   "pass": true,
+   "detail": "expiry error shown=True, short-app records=0"
+  }
+ ]
+}

@@ -7,6 +7,8 @@
   "status": "CROP_ONLY",
   "crop_image": "cell_evidence\\spatial_short_term_debt_p5_y2022.png",
   "page_image": "eval_pages\\page_5.png",
+  "date_header_image": "cell_evidence\\date_header_p5.png",
+  "label_text": "بنوك تسهيلات إنتمانية",
   "bbox_rel": [
    0.2429131652661064,
    0.5938004750593825,
@@ -19,6 +21,23 @@
    "crop_variants": []
   },
   "conflict_reason": "single source (crop:orig) = 4,063,400,167 — needs the live per-cell confirmation",
+  "source_pdf": "D:\\hassan_charges\\مشروع تخرج حسن\\القوائم المالية المستقلة 2022.pdf",
+  "pdf_sha256": "443180e36c04a287a672ac485d0d5ad6",
+  "page_image_sha256": "7dfea0fa98e4a8770eab7b470bfa2d78",
+  "crop_sha256": "79c08d6afda0ef28874f65aec5c92e50",
+  "extraction_version": "extraction-spatial-2026.11",
+  "context": {
+   "year_header_available": true,
+   "label_available": true,
+   "context_complete": true
+  },
+  "confirmations": {
+   "document": false,
+   "field": false,
+   "year": false,
+   "position": false,
+   "value": false
+  },
   "decision": null
  },
  {
@@ -29,6 +48,8 @@
   "status": "CONFLICT",
   "crop_image": "cell_evidence\\spatial_current_portion_lt_debt_p5_y2022.png",
   "page_image": "eval_pages\\page_5.png",
+  "date_header_image": "cell_evidence\\date_header_p5.png",
+  "label_text": "أقساط قروض طويلة الأجل مستحقة السداد خلال عام",
   "bbox_rel": [
    0.2429131652661064,
    0.6075534441805226,
@@ -41,6 +62,23 @@
    "crop_variants": []
   },
   "conflict_reason": "selected 299,320,963 [crop:up3_bin] vs others [199784954.0] — all kept",
+  "source_pdf": "D:\\hassan_charges\\مشروع تخرج حسن\\القوائم المالية المستقلة 2022.pdf",
+  "pdf_sha256": "443180e36c04a287a672ac485d0d5ad6",
+  "page_image_sha256": "7dfea0fa98e4a8770eab7b470bfa2d78",
+  "crop_sha256": "1d6501c5c2f923126180033fac5e1b8d",
+  "extraction_version": "extraction-spatial-2026.11",
+  "context": {
+   "year_header_available": true,
+   "label_available": true,
+   "context_complete": true
+  },
+  "confirmations": {
+   "document": false,
+   "field": false,
+   "year": false,
+   "position": false,
+   "value": false
+  },
   "decision": null
  },
  {
@@ -51,6 +89,8 @@
   "status": "CONFLICT",
   "crop_image": "cell_evidence\\spatial_long_term_debt_p5_y2022.png",
   "page_image": "eval_pages\\page_5.png",
+  "date_header_image": "cell_evidence\\date_header_p5.png",
+  "label_text": "قروض طويلة الأجل",
   "bbox_rel": [
    0.2429131652661064,
    0.4918745051464766,
@@ -63,6 +103,23 @@
    "crop_variants": []
   },
   "conflict_reason": "selected 363,974,291 [crop:orig] vs others [174946891.0, 178946891.0] — all kept",
+  "source_pdf": "D:\\hassan_charges\\مشروع تخرج حسن\\القوائم المالية المستقلة 2022.pdf",
+  "pdf_sha256": "443180e36c04a287a672ac485d0d5ad6",
+  "page_image_sha256": "7dfea0fa98e4a8770eab7b470bfa2d78",
+  "crop_sha256": "8ead414212dfb654849dff9fe9d5e67a",
+  "extraction_version": "extraction-spatial-2026.11",
+  "context": {
+   "year_header_available": true,
+   "label_available": true,
+   "context_complete": true
+  },
+  "confirmations": {
+   "document": false,
+   "field": false,
+   "year": false,
+   "position": false,
+   "value": false
+  },
   "decision": null
  },
  {
@@ -73,6 +130,8 @@
   "status": "CONFLICT",
   "crop_image": "cell_evidence\\spatial_non_current_lease_liabilities_p5_y2022.png",
   "page_image": "eval_pages\\page_5.png",
+  "date_header_image": "cell_evidence\\date_header_p5.png",
+  "label_text": "التزامات تأجير تمويلي",
   "bbox_rel": [
    0.2429131652661064,
    0.5201504354711006,
@@ -85,6 +144,23 @@
    "crop_variants": []
   },
   "conflict_reason": "selected 9,109,619 [crop:orig] vs others [104419.0, 4109614.0, 109819.0] — all kept",
+  "source_pdf": "D:\\hassan_charges\\مشروع تخرج حسن\\القوائم المالية المستقلة 2022.pdf",
+  "pdf_sha256": "443180e36c04a287a672ac485d0d5ad6",
+  "page_image_sha256": "7dfea0fa98e4a8770eab7b470bfa2d78",
+  "crop_sha256": "bdcdee7ae5834e6eb5d86bce700784ba",
+  "extraction_version": "extraction-spatial-2026.11",
+  "context": {
+   "year_header_available": true,
+   "label_available": true,
+   "context_complete": true
+  },
+  "confirmations": {
+   "document": false,
+   "field": false,
+   "year": false,
+   "position": false,
+   "value": false
+  },
   "decision": null
  },
  {
@@ -95,6 +171,8 @@
   "status": "CROP_ONLY",
   "crop_image": "cell_evidence\\spatial_current_lease_liabilities_p5_y2022.png",
   "page_image": "eval_pages\\page_5.png",
+  "date_header_image": "cell_evidence\\date_header_p5.png",
+  "label_text": "التزامات تأجير تمويلي مستحقة السداد خلال عام",
   "bbox_rel": [
    0.2429131652661064,
    0.621076801266825,
@@ -107,6 +185,23 @@
    "crop_variants": []
   },
   "conflict_reason": "single source (crop:up3_bin) = 83,301,722 — needs the live per-cell confirmation",
+  "source_pdf": "D:\\hassan_charges\\مشروع تخرج حسن\\القوائم المالية المستقلة 2022.pdf",
+  "pdf_sha256": "443180e36c04a287a672ac485d0d5ad6",
+  "page_image_sha256": "7dfea0fa98e4a8770eab7b470bfa2d78",
+  "crop_sha256": "a71516e4544da29c57e3865facc0c0d7",
+  "extraction_version": "extraction-spatial-2026.11",
+  "context": {
+   "year_header_available": true,
+   "label_available": true,
+   "context_complete": true
+  },
+  "confirmations": {
+   "document": false,
+   "field": false,
+   "year": false,
+   "position": false,
+   "value": false
+  },
   "decision": null
  },
  {
@@ -117,6 +212,8 @@
   "status": "CONFLICT",
   "crop_image": "cell_evidence\\spatial_revenue_p6_y2022.png",
   "page_image": "eval_pages\\page_6.png",
+  "date_header_image": "cell_evidence\\date_header_p6.png",
+  "label_text": "المبيعات (بالصافي)",
   "bbox_rel": [
    0.2069467787114846,
    0.132444576405384,
@@ -129,6 +226,23 @@
    "crop_variants": []
   },
   "conflict_reason": "selected 16,665,919,878 [crop:up3_clahe] vs others [17770919.0, 177709194.0, 1777091944.0] — all kept",
+  "source_pdf": "D:\\hassan_charges\\مشروع تخرج حسن\\القوائم المالية المستقلة 2022.pdf",
+  "pdf_sha256": "443180e36c04a287a672ac485d0d5ad6",
+  "page_image_sha256": "b23ce380a95d8488edca4e87e62d72c3",
+  "crop_sha256": "09ac7b3861d6fca9ce39ecf1156f965e",
+  "extraction_version": "extraction-spatial-2026.11",
+  "context": {
+   "year_header_available": true,
+   "label_available": true,
+   "context_complete": true
+  },
+  "confirmations": {
+   "document": false,
+   "field": false,
+   "year": false,
+   "position": false,
+   "value": false
+  },
   "decision": null
  },
  {
@@ -139,6 +253,8 @@
   "status": "CONFLICT",
   "crop_image": "cell_evidence\\spatial_net_activity_profit_p6_y2022.png",
   "page_image": "eval_pages\\page_6.png",
+  "date_header_image": "cell_evidence\\date_header_p6.png",
+  "label_text": "صافى أرباح النشاط",
   "bbox_rel": [
    0.2069467787114846,
    0.2716250989707047,
@@ -151,6 +267,23 @@
    "crop_variants": []
   },
   "conflict_reason": "selected 1,257,960,603 [crop:orig] vs others [140445.33] — all kept",
+  "source_pdf": "D:\\hassan_charges\\مشروع تخرج حسن\\القوائم المالية المستقلة 2022.pdf",
+  "pdf_sha256": "443180e36c04a287a672ac485d0d5ad6",
+  "page_image_sha256": "b23ce380a95d8488edca4e87e62d72c3",
+  "crop_sha256": "f1e7810d4ba0b1056ba8bb62e8b4c15b",
+  "extraction_version": "extraction-spatial-2026.11",
+  "context": {
+   "year_header_available": true,
+   "label_available": true,
+   "context_complete": true
+  },
+  "confirmations": {
+   "document": false,
+   "field": false,
+   "year": false,
+   "position": false,
+   "value": false
+  },
   "decision": null
  },
  {
@@ -161,6 +294,8 @@
   "status": "CONFLICT",
   "crop_image": "cell_evidence\\spatial_net_income_p6_y2022.png",
   "page_image": "eval_pages\\page_6.png",
+  "date_header_image": "cell_evidence\\date_header_p6.png",
+  "label_text": "صافى أرباح العام",
   "bbox_rel": [
    0.2069467787114846,
    0.4843665874901029,
@@ -173,6 +308,23 @@
    "crop_variants": []
   },
   "conflict_reason": "selected 1,056,737,086 [crop:orig] vs others [1004.0, 1001.0] — all kept",
+  "source_pdf": "D:\\hassan_charges\\مشروع تخرج حسن\\القوائم المالية المستقلة 2022.pdf",
+  "pdf_sha256": "443180e36c04a287a672ac485d0d5ad6",
+  "page_image_sha256": "b23ce380a95d8488edca4e87e62d72c3",
+  "crop_sha256": "e9017f51672d1b963d6554de0a79c5f1",
+  "extraction_version": "extraction-spatial-2026.11",
+  "context": {
+   "year_header_available": true,
+   "label_available": true,
+   "context_complete": true
+  },
+  "confirmations": {
+   "document": false,
+   "field": false,
+   "year": false,
+   "position": false,
+   "value": false
+  },
   "decision": null
  },
  {
@@ -183,6 +335,8 @@
   "status": "MULTI_ROW",
   "crop_image": "cell_evidence\\spatial_income_tax_expense_p6_y2022.png",
   "page_image": "eval_pages\\page_6.png",
+  "date_header_image": "cell_evidence\\date_header_p6.png",
+  "label_text": "إجمالي ضريبة الدخل عن العام",
   "bbox_rel": [
    0.2069467787114846,
    0.4682462391132225,
@@ -195,6 +349,23 @@
    "crop_variants": []
   },
   "conflict_reason": "MULTI_ROW kept after resolution (CONFLICT): selected -179,626,127 [crop:orig] vs others [-119587144.0, -11948318.0] — all kept",
+  "source_pdf": "D:\\hassan_charges\\مشروع تخرج حسن\\القوائم المالية المستقلة 2022.pdf",
+  "pdf_sha256": "443180e36c04a287a672ac485d0d5ad6",
+  "page_image_sha256": "b23ce380a95d8488edca4e87e62d72c3",
+  "crop_sha256": "f90147bc37c638e82ab0e28a284c65e3",
+  "extraction_version": "extraction-spatial-2026.11",
+  "context": {
+   "year_header_available": true,
+   "label_available": true,
+   "context_complete": true
+  },
+  "confirmations": {
+   "document": false,
+   "field": false,
+   "year": false,
+   "position": false,
+   "value": false
+  },
   "decision": null
  },
  {
@@ -205,6 +376,8 @@
   "status": "CONFLICT",
   "crop_image": "cell_evidence\\spatial_total_liabilities_p5_y2022.png",
   "page_image": "eval_pages\\page_5.png",
+  "date_header_image": "cell_evidence\\date_header_p5.png",
+  "label_text": "إجمالي الالتزامات",
   "bbox_rel": [
    0.2429131652661064,
    0.7084738717339667,
@@ -217,6 +390,23 @@
    "crop_variants": []
   },
   "conflict_reason": "selected 418,441,944 [crop:up3_bin] vs others [10944.0, 1410444.0, 10444.0] — all kept",
+  "source_pdf": "D:\\hassan_charges\\مشروع تخرج حسن\\القوائم المالية المستقلة 2022.pdf",
+  "pdf_sha256": "443180e36c04a287a672ac485d0d5ad6",
+  "page_image_sha256": "7dfea0fa98e4a8770eab7b470bfa2d78",
+  "crop_sha256": "dd4d9b909f3aeacc706f059273c6bde2",
+  "extraction_version": "extraction-spatial-2026.11",
+  "context": {
+   "year_header_available": true,
+   "label_available": true,
+   "context_complete": true
+  },
+  "confirmations": {
+   "document": false,
+   "field": false,
+   "year": false,
+   "position": false,
+   "value": false
+  },
   "decision": null
  },
  {
@@ -227,6 +417,8 @@
   "status": "UNREADABLE",
   "crop_image": "cell_evidence\\spatial_operating_cash_flow_p9_y2022.png",
   "page_image": "eval_pages\\page_9.png",
+  "date_header_image": "cell_evidence\\date_header_p9.png",
+  "label_text": "صافي النقدية النائجة من أنشطة التشغيل",
   "bbox_rel": [
    0.21317927170868345,
    0.5209362628661917,
@@ -239,6 +431,23 @@
    "crop_variants": []
   },
   "conflict_reason": "short read (5 digits) — suspect truncation; detection + crop read agree on 11,160",
+  "source_pdf": "D:\\hassan_charges\\مشروع تخرج حسن\\القوائم المالية المستقلة 2022.pdf",
+  "pdf_sha256": "443180e36c04a287a672ac485d0d5ad6",
+  "page_image_sha256": "0a1cf8cbbfc5fd082963d81cf3bf77d7",
+  "crop_sha256": "5b8907da2e20bab0afae69ea6b126a22",
+  "extraction_version": "extraction-spatial-2026.11",
+  "context": {
+   "year_header_available": true,
+   "label_available": true,
+   "context_complete": true
+  },
+  "confirmations": {
+   "document": false,
+   "field": false,
+   "year": false,
+   "position": false,
+   "value": false
+  },
   "decision": null
  }
 ]

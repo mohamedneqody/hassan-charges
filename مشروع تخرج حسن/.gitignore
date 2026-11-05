@@ -1,6 +1,10 @@
 # Secrets
 .env
 
+# Review credentials & runtime security state — never commit
+reviewers.json
+.review_attempts.json
+
 # Python
 __pycache__/
 *.py[cod]

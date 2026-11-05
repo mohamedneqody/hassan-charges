@@ -1,0 +1,44 @@
+{
+ "note": "same GT (54 workbook cells), same frozen GT mapping; ONLY the gate gained source-awareness (VERIFIED_SOURCE_EXACT with full evidence) — no Ground Truth change, no threshold loosening",
+ "digital_xlsx": {
+  "before": {
+   "automatic_decisive_coverage": 0.0,
+   "end_to_end_accuracy": 0.0,
+   "gate_partition": {
+    "usable": 0,
+    "not_decisive": 54,
+    "missing": 0
+   }
+  },
+  "after": {
+   "automatic_decisive_coverage": 1.0,
+   "end_to_end_accuracy": 1.0,
+   "gate_partition": {
+    "usable": 54,
+    "not_decisive": 0,
+    "missing": 0
+   },
+   "automatic_exact_match_accuracy": 1.0,
+   "false_acceptance_rate": 0.0
+  }
+ },
+ "scanned_pdf_2022": {
+  "before": {
+   "gate_partition": {
+    "usable": 0,
+    "not_decisive": 10,
+    "missing": 1
+   },
+   "automatic_decisive_coverage": 0.0
+  },
+  "after": {
+   "gate_partition": {
+    "usable": 0,
+    "not_decisive": 10,
+    "missing": 1
+   },
+   "automatic_decisive_coverage": 0.0,
+   "note": "statuses unchanged — the OCR path keeps its ladder; critical_field_coverage 0.0"
+  }
+ }
+}

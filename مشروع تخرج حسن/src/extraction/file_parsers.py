@@ -17,6 +17,7 @@ from src.extraction.normalizer import (
     merge_parsed,
     parse_number,
     parse_table,
+    parse_table_full,
     reconcile,
 )
 
@@ -87,15 +88,78 @@ def load_financial_data(file_name: str, raw: bytes, progress_cb=None, page_range
         frames, notes = _load_pdf(raw)
     elif ext == ".csv":
         frames, notes = _load_csv(raw)
+        named_frames = [("", f) for f in frames]
+        evidence_bundle: dict | None = None
     else:
-        frames, notes = _load_excel(raw, ext)
+        named_frames, notes, evidence_bundle = _load_excel_with_evidence(raw, ext)
+        frames = [f for _name, f in named_frames]
+
+    from src.extraction.provenance import (
+        SOURCE_NATIVE_PDF_TEXT, SOURCE_NATIVE_SPREADSHEET_CELL,
+        CellEvidence, sniff_consolidation, sniff_scale_words,
+    )
+
+    try:
+        import openpyxl  # noqa: F401  (column-letter helper below)
+    except Exception:  # pragma: no cover
+        openpyxl = None
 
     parts: list[dict[int, dict[str, float]]] = []
-    for frame in frames:
-        try:
-            parts.append(parse_table(frame))
-        except Exception as exc:  # a broken table must not kill the run
-            notes.append(f"Skipped an unparseable table: {exc}")
+    evidences: list[dict] = []
+    if ext == ".pdf":
+        for frame in frames:
+            try:
+                parts.append(parse_table(frame))
+            except Exception as exc:  # a broken table must not kill the run
+                notes.append(f"Skipped an unparseable table: {exc}")
+    else:
+        for sheet_name, frame in named_frames:
+            try:
+                result, captures = parse_table_full(frame)
+            except Exception as exc:  # a broken table must not kill the run
+                notes.append(f"Skipped an unparseable table: {exc}")
+                continue
+            parts.append(result)
+            meta = (evidence_bundle or {}).get("cell_meta", {}).get(
+                sheet_name, {})
+            band = _sheet_band_text(frame)
+            for cap in captures:
+                if cap.get("transposed"):
+                    # rotated layout: the address mapping degrades — record
+                    # the source but let the checklist refuse the address
+                    ev = CellEvidence(
+                        source=SOURCE_NATIVE_SPREADSHEET_CELL,
+                        file_sha256=(evidence_bundle or {}).get("file_sha256"),
+                        file_name=file_name, sheet=sheet_name or None,
+                        cell_address=None, label_text=cap["label_text"],
+                        year=cap["year"],
+                        data_type=("formula_cached" if meta.get(
+                            (cap["row"], cap["col"]), {}).get("data_type")
+                            == "formula_cached" else "value"),
+                        unit_hint=sniff_scale_words(band),
+                        consolidation=sniff_consolidation(band),
+                        extra={"transposed": True},
+                    )
+                else:
+                    m = meta.get((cap["row"], cap["col"]), {})
+                    data_type = m.get("data_type", "value")
+                    ev = CellEvidence(
+                        source=SOURCE_NATIVE_SPREADSHEET_CELL,
+                        file_sha256=(evidence_bundle or {}).get("file_sha256"),
+                        file_name=file_name, sheet=sheet_name or None,
+                        cell_address=(
+                            f"{openpyxl.utils.get_column_letter(cap['col'])}"
+                            f"{cap['row']}")
+                        if cap["col"] and cap["row"] else None,
+                        label_text=cap["label_text"], year=cap["year"],
+                        data_type=data_type,
+                        cached_formula=bool(m.get("cached_formula")),
+                        unit_hint=sniff_scale_words(band),
+                        consolidation=sniff_consolidation(band),
+                        extra={"number_format": m.get("number_format")},
+                    )
+                evidences.append({**ev.as_dict(),
+                                  "field": cap["field"], "year": cap["year"]})
 
     if not parts and ext == ".pdf":
         # No text/tables at all → scanned PDF: render → OpenCV cleanup →
@@ -108,7 +172,9 @@ def load_financial_data(file_name: str, raw: bytes, progress_cb=None, page_range
     if not parts:
         raise ExtractionError("no readable tables were found.")
 
-    data = merge_parsed(parts, notes)
+    data = merge_parsed(parts, notes, evidences=evidences)
+    data.extraction_source = (SOURCE_NATIVE_PDF_TEXT if ext == ".pdf"
+                              else SOURCE_NATIVE_SPREADSHEET_CELL)
     reconcile(data)
     data.currency_hint = _currency_hint_from_frames(frames)
     data.company_hint = _company_hint_from_frames(frames)
@@ -169,6 +235,65 @@ def _load_excel(raw: bytes, ext: str) -> tuple[list[pd.DataFrame], list[str]]:
     return frames, notes
 
 
+def _load_excel_with_evidence(
+    raw: bytes, ext: str,
+) -> tuple[list[tuple[str, pd.DataFrame]], list[str], dict]:
+    """_load_excel + the verifiable source evidence (المهمة 1):
+    per-sheet {(row, col) -> {data_type, is_merged, number_format}} from
+    openpyxl (formula cells = the STORED cache value, flagged), plus the
+    file sha256 — so each captured value can cite WHERE it came from."""
+    from src.extraction.provenance import file_sha256 as _sha
+
+    notes: list[str] = []
+    frames: list[tuple[str, pd.DataFrame]] = []
+    try:
+        sheets = pd.read_excel(
+            io.BytesIO(raw), sheet_name=None, header=None, dtype=object, engine=None
+        )
+    except Exception as exc:
+        raise ExtractionError(f"could not open the Excel file ({exc}).") from exc
+
+    cell_meta: dict[str, dict[tuple[int, int], dict]] = {}
+    try:
+        import openpyxl
+
+        wb = openpyxl.load_workbook(io.BytesIO(raw), data_only=True)
+        for ws in wb.worksheets:
+            meta: dict[tuple[int, int], dict] = {}
+            merged = list(ws.merged_cells.ranges)
+            for row in ws.iter_rows():
+                for c in row:
+                    entry: dict = {}
+                    if c.value is not None:
+                        if c.data_type == "f":
+                            entry["data_type"] = "formula_cached"
+                            entry["cached_formula"] = True
+                        entry["number_format"] = c.number_format
+                    entry["is_merged"] = any(
+                        c.coordinate in rng for rng in merged)
+                    meta[(c.row, c.column)] = entry
+            cell_meta[ws.title] = meta
+    except Exception as exc:
+        # .xls or a reader failure: evidence degrades honestly (no formula /
+        # merged flags), the sheet/address/label evidence still applies
+        notes.append(f"openpyxl provenance index unavailable: {exc}")
+
+    for name, df in sheets.items():
+        if not df.empty:
+            frames.append((str(name), df))
+    if len(frames) > 1:
+        notes.append(f"Parsed {len(frames)} sheets and merged their data.")
+    bundle = {"file_sha256": _sha(raw), "cell_meta": cell_meta}
+    return frames, notes, bundle
+
+
+def _sheet_band_text(df: pd.DataFrame, upto: int = 6) -> str:
+    """The title/header band above the table — scale words and the
+    consolidation scope are sniffed here, not guessed."""
+    band = df.head(upto).astype(str).values.ravel()
+    return " ".join(str(x) for x in band[:200])
+
+
 # ---------------------------------------------------------------------------
 # PDF
 # ---------------------------------------------------------------------------
@@ -217,19 +342,54 @@ def _parse_pdf_text_lines(lines: list[str]) -> list[pd.DataFrame]:
 
     A line containing >= 2 years is treated as the column header; following
     'Label  number  number' lines are mapped against the active years.
+    Tables with DIFFERENT year sets become SEPARATE frames (a statement of
+    financial position with 3 year columns followed by a P&L with 2 must
+    never be merged into one DataFrame — ragged rows used to crash the
+    whole extraction with a pandas column-count error).
     """
+    frames: list[pd.DataFrame] = []
     rows: list[list[object]] = []
     active_years: list[int] = []
+
+    def _flush() -> None:
+        nonlocal rows
+        if not rows:
+            return
+        width = len(rows[0])
+        norm = [(r + [None] * (width - len(r)))[:width] for r in rows]
+        frames.append(pd.DataFrame(norm[1:], columns=norm[0], dtype=object))
+        rows = []
+
     for line in lines:
         years = [extract_year(tok) for tok in re.split(r"\s+", line) if extract_year(tok)]
         if sum(y is not None for y in years) >= 2:
-            active_years = [y for y in years if y is not None]
+            new_years = [y for y in years if y is not None]
+            # A real comparison header holds RECENT ADJACENT fiscal years;
+            # prose enumerations (tax-dispute years 1995..2014, law numbers)
+            # span decades or reference distant pasts and must never become
+            # column headers. Header years are bounded to the last decade+;
+            # extract_year itself keeps the full 1990..2099 range.
+            if max(new_years) - min(new_years) > 6 or min(new_years) < 2015:
+                continue
+            if active_years and new_years != active_years:
+                _flush()   # a new year set → a new table, never merge ragged
+            active_years = new_years
             rows.append(["Line Item"] + active_years)
             continue
         if not active_years:
             continue
-        numbers = [parse_number(tok) for tok in _NUMBER_TOKEN.findall(line)]
-        numbers = [n for n in numbers if n is not None]
+        atoms = [(m.group(0), m.group(0).startswith("("))
+                 for m in _NUMBER_TOKEN.finditer(line)]
+        numbers = [n for n in (parse_number(t) for t, _p in atoms)
+                   if n is not None]
+        # IFRS statement rows lead with the Note reference — «Operating
+        # revenue (32) 22 915 657 021 …»: the parenthesized small integer is
+        # a NOTE NUMBER, not a (negative) value. Drop LEADING parenthesized
+        # atoms ≤ 999 whenever the line carries more numbers after them.
+        while (len(atoms) > 1 and len(numbers) > 1 and atoms[0][1]
+               and numbers and abs(numbers[0]) <= 999):
+            atoms = atoms[1:]
+            numbers = numbers[1:]
         if not numbers:
             continue
         label = _NUMBER_TOKEN.sub(" ", line).strip(" -–—.:") or None
@@ -238,6 +398,5 @@ def _parse_pdf_text_lines(lines: list[str]) -> list[pd.DataFrame]:
         # Keep at most as many numbers as active year columns.
         rows.append([label] + numbers[: len(active_years)])
 
-    if not rows:
-        return []
-    return [pd.DataFrame(rows[1:], columns=rows[0], dtype=object)]
+    _flush()
+    return frames

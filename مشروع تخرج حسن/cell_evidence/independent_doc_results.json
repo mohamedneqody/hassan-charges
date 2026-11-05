@@ -15,18 +15,18 @@
   "ok": true
  },
  "automatic_exact_match_accuracy": 1.0,
- "automatic_decisive_coverage": 0.0,
- "false_acceptance_rate": null,
+ "automatic_decisive_coverage": 1.0,
+ "false_acceptance_rate": 0.0,
  "false_acceptances": 0,
- "correct_values_blocked": 54,
+ "correct_values_blocked": 0,
  "wrong_values_blocked": 0,
  "missing_values": 0,
- "end_to_end_accuracy": 0.0,
+ "end_to_end_accuracy": 1.0,
  "human_assisted_coverage": 0.0,
  "human_assisted_note": "no image evidence exists for a born-digital file — the review chain is crop-based and no packets apply (0/N, not N/A)",
  "gate_partition": {
-  "usable": 0,
-  "not_decisive": 54,
+  "usable": 54,
+  "not_decisive": 0,
   "missing": 0
  },
  "rows": [
@@ -35,8 +35,8 @@
    "year": 2025,
    "gt": 140000.0,
    "captured": 140000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -44,8 +44,8 @@
    "year": 2026,
    "gt": 160000.0,
    "captured": 160000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -53,8 +53,8 @@
    "year": 2025,
    "gt": 180000.0,
    "captured": 180000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -62,8 +62,8 @@
    "year": 2026,
    "gt": 220000.0,
    "captured": 220000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -71,8 +71,8 @@
    "year": 2025,
    "gt": -120000.0,
    "captured": -120000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -80,8 +80,8 @@
    "year": 2026,
    "gt": -160000.0,
    "captured": -160000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -89,8 +89,8 @@
    "year": 2025,
    "gt": 150000.0,
    "captured": 150000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -98,8 +98,8 @@
    "year": 2026,
    "gt": 120000.0,
    "captured": 120000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -107,8 +107,8 @@
    "year": 2025,
    "gt": 420000.0,
    "captured": 420000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -116,8 +116,8 @@
    "year": 2026,
    "gt": 520000.0,
    "captured": 520000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -125,8 +125,8 @@
    "year": 2025,
    "gt": 600000.0,
    "captured": 600000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -134,8 +134,8 @@
    "year": 2026,
    "gt": 560000.0,
    "captured": 560000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -143,8 +143,8 @@
    "year": 2025,
    "gt": 250000.0,
    "captured": 250000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -152,8 +152,8 @@
    "year": 2026,
    "gt": 340000.0,
    "captured": 340000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -161,8 +161,8 @@
    "year": 2025,
    "gt": 90000.0,
    "captured": 90000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -170,8 +170,8 @@
    "year": 2026,
    "gt": 105000.0,
    "captured": 105000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -179,8 +179,8 @@
    "year": 2025,
    "gt": 800000.0,
    "captured": 800000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -188,8 +188,8 @@
    "year": 2026,
    "gt": 800000.0,
    "captured": 800000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -197,8 +197,8 @@
    "year": 2025,
    "gt": -40000.0,
    "captured": -40000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -206,8 +206,8 @@
    "year": 2026,
    "gt": 60000.0,
    "captured": 60000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -215,8 +215,8 @@
    "year": 2025,
    "gt": 700000.0,
    "captured": 700000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -224,8 +224,8 @@
    "year": 2026,
    "gt": 850000.0,
    "captured": 850000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -233,8 +233,8 @@
    "year": 2025,
    "gt": 580000.0,
    "captured": 580000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -242,8 +242,8 @@
    "year": 2026,
    "gt": 660000.0,
    "captured": 660000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -251,8 +251,8 @@
    "year": 2025,
    "gt": 45000.0,
    "captured": 45000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -260,8 +260,8 @@
    "year": 2026,
    "gt": 40000.0,
    "captured": 40000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -269,8 +269,8 @@
    "year": 2025,
    "gt": 45000.0,
    "captured": 45000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -278,8 +278,8 @@
    "year": 2026,
    "gt": 60000.0,
    "captured": 60000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -287,8 +287,8 @@
    "year": 2025,
    "gt": 120000.0,
    "captured": 120000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -296,8 +296,8 @@
    "year": 2026,
    "gt": 150000.0,
    "captured": 150000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -305,8 +305,8 @@
    "year": 2025,
    "gt": -150000.0,
    "captured": -150000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -314,8 +314,8 @@
    "year": 2026,
    "gt": -210000.0,
    "captured": -210000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -323,8 +323,8 @@
    "year": 2025,
    "gt": 180000.0,
    "captured": 180000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -332,8 +332,8 @@
    "year": 2026,
    "gt": 165000.0,
    "captured": 165000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -341,8 +341,8 @@
    "year": 2025,
    "gt": 220000.0,
    "captured": 220000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -350,8 +350,8 @@
    "year": 2026,
    "gt": 190000.0,
    "captured": 190000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -359,8 +359,8 @@
    "year": 2025,
    "gt": 300000.0,
    "captured": 300000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -368,8 +368,8 @@
    "year": 2026,
    "gt": 360000.0,
    "captured": 360000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -377,8 +377,8 @@
    "year": 2025,
    "gt": 280000.0,
    "captured": 280000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -386,8 +386,8 @@
    "year": 2026,
    "gt": 300000.0,
    "captured": 300000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -395,8 +395,8 @@
    "year": 2025,
    "gt": 225000.0,
    "captured": 225000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -404,8 +404,8 @@
    "year": 2026,
    "gt": 205000.0,
    "captured": 205000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -413,8 +413,8 @@
    "year": 2025,
    "gt": 60000.0,
    "captured": 60000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -422,8 +422,8 @@
    "year": 2026,
    "gt": 75000.0,
    "captured": 75000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -431,8 +431,8 @@
    "year": 2025,
    "gt": 1000000.0,
    "captured": 1000000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -440,8 +440,8 @@
    "year": 2026,
    "gt": 1180000.0,
    "captured": 1180000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -449,8 +449,8 @@
    "year": 2025,
    "gt": 140000.0,
    "captured": 140000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -458,8 +458,8 @@
    "year": 2026,
    "gt": 165000.0,
    "captured": 165000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -467,8 +467,8 @@
    "year": 2025,
    "gt": 1500000.0,
    "captured": 1500000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -476,8 +476,8 @@
    "year": 2026,
    "gt": 1650000.0,
    "captured": 1650000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -485,8 +485,8 @@
    "year": 2025,
    "gt": 400000.0,
    "captured": 400000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -494,8 +494,8 @@
    "year": 2026,
    "gt": 520000.0,
    "captured": 520000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -503,8 +503,8 @@
    "year": 2025,
    "gt": 700000.0,
    "captured": 700000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   },
   {
@@ -512,8 +512,8 @@
    "year": 2026,
    "gt": 850000.0,
    "captured": 850000.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
+   "status": "VERIFIED_SOURCE_EXACT",
+   "gate": "use",
    "exact": true
   }
  ]

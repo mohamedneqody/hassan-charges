@@ -1,0 +1,136 @@
+{
+ "scenario": "Hadid Ezz 2022 — machine vs human-assisted",
+ "mixing_rule": "total LIABILITIES (debt_ratio, Beneish LVGI) ≠ total BORROWINGS (debt_to_equity, cfo_to_debt); leases count only where explicitly included",
+ "rows": [
+  {
+   "indicator": "Debt Ratio",
+   "formula": "total_liabilities / total_assets",
+   "input_values": {
+    "total_liabilities": {
+     "before": 418441944.0,
+     "after": 9027315979.0
+    },
+    "total_assets": 15900000000.0
+   },
+   "input_sources": {
+    "total_liabilities": "HUMAN_REVIEWED (correct) after CONFLICT machine capture",
+    "total_assets": "VERIFIED_EXACT (machine, dual read)"
+   },
+   "period": "FY2022",
+   "accounting_definition": "leverage — total obligations over total assets",
+   "verification_status": "definition PINNED; movement 2.6%→56.8% is input correction only (VERIFIED_HUMAN numerator; denominator unchanged)"
+  },
+  {
+   "indicator": "Debt-to-Equity",
+   "formula": "(short_term_debt + current_portion_lt_debt + long_term_debt) / equity",
+   "input_values": {
+    "borrowings": 4726695421.0,
+    "equity": 6900000000.0
+   },
+   "input_sources": {
+    "borrowings": "VERIFIED_EXACT (machine, dual read)",
+    "equity": "VERIFIED_EXACT (machine, dual read)"
+   },
+   "period": "FY2022",
+   "accounting_definition": "leverage on INTEREST-BEARING debt — deliberately NOT total liabilities",
+   "verification_status": "definition documented; unaffected by the total_liabilities review"
+  },
+  {
+   "indicator": "Current Ratio",
+   "formula": "current_assets / current_liabilities",
+   "input_values": {
+    "current_assets": 8300000000.0,
+    "current_liabilities": 7900000000.0
+   },
+   "input_sources": {
+    "both": "VERIFIED_EXACT (machine, dual read)"
+   },
+   "period": "FY2022",
+   "accounting_definition": "liquidity",
+   "verification_status": "unchanged by the reviews; inputs all decisive"
+  },
+  {
+   "indicator": "Cash Flow Coverage (cfo_to_debt)",
+   "formula": "operating_cash_flow / (short+current-portion+long-term debt)",
+   "input_values": {
+    "operating_cash_flow": {
+     "before": 1214507839.0,
+     "after": 1214507839.0
+    },
+    "borrowings": 4726695421.0
+   },
+   "input_sources": {
+    "operating_cash_flow": "UNVERIFIED machine read → VERIFIED_HUMAN after review",
+    "borrowings": "VERIFIED_EXACT (machine)"
+   },
+   "period": "FY2022",
+   "accounting_definition": "cash generation vs interest-bearing debt",
+   "verification_status": "review made the input DECISIVE (value identical)"
+  },
+  {
+   "indicator": "ROE",
+   "formula": "net_income / average equity",
+   "input_values": {
+    "net_income": 1056737086.0,
+    "avg_equity": 6600000000.0
+   },
+   "input_sources": {
+    "net_income": "UNVERIFIED → VERIFIED_HUMAN (corroborate)",
+    "equity": "VERIFIED_EXACT (machine)"
+   },
+   "period": "FY2022 (avg over FY2021-FY2022)",
+   "accounting_definition": "profitability",
+   "verification_status": "value identical before/after — the review changed the STATUS, not the number"
+  },
+  {
+   "indicator": "DuPont 3-factor",
+   "formula": "net_margin × asset_turnover × equity_multiplier",
+   "input_values": {
+    "net_income": 1056737086.0,
+    "revenue": 16665919878.0,
+    "avg_assets": 15250000000.0,
+    "avg_equity": 6600000000.0
+   },
+   "input_sources": {
+    "all": "machine VERIFIED_EXACT + net_income VERIFIED_HUMAN"
+   },
+   "period": "FY2022",
+   "accounting_definition": "ROE decomposition with reconciliation check",
+   "verification_status": "implied ROE identical before/after; reconciles"
+  },
+  {
+   "indicator": "Beneish M-Score",
+   "formula": "-4.84 + 0.920·DSRI + 0.528·GMI + 0.404·AQI + 0.892·SGI + 0.115·DEPI − 0.172·SGAI + 4.679·TATA − 0.327·LVGI",
+   "input_values": {
+    "LVGI": {
+     "before": 21.4715,
+     "after": 0.9953
+    }
+   },
+   "input_sources": {
+    "8 components": "machine captures (none human-reviewed)"
+   },
+   "period": "FY2022 vs FY2021",
+   "accounting_definition": "Beneish (1999) — LVGI uses TOTAL LIABILITIES by the model's own definition",
+   "verification_status": "m_score moved with the corrected LVGI; inputs not independently verified — disclosed, never decisive alone"
+  },
+  {
+   "indicator": "Health Score",
+   "formula": "weighted pillars: liquidity 25% + leverage 25% + profitability 30% + cash 20%",
+   "input_values": {
+    "blocked_fields_before": [
+     "net_income",
+     "operating_cash_flow",
+     "total_liabilities"
+    ],
+    "blocked_fields_after": []
+   },
+   "input_sources": {
+    "pillars": "each sub-score's inputs must be decisive (gate-filtered) or the pillar is dropped"
+   },
+   "period": "FY2022",
+   "accounting_definition": "Missing-Data-Coverage policy: critical-pillar hole REFUSES the score instead of renormalizing",
+   "verification_status": "machine: REFUSED (coverage 0.25, leverage missing) → human-assisted: computed (coverage 1.0, complete)"
+  }
+ ]
+}

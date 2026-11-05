@@ -270,6 +270,16 @@ class FinancialData:
     # accounting identity — honest metadata: identity-consistent is NOT the
     # same as independently verified.
     identity_ok: dict = field(default_factory=dict)
+    # Source-aware provenance (المهمة: إسناد المصدر) — (field, year) ->
+    # CellEvidence.as_dict(): WHERE the value came from (digital cell, PDF
+    # text, OCR…) with the verifiable evidence (file hash, sheet, address,
+    # label, year, data type). Source is metadata — verification stays with
+    # the status ladder; never conflated.
+    cell_provenance: dict = field(default_factory=dict)
+    # the pipeline path that produced this data (SCANNED_OCR | NATIVE_PDF_TEXT
+    # | NATIVE_SPREADSHEET_CELL | VISION_MODEL) — the fallback source label
+    # for values without cell-level provenance
+    extraction_source: str = "SCANNED_OCR"
 
     def bump_confidence(self, field_name: str, year: int, level: int) -> None:
         if level > self.confidence.get(field_name, {}).get(year, 0):
@@ -347,21 +357,31 @@ def parse_table(df: pd.DataFrame) -> dict[int, dict[str, float]]:
 
     Tables without a detectable two-year header return {}.
     """
+    return parse_table_full(df)[0]
+
+
+def parse_table_full(
+    df: pd.DataFrame,
+) -> tuple[dict[int, dict[str, float]], list[dict]]:
+    """parse_table + one capture record per value (label, year, position,
+    transposed flag) so digital sources can attach verifiable evidence."""
+    captures: list[dict] = []
     if df.empty:
-        return {}
-    if _detect_transposed(df):
+        return {}, captures
+    transposed = _detect_transposed(df)
+    if transposed:
         # Rotate years-in-first-column/index layouts into the wide shape.
         df = df.T
 
     found = _find_year_header(df)
     if found is None:
-        return {}
+        return {}, captures
     header_idx, year_cols_map = found
     year_cols = set(year_cols_map)
 
     result: dict[int, dict[str, float]] = {}
     body = df if header_idx == -1 else df.iloc[header_idx + 1:]
-    for _, row in body.iterrows():
+    for row_pos, row in body.iterrows():
         label = _row_label(row, year_cols)
         if label is None:
             continue
@@ -377,11 +397,23 @@ def parse_table(df: pd.DataFrame) -> dict[int, dict[str, float]]:
             if value is None:
                 continue
             result.setdefault(year, {}).setdefault(canonical, value)
-    return result
+            captures.append({
+                "field": canonical, "year": year, "value": value,
+                "label_text": str(label).strip(),
+                # df position → openpyxl 1-based address is computed by the
+                # caller that knows the physical layout; None when unknown
+                "row": None if transposed else int(row_pos) + 1,
+                "col": None if transposed else int(col_pos) + 1,
+                "transposed": transposed,
+            })
+    return result, captures
 
 
-def merge_parsed(parts: list[dict[int, dict[str, float]]], notes: list[str]) -> FinancialData:
-    """Merge per-table parses, keeping every candidate for reconciliation."""
+def merge_parsed(parts: list[dict[int, dict[str, float]]], notes: list[str],
+                 evidences: list[dict] | None = None) -> FinancialData:
+    """Merge per-table parses, keeping every candidate for reconciliation.
+    `evidences` (optional, CellEvidence.as_dict() per capture) attaches
+    source provenance to the FIRST capture of each (field, year)."""
     data = FinancialData(notes=notes)
     order = 0
     for part in parts:
@@ -394,6 +426,10 @@ def merge_parsed(parts: list[dict[int, dict[str, float]]], notes: list[str]) -> 
                 order += 1
                 # first-wins base; reconcile() may override with better values
                 data.values.setdefault(canonical, {}).setdefault(year, value)
+    for ev in (evidences or []):
+        key = (ev.get("field"), ev.get("year"))
+        if key not in data.cell_provenance and ev.get("year") is not None:
+            data.cell_provenance[key] = ev
     return data
 
 
@@ -714,6 +750,51 @@ DECISION_STATUSES = (
 )
 
 
+def _value_source(data: FinancialData, field_name: str, year) -> str:
+    """WHERE the value came from — metadata, never a verification claim."""
+    from src.extraction.provenance import (
+        SOURCE_DERIVED, SOURCE_HUMAN_REVIEWED,
+    )
+
+    hr = (getattr(data, "human_reviews", {}) or {}).get((field_name, year))
+    if hr and hr.get("status") == "VERIFIED_HUMAN":
+        return SOURCE_HUMAN_REVIEWED
+    ev = (getattr(data, "cell_provenance", {}) or {}).get((field_name, year))
+    if ev:
+        return ev.get("source") or getattr(data, "extraction_source",
+                                           "SCANNED_OCR")
+    if derived_note := (getattr(data, "derived", {}) or {}).get(
+            (field_name, year)):
+        return SOURCE_DERIVED
+    return getattr(data, "extraction_source", "SCANNED_OCR")
+
+
+def _source_exact(data: FinancialData, field_name: str,
+                  year) -> tuple[bool, dict | None, list[str]]:
+    """VERIFIED_SOURCE_EXACT eligibility for a digital-source capture:
+    the stored evidence must pass the full checklist AND the label must
+    still map to the SAME canonical field it was captured under (a correct
+    number on the wrong row must never be promoted)."""
+    from src.extraction.provenance import (
+        DIGITAL_SOURCES, CellEvidence, evaluate_source_evidence,
+    )
+
+    ev_d = (getattr(data, "cell_provenance", {}) or {}).get(
+        (field_name, year))
+    if not ev_d:
+        return False, None, ["لا يوجد إسناد مصدري لهذه القيمة"]
+    ev = CellEvidence.from_dict(ev_d)
+    if ev.source not in DIGITAL_SOURCES:
+        return False, ev, ["المصدر ليس خلية/نصًا رقميًا مباشرًا"]
+    # the label the evidence saw must map to the field the capture used
+    if ev.label_text and match_field(ev.label_text) != field_name:
+        return False, ev, [
+            f"البند «{ev.label_text}» لا يقابل الحقل '{field_name}' — "
+            "رقم صحيح على الصف الخطأ لا يُعتمد"]
+    ok, failures = evaluate_source_evidence(ev, expected_year=year)
+    return ok, ev, failures
+
+
 def build_decision_log(data: FinancialData) -> list[dict]:
     """One honest record per captured field/year. Status precedence:
     MISSING → VERIFIED_DERIVED (flagged) → CONFLICT (competing reads without
@@ -749,6 +830,30 @@ def build_decision_log(data: FinancialData) -> list[dict]:
                 else:
                     status, reason = ("VERIFIED_DERIVED",
                                       f"مشتق: {derived_note} — موسوم ولا يُعد قراءة مباشرة")
+            elif len(distinct) == 1 and (field_name, year) in (
+                    getattr(data, "cell_provenance", {}) or {}):
+                # Source-aware gate (البوابة الواعية بالمصدر): a DIGITAL cell
+                # whose FULL evidence checklist passes is a documented
+                # faithful TRANSFER of the printed value — decisive, with
+                # the evidence cited. Never granted for wrong-field labels,
+                # year mismatches, merged cells, scaled units, flipped
+                # signs, or non-amount types. Values WITHOUT cell-level
+                # provenance (OCR paths) keep the original ladder — this
+                # branch never tightens or loosens them.
+                src_ok, src_ev, src_fails = _source_exact(
+                    data, field_name, year)
+                if src_ok:
+                    from src.extraction.provenance import evidence_reason
+
+                    status = "VERIFIED_SOURCE_EXACT"
+                    reason = evidence_reason(src_ev)
+                else:
+                    status, reason = ("UNVERIFIED",
+                                      "قراءة واحدة بلا تحقق مستقل"
+                                      + (f" — {src_fails[0]}"
+                                         if src_fails and src_fails != [
+                                             "لا يوجد إسناد مصدري لهذه القيمة"]
+                                         else ""))
             elif len(distinct) >= 2 and conf < 2:
                 status = "CONFLICT"
                 reason = (f"قراءات متضاربة غير محسومة ({len(distinct)} قيمًا مختلفة) "
@@ -819,6 +924,7 @@ def build_decision_log(data: FinancialData) -> list[dict]:
                 "distinct_reads": len(distinct),
                 "confidence": conf,
                 "identity_ok": identity_ok,
+                "source": _value_source(data, field_name, year),
                 "status": status,
                 "reason": reason,
                 **({"spatial": spatial} if spatial else {}),

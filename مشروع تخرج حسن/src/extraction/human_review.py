@@ -711,6 +711,17 @@ def separated_metrics(per_cell_rows: list[dict], human_log: Path = REVIEW_LOG,
     def rate(num: int, den: int) -> float | None:
         return round(num / den, 3) if den else None   # zero denominator = N/A
 
+    # Critical Field Coverage (تغطية الحقول الحرجة): the fields a reader MUST
+    # have before any health/leverage/profitability verdict — measured over
+    # the latest year present in the rows
+    from src.analysis.financial_gate import decide as _decide
+    critical = ({"revenue", "net_income", "total_assets", "total_liabilities",
+                 "equity", "operating_cash_flow", "current_assets",
+                 "current_liabilities"})
+    crit_rows = [r for r in per_cell_rows if r.get("field") in critical]
+    crit_allowed = [r for r in crit_rows
+                    if _decide(r["final_status"]) in ("use", "use_disclosed")]
+
     exact = sum(1 for r in per_cell_rows if r["exact_value"])
     gated_exact = [r for r in gated if r["exact_value"]]
     gated_wrong = [r for r in gated if not r["exact_value"]]
@@ -732,6 +743,7 @@ def separated_metrics(per_cell_rows: list[dict], human_log: Path = REVIEW_LOG,
         "withheld_correct_share": rate(len(gated_exact), len(gated)),
         # denominator is always n (all targeted cells) → 0.0 when no reviews
         "human_assisted_verified_coverage": rate(len(trusted_packets), n),
+        "critical_field_coverage": rate(len(crit_allowed), len(crit_rows)),
         "final_report_coverage": rate(min(final_covered, n), n),
         "counts": {
             "correct_values_blocked": len(gated_exact),
@@ -759,6 +771,9 @@ def separated_metrics(per_cell_rows: list[dict], human_log: Path = REVIEW_LOG,
                 "0/11 عندما لا توجد مراجعات إنتاجية",
             "false_acceptance_rate":
                 "قيم خاطئة قُبلت آليًا / كل المقبولة آليًا (N/A إذا لم يُقبل شيء)",
+            "critical_field_coverage":
+                "الحقول الحرجة المسموح بها (آليًا أو بشريًا) / كل الحقول الحرجة "
+                "المستهدفة — سيولة/مديونية/ربحية لا تُبنى بدونها",
             "reviewer_accuracy_unreviewed_sample":
                 "N/A — لا توجد عينة مراجَعة بشريًا مستقلة لقياس دقة المراجعين",
             "gate_partition":

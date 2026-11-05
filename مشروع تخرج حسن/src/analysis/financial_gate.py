@@ -20,6 +20,11 @@ def decide(status: str) -> str:
     """use | use_disclosed | not_decisive | missing"""
     return {
         "VERIFIED_EXACT": "use",
+        # documented faithful transfer from a DIGITAL source (spreadsheet
+        # cell / PDF text layer) whose full evidence checklist passed —
+        # decisive WITH the source cited in the decision log. Proof of
+        # transfer, never of economic correctness.
+        "VERIFIED_SOURCE_EXACT": "use",
         # explicit human attestation — usable, but always DISCLOSED as
         # human-assisted (never folded into automatic OCR accuracy)
         "VERIFIED_HUMAN": "use_disclosed",

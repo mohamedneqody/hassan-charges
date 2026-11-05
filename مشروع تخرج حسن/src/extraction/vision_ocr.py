@@ -1366,6 +1366,12 @@ def extract_via_vision(
                 "Notes text capture skipped (local OCR unavailable or failed) — "
                 "the notes RAG tab needs a re-analysis."
             )
+    # source-aware provenance: this whole path is MODEL-READ pixel text —
+    # every value's source label (and the decision-log `source` field)
+    # reflects that; the verification ladder is untouched
+    from src.extraction.provenance import SOURCE_VISION_MODEL
+
+    data.extraction_source = SOURCE_VISION_MODEL
     return data
 
 

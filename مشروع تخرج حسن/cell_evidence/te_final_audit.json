@@ -1,0 +1,371 @@
+{
+ "n": 40,
+ "auto_signed": 36,
+ "human_corrections": 4,
+ "final_signed": 40,
+ "false_accepted": 4,
+ "far": 0.1,
+ "human_reviewed_test": 40,
+ "rows": [
+  {
+   "field": "accounts_payable",
+   "year": 2023,
+   "machine": 13567712.0,
+   "human_final": 25538574.0,
+   "kind": "correct",
+   "auto_signed": false,
+   "final_signed": true
+  },
+  {
+   "field": "accounts_payable",
+   "year": 2024,
+   "machine": 15928525.0,
+   "human_final": 33524304.0,
+   "kind": "correct",
+   "auto_signed": false,
+   "final_signed": true
+  },
+  {
+   "field": "accounts_receivable",
+   "year": 2023,
+   "machine": 7752132.0,
+   "human_final": 7752132.0,
+   "kind": "corroborate",
+   "auto_signed": true,
+   "final_signed": true
+  },
+  {
+   "field": "accounts_receivable",
+   "year": 2024,
+   "machine": 12985847.0,
+   "human_final": 12985847.0,
+   "kind": "corroborate",
+   "auto_signed": true,
+   "final_signed": true
+  },
+  {
+   "field": "cash",
+   "year": 2023,
+   "machine": 10272954.0,
+   "human_final": 10272954.0,
+   "kind": "corroborate",
+   "auto_signed": true,
+   "final_signed": true
+  },
+  {
+   "field": "cash",
+   "year": 2024,
+   "machine": 6000305.0,
+   "human_final": 6000305.0,
+   "kind": "corroborate",
+   "auto_signed": true,
+   "final_signed": true
+  },
+  {
+   "field": "cost_of_revenue",
+   "year": 2023,
+   "machine": 13227521.0,
+   "human_final": -13227521.0,
+   "kind": "correct",
+   "auto_signed": false,
+   "final_signed": true
+  },
+  {
+   "field": "cost_of_revenue",
+   "year": 2024,
+   "machine": 18799203.0,
+   "human_final": -18799203.0,
+   "kind": "correct",
+   "auto_signed": false,
+   "final_signed": true
+  },
+  {
+   "field": "current_assets",
+   "year": 2023,
+   "machine": 28631278.0,
+   "human_final": 28631278.0,
+   "kind": "corroborate",
+   "auto_signed": true,
+   "final_signed": true
+  },
+  {
+   "field": "current_assets",
+   "year": 2024,
+   "machine": 39472216.0,
+   "human_final": 39472216.0,
+   "kind": "corroborate",
+   "auto_signed": true,
+   "final_signed": true
+  },
+  {
+   "field": "current_liabilities",
+   "year": 2023,
+   "machine": 64166416.0,
+   "human_final": 64166416.0,
+   "kind": "corroborate",
+   "auto_signed": true,
+   "final_signed": true
+  },
+  {
+   "field": "current_liabilities",
+   "year": 2024,
+   "machine": 91625404.0,
+   "human_final": 91625404.0,
+   "kind": "corroborate",
+   "auto_signed": true,
+   "final_signed": true
+  },
+  {
+   "field": "equity",
+   "year": 2023,
+   "machine": 36152951.0,
+   "human_final": 36152951.0,
+   "kind": "corroborate",
+   "auto_signed": true,
+   "final_signed": true
+  },
+  {
+   "field": "equity",
+   "year": 2024,
+   "machine": 27204878.0,
+   "human_final": 27204878.0,
+   "kind": "corroborate",
+   "auto_signed": true,
+   "final_signed": true
+  },
+  {
+   "field": "financing_cash_flow",
+   "year": 2023,
+   "machine": 6112704.0,
+   "human_final": 6112704.0,
+   "kind": "corroborate",
+   "auto_signed": true,
+   "final_signed": true
+  },
+  {
+   "field": "financing_cash_flow",
+   "year": 2024,
+   "machine": 10246257.0,
+   "human_final": 10246257.0,
+   "kind": "corroborate",
+   "auto_signed": true,
+   "final_signed": true
+  },
+  {
+   "field": "fixed_assets",
+   "year": 2023,
+   "machine": 76244954.0,
+   "human_final": 76244954.0,
+   "kind": "corroborate",
+   "auto_signed": true,
+   "final_signed": true
+  },
+  {
+   "field": "fixed_assets",
+   "year": 2024,
+   "machine": 89842411.0,
+   "human_final": 89842411.0,
+   "kind": "corroborate",
+   "auto_signed": true,
+   "final_signed": true
+  },
+  {
+   "field": "gross_profit",
+   "year": 2023,
+   "machine": 8671583.0,
+   "human_final": 8671583.0,
+   "kind": "corroborate",
+   "auto_signed": true,
+   "final_signed": true
+  },
+  {
+   "field": "gross_profit",
+   "year": 2024,
+   "machine": 8927811.0,
+   "human_final": 8927811.0,
+   "kind": "corroborate",
+   "auto_signed": true,
+   "final_signed": true
+  },
+  {
+   "field": "income_tax_expense",
+   "year": 2023,
+   "machine": -373645.0,
+   "human_final": -373645.0,
+   "kind": "corroborate",
+   "auto_signed": true,
+   "final_signed": true
+  },
+  {
+   "field": "income_tax_expense",
+   "year": 2024,
+   "machine": 1272749.0,
+   "human_final": 1272749.0,
+   "kind": "corroborate",
+   "auto_signed": true,
+   "final_signed": true
+  },
+  {
+   "field": "inventory",
+   "year": 2023,
+   "machine": 3623500.0,
+   "human_final": 3623500.0,
+   "kind": "corroborate",
+   "auto_signed": true,
+   "final_signed": true
+  },
+  {
+   "field": "inventory",
+   "year": 2024,
+   "machine": 5732698.0,
+   "human_final": 5732698.0,
+   "kind": "corroborate",
+   "auto_signed": true,
+   "final_signed": true
+  },
+  {
+   "field": "investing_cash_flow",
+   "year": 2023,
+   "machine": -11935977.0,
+   "human_final": -11935977.0,
+   "kind": "corroborate",
+   "auto_signed": true,
+   "final_signed": true
+  },
+  {
+   "field": "investing_cash_flow",
+   "year": 2024,
+   "machine": -26010844.0,
+   "human_final": -26010844.0,
+   "kind": "corroborate",
+   "auto_signed": true,
+   "final_signed": true
+  },
+  {
+   "field": "net_income",
+   "year": 2023,
+   "machine": 5724683.0,
+   "human_final": 5724683.0,
+   "kind": "corroborate",
+   "auto_signed": true,
+   "final_signed": true
+  },
+  {
+   "field": "net_income",
+   "year": 2024,
+   "machine": 4416350.0,
+   "human_final": 4416350.0,
+   "kind": "corroborate",
+   "auto_signed": true,
+   "final_signed": true
+  },
+  {
+   "field": "operating_cash_flow",
+   "year": 2023,
+   "machine": 8543713.0,
+   "human_final": 8543713.0,
+   "kind": "corroborate",
+   "auto_signed": true,
+   "final_signed": true
+  },
+  {
+   "field": "operating_cash_flow",
+   "year": 2024,
+   "machine": 11329526.0,
+   "human_final": 11329526.0,
+   "kind": "corroborate",
+   "auto_signed": true,
+   "final_signed": true
+  },
+  {
+   "field": "operating_income",
+   "year": 2023,
+   "machine": 5451938.0,
+   "human_final": 5451938.0,
+   "kind": "corroborate",
+   "auto_signed": true,
+   "final_signed": true
+  },
+  {
+   "field": "operating_income",
+   "year": 2024,
+   "machine": 5040128.0,
+   "human_final": 5040128.0,
+   "kind": "corroborate",
+   "auto_signed": true,
+   "final_signed": true
+  },
+  {
+   "field": "pretax_income",
+   "year": 2023,
+   "machine": 6098328.0,
+   "human_final": 6098328.0,
+   "kind": "corroborate",
+   "auto_signed": true,
+   "final_signed": true
+  },
+  {
+   "field": "pretax_income",
+   "year": 2024,
+   "machine": 3143601.0,
+   "human_final": 3143601.0,
+   "kind": "corroborate",
+   "auto_signed": true,
+   "final_signed": true
+  },
+  {
+   "field": "revenue",
+   "year": 2023,
+   "machine": 21899104.0,
+   "human_final": 21899104.0,
+   "kind": "corroborate",
+   "auto_signed": true,
+   "final_signed": true
+  },
+  {
+   "field": "revenue",
+   "year": 2024,
+   "machine": 27727014.0,
+   "human_final": 27727014.0,
+   "kind": "corroborate",
+   "auto_signed": true,
+   "final_signed": true
+  },
+  {
+   "field": "total_assets",
+   "year": 2023,
+   "machine": 134358541.0,
+   "human_final": 134358541.0,
+   "kind": "corroborate",
+   "auto_signed": true,
+   "final_signed": true
+  },
+  {
+   "field": "total_assets",
+   "year": 2024,
+   "machine": 169497056.0,
+   "human_final": 169497056.0,
+   "kind": "corroborate",
+   "auto_signed": true,
+   "final_signed": true
+  },
+  {
+   "field": "total_liabilities",
+   "year": 2023,
+   "machine": 98205590.0,
+   "human_final": 98205590.0,
+   "kind": "corroborate",
+   "auto_signed": true,
+   "final_signed": true
+  },
+  {
+   "field": "total_liabilities",
+   "year": 2024,
+   "machine": 142292178.0,
+   "human_final": 142292178.0,
+   "kind": "corroborate",
+   "auto_signed": true,
+   "final_signed": true
+  }
+ ]
+}

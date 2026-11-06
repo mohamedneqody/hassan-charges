@@ -1,0 +1,647 @@
+{
+ "EFG (born-digital, text path)": {
+  "document": "efg_standalone_fy2024.pdf",
+  "pages_total": 55,
+  "processed": 55,
+  "skipped": 0,
+  "pages_with_captured_fields": 11,
+  "cap_note": "no cap on the text path — every page processed",
+  "per_page": [
+   {
+    "page": 1,
+    "route": "PDF_TEXT",
+    "chars_text": 136,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 2,
+    "route": "PDF_TEXT",
+    "chars_text": 317,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 3,
+    "route": "PDF_TEXT",
+    "chars_text": 0,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 4,
+    "route": "PDF_TEXT",
+    "chars_text": 0,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 5,
+    "route": "PDF_TEXT",
+    "chars_text": 0,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 6,
+    "route": "PDF_TEXT",
+    "chars_text": 1577,
+    "fields_captured": 11,
+    "status": "processed (text layer)"
+   },
+   {
+    "page": 7,
+    "route": "PDF_TEXT",
+    "chars_text": 714,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 8,
+    "route": "PDF_TEXT",
+    "chars_text": 2062,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 9,
+    "route": "PDF_TEXT",
+    "chars_text": 3418,
+    "fields_captured": 27,
+    "status": "processed (text layer)"
+   },
+   {
+    "page": 10,
+    "route": "PDF_TEXT",
+    "chars_text": 1945,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 11,
+    "route": "PDF_TEXT",
+    "chars_text": 2041,
+    "fields_captured": 1,
+    "status": "processed (text layer)"
+   },
+   {
+    "page": 12,
+    "route": "PDF_TEXT",
+    "chars_text": 1681,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 13,
+    "route": "PDF_TEXT",
+    "chars_text": 1573,
+    "fields_captured": 3,
+    "status": "processed (text layer)"
+   },
+   {
+    "page": 14,
+    "route": "PDF_TEXT",
+    "chars_text": 1355,
+    "fields_captured": 2,
+    "status": "processed (text layer)"
+   },
+   {
+    "page": 15,
+    "route": "PDF_TEXT",
+    "chars_text": 1581,
+    "fields_captured": 1,
+    "status": "processed (text layer)"
+   },
+   {
+    "page": 16,
+    "route": "PDF_TEXT",
+    "chars_text": 938,
+    "fields_captured": 2,
+    "status": "processed (text layer)"
+   },
+   {
+    "page": 17,
+    "route": "PDF_TEXT",
+    "chars_text": 1291,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 18,
+    "route": "PDF_TEXT",
+    "chars_text": 2629,
+    "fields_captured": 2,
+    "status": "processed (text layer)"
+   },
+   {
+    "page": 19,
+    "route": "PDF_TEXT",
+    "chars_text": 1757,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 20,
+    "route": "PDF_TEXT",
+    "chars_text": 2828,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 21,
+    "route": "PDF_TEXT",
+    "chars_text": 1069,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 22,
+    "route": "PDF_TEXT",
+    "chars_text": 3289,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 23,
+    "route": "PDF_TEXT",
+    "chars_text": 1771,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 24,
+    "route": "PDF_TEXT",
+    "chars_text": 1855,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 25,
+    "route": "PDF_TEXT",
+    "chars_text": 1719,
+    "fields_captured": 5,
+    "status": "processed (text layer)"
+   },
+   {
+    "page": 26,
+    "route": "PDF_TEXT",
+    "chars_text": 1443,
+    "fields_captured": 5,
+    "status": "processed (text layer)"
+   },
+   {
+    "page": 27,
+    "route": "PDF_TEXT",
+    "chars_text": 1072,
+    "fields_captured": 3,
+    "status": "processed (text layer)"
+   },
+   {
+    "page": 28,
+    "route": "PDF_TEXT",
+    "chars_text": 2824,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 29,
+    "route": "PDF_TEXT",
+    "chars_text": 2756,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 30,
+    "route": "PDF_TEXT",
+    "chars_text": 1716,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 31,
+    "route": "PDF_TEXT",
+    "chars_text": 2033,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 32,
+    "route": "PDF_TEXT",
+    "chars_text": 2188,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 33,
+    "route": "PDF_TEXT",
+    "chars_text": 858,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 34,
+    "route": "PDF_TEXT",
+    "chars_text": 2462,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 35,
+    "route": "PDF_TEXT",
+    "chars_text": 2074,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 36,
+    "route": "PDF_TEXT",
+    "chars_text": 2369,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 37,
+    "route": "PDF_TEXT",
+    "chars_text": 2660,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 38,
+    "route": "PDF_TEXT",
+    "chars_text": 2348,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 39,
+    "route": "PDF_TEXT",
+    "chars_text": 2371,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 40,
+    "route": "PDF_TEXT",
+    "chars_text": 2437,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 41,
+    "route": "PDF_TEXT",
+    "chars_text": 2744,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 42,
+    "route": "PDF_TEXT",
+    "chars_text": 2518,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 43,
+    "route": "PDF_TEXT",
+    "chars_text": 2687,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 44,
+    "route": "PDF_TEXT",
+    "chars_text": 1992,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 45,
+    "route": "PDF_TEXT",
+    "chars_text": 2406,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 46,
+    "route": "PDF_TEXT",
+    "chars_text": 2499,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 47,
+    "route": "PDF_TEXT",
+    "chars_text": 1957,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 48,
+    "route": "PDF_TEXT",
+    "chars_text": 2600,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 49,
+    "route": "PDF_TEXT",
+    "chars_text": 2791,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 50,
+    "route": "PDF_TEXT",
+    "chars_text": 2525,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 51,
+    "route": "PDF_TEXT",
+    "chars_text": 2455,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 52,
+    "route": "PDF_TEXT",
+    "chars_text": 2184,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 53,
+    "route": "PDF_TEXT",
+    "chars_text": 1656,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 54,
+    "route": "PDF_TEXT",
+    "chars_text": 2003,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   },
+   {
+    "page": 55,
+    "route": "PDF_TEXT",
+    "chars_text": 1577,
+    "fields_captured": 0,
+    "status": "processed — no mappable rows"
+   }
+  ]
+ },
+ "TE (pure scan, vision/local path)": {
+  "document": "te_standalone_h1_2024.pdf",
+  "pages_total": 30,
+  "processed": 30,
+  "skipped": 0,
+  "pages_with_captured_fields": 15,
+  "cap_note": "VISION_MAX_PAGES=40: pages 41-30 would be skipped IF the vision path ran (TE is 30 pages — inside the cap)",
+  "per_page": [
+   {
+    "page": 1,
+    "route": "VISION_SWEEP (+ local OCR read)",
+    "tables": 0,
+    "fields_captured": 0,
+    "chars_md": 211,
+    "status": "processed (vision sweep; local markdown 211 chars)"
+   },
+   {
+    "page": 2,
+    "route": "VISION_SWEEP (+ local OCR read)",
+    "tables": 0,
+    "fields_captured": 0,
+    "chars_md": 863,
+    "status": "processed (vision sweep; local markdown 863 chars)"
+   },
+   {
+    "page": 3,
+    "route": "VISION_SWEEP (+ local OCR read)",
+    "tables": 0,
+    "fields_captured": 0,
+    "chars_md": 2528,
+    "status": "processed (vision sweep; local markdown 2528 chars)"
+   },
+   {
+    "page": 4,
+    "route": "VISION_SWEEP (+ local OCR read)",
+    "tables": 0,
+    "fields_captured": 0,
+    "chars_md": 1087,
+    "status": "processed (vision sweep; local markdown 1087 chars)"
+   },
+   {
+    "page": 5,
+    "route": "VISION_SWEEP (+ local OCR read)",
+    "tables": 1,
+    "fields_captured": 26,
+    "chars_md": 4784,
+    "status": "processed (vision sweep; local markdown 4784 chars)"
+   },
+   {
+    "page": 6,
+    "route": "VISION_SWEEP (+ local OCR read)",
+    "tables": 1,
+    "fields_captured": 36,
+    "chars_md": 2780,
+    "status": "processed (vision sweep; local markdown 2780 chars)"
+   },
+   {
+    "page": 7,
+    "route": "VISION_SWEEP (+ local OCR read)",
+    "tables": 1,
+    "fields_captured": 8,
+    "chars_md": 1447,
+    "status": "processed (vision sweep; local markdown 1447 chars)"
+   },
+   {
+    "page": 8,
+    "route": "VISION_SWEEP (+ local OCR read)",
+    "tables": 0,
+    "fields_captured": 0,
+    "chars_md": 3727,
+    "status": "processed (vision sweep; local markdown 3727 chars)"
+   },
+   {
+    "page": 9,
+    "route": "VISION_SWEEP (+ local OCR read)",
+    "tables": 1,
+    "fields_captured": 14,
+    "chars_md": 3770,
+    "status": "processed (vision sweep; local markdown 3770 chars)"
+   },
+   {
+    "page": 10,
+    "route": "VISION_SWEEP (+ local OCR read)",
+    "tables": 0,
+    "fields_captured": 0,
+    "chars_md": 4187,
+    "status": "processed (vision sweep; local markdown 4187 chars)"
+   },
+   {
+    "page": 11,
+    "route": "VISION_SWEEP (+ local OCR read)",
+    "tables": 0,
+    "fields_captured": 0,
+    "chars_md": 4905,
+    "status": "processed (vision sweep; local markdown 4905 chars)"
+   },
+   {
+    "page": 12,
+    "route": "VISION_SWEEP (+ local OCR read)",
+    "tables": 0,
+    "fields_captured": 0,
+    "chars_md": 5287,
+    "status": "processed (vision sweep; local markdown 5287 chars)"
+   },
+   {
+    "page": 13,
+    "route": "VISION_SWEEP (+ local OCR read)",
+    "tables": 0,
+    "fields_captured": 0,
+    "chars_md": 5524,
+    "status": "processed (vision sweep; local markdown 5524 chars)"
+   },
+   {
+    "page": 14,
+    "route": "VISION_SWEEP (+ local OCR read)",
+    "tables": 0,
+    "fields_captured": 0,
+    "chars_md": 5073,
+    "status": "processed (vision sweep; local markdown 5073 chars)"
+   },
+   {
+    "page": 15,
+    "route": "VISION_SWEEP (+ local OCR read)",
+    "tables": 0,
+    "fields_captured": 0,
+    "chars_md": 2367,
+    "status": "processed (vision sweep; local markdown 2367 chars)"
+   },
+   {
+    "page": 16,
+    "route": "VISION_SWEEP (+ local OCR read)",
+    "tables": 1,
+    "fields_captured": 6,
+    "chars_md": 3702,
+    "status": "processed (vision sweep; local markdown 3702 chars)"
+   },
+   {
+    "page": 17,
+    "route": "VISION_SWEEP (+ local OCR read)",
+    "tables": 1,
+    "fields_captured": 12,
+    "chars_md": 2964,
+    "status": "processed (vision sweep; local markdown 2964 chars)"
+   },
+   {
+    "page": 18,
+    "route": "VISION_SWEEP (+ local OCR read)",
+    "tables": 1,
+    "fields_captured": 5,
+    "chars_md": 3433,
+    "status": "processed (vision sweep; local markdown 3433 chars)"
+   },
+   {
+    "page": 19,
+    "route": "VISION_SWEEP (+ local OCR read)",
+    "tables": 2,
+    "fields_captured": 10,
+    "chars_md": 5129,
+    "status": "processed (vision sweep; local markdown 5129 chars)"
+   },
+   {
+    "page": 20,
+    "route": "VISION_SWEEP (+ local OCR read)",
+    "tables": 1,
+    "fields_captured": 0,
+    "chars_md": 2101,
+    "status": "processed (vision sweep; local markdown 2101 chars)"
+   },
+   {
+    "page": 21,
+    "route": "VISION_SWEEP (+ local OCR read)",
+    "tables": 1,
+    "fields_captured": 2,
+    "chars_md": 2394,
+    "status": "processed (vision sweep; local markdown 2394 chars)"
+   },
+   {
+    "page": 22,
+    "route": "VISION_SWEEP (+ local OCR read)",
+    "tables": 1,
+    "fields_captured": 4,
+    "chars_md": 3172,
+    "status": "processed (vision sweep; local markdown 3172 chars)"
+   },
+   {
+    "page": 23,
+    "route": "VISION_SWEEP (+ local OCR read)",
+    "tables": 1,
+    "fields_captured": 8,
+    "chars_md": 2713,
+    "status": "processed (vision sweep; local markdown 2713 chars)"
+   },
+   {
+    "page": 24,
+    "route": "VISION_SWEEP (+ local OCR read)",
+    "tables": 2,
+    "fields_captured": 29,
+    "chars_md": 3910,
+    "status": "processed (vision sweep; local markdown 3910 chars)"
+   },
+   {
+    "page": 25,
+    "route": "VISION_SWEEP (+ local OCR read)",
+    "tables": 1,
+    "fields_captured": 3,
+    "chars_md": 2607,
+    "status": "processed (vision sweep; local markdown 2607 chars)"
+   },
+   {
+    "page": 26,
+    "route": "VISION_SWEEP (+ local OCR read)",
+    "tables": 1,
+    "fields_captured": 5,
+    "chars_md": 3075,
+    "status": "processed (vision sweep; local markdown 3075 chars)"
+   },
+   {
+    "page": 27,
+    "route": "VISION_SWEEP (+ local OCR read)",
+    "tables": 0,
+    "fields_captured": 0,
+    "chars_md": 2691,
+    "status": "processed (vision sweep; local markdown 2691 chars)"
+   },
+   {
+    "page": 28,
+    "route": "VISION_SWEEP (+ local OCR read)",
+    "tables": 0,
+    "fields_captured": 0,
+    "chars_md": 6552,
+    "status": "processed (vision sweep; local markdown 6552 chars)"
+   },
+   {
+    "page": 29,
+    "route": "VISION_SWEEP (+ local OCR read)",
+    "tables": 0,
+    "fields_captured": 0,
+    "chars_md": 4354,
+    "status": "processed (vision sweep; local markdown 4354 chars)"
+   },
+   {
+    "page": 30,
+    "route": "VISION_SWEEP (+ local OCR read)",
+    "tables": 1,
+    "fields_captured": 10,
+    "chars_md": 2784,
+    "status": "processed (vision sweep; local markdown 2784 chars)"
+   }
+  ]
+ }
+}

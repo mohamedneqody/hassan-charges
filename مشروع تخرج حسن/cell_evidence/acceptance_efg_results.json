@@ -8,7 +8,7 @@
  "gt_protocol": "visual reading of rendered pages 5 (financial position) and 6 (income statement) + text-layer verification of page 9 (cash flows); all printed, zero derived",
  "gt_cells": 28,
  "run": {
-  "seconds": 30.0
+  "seconds": 16.4
  },
  "years": {
   "detected": [

@@ -1,0 +1,159 @@
+{
+ "wrong_cells": [
+  {
+   "field": "total_assets",
+   "year": 2024,
+   "gt_test_only": 169497056.0,
+   "selected_now": 7254571.0,
+   "correct_selected": false,
+   "correct_in_candidates": false,
+   "candidates": [
+    {
+     "value": 7254571.0,
+     "order": 0,
+     "label_row": "total assets",
+     "layer": "local_ocr",
+     "source_line": "Usufruct assets (13) 7 254 571 6 474 753"
+    }
+   ]
+  },
+  {
+   "field": "total_assets",
+   "year": 2023,
+   "gt_test_only": 134358541.0,
+   "selected_now": 6474753.0,
+   "correct_selected": false,
+   "correct_in_candidates": false,
+   "candidates": [
+    {
+     "value": 6474753.0,
+     "order": 0,
+     "label_row": "total assets",
+     "layer": "local_ocr",
+     "source_line": "Usufruct assets (13) 7 254 571 6 474 753"
+    }
+   ]
+  },
+  {
+   "field": "current_liabilities",
+   "year": 2024,
+   "gt_test_only": 91625404.0,
+   "selected_now": 91625404.0,
+   "correct_selected": true,
+   "correct_in_candidates": true,
+   "candidates": [
+    {
+     "value": 91625404.0,
+     "order": 11,
+     "label_row": "total current liabilities",
+     "layer": "local_ocr",
+     "source_line": "Total Current Liabilities 91 625 404 64 166 416"
+    }
+   ]
+  },
+  {
+   "field": "current_liabilities",
+   "year": 2023,
+   "gt_test_only": 64166416.0,
+   "selected_now": 64166416.0,
+   "correct_selected": true,
+   "correct_in_candidates": true,
+   "candidates": [
+    {
+     "value": 64166416.0,
+     "order": 24,
+     "label_row": "total current liabilities",
+     "layer": "local_ocr",
+     "source_line": "Total Current Liabilities 91 625 404 64 166 416"
+    }
+   ]
+  },
+  {
+   "field": "operating_income",
+   "year": 2024,
+   "gt_test_only": 5040128.0,
+   "selected_now": 5040128.0,
+   "correct_selected": true,
+   "correct_in_candidates": true,
+   "candidates": [
+    {
+     "value": 5040128.0,
+     "order": 29,
+     "label_row": "operating profit",
+     "layer": "local_ocr",
+     "source_line": "Operating profit 5 040 128 5 451 938 3 502 888 2 758 345"
+    }
+   ]
+  },
+  {
+   "field": "operating_income",
+   "year": 2023,
+   "gt_test_only": 5451938.0,
+   "selected_now": 5451938.0,
+   "correct_selected": true,
+   "correct_in_candidates": true,
+   "candidates": [
+    {
+     "value": 5451938.0,
+     "order": 37,
+     "label_row": "operating profit",
+     "layer": "local_ocr",
+     "source_line": "Operating profit 5 040 128 5 451 938 3 502 888 2 758 345"
+    }
+   ]
+  },
+  {
+   "field": "accounts_payable",
+   "year": 2024,
+   "gt_test_only": 33524304.0,
+   "selected_now": 33524304.0,
+   "correct_selected": true,
+   "correct_in_candidates": true,
+   "candidates": [
+    {
+     "value": 33524304.0,
+     "order": 10,
+     "label_row": "creditors and other credit balances",
+     "layer": "local_ocr",
+     "source_line": "Creditors and other credit balances (21) 33 524 304 25 538 574"
+    }
+   ]
+  },
+  {
+   "field": "accounts_payable",
+   "year": 2023,
+   "gt_test_only": 25538574.0,
+   "selected_now": 25538574.0,
+   "correct_selected": true,
+   "correct_in_candidates": true,
+   "candidates": [
+    {
+     "value": 25538574.0,
+     "order": 23,
+     "label_row": "creditors and other credit balances",
+     "layer": "local_ocr",
+     "source_line": "Creditors and other credit balances (21) 33 524 304 25 538 574"
+    }
+   ]
+  },
+  {
+   "field": "cash",
+   "year": 2023,
+   "gt_test_only": 10272954.0,
+   "selected_now": 10.0,
+   "correct_selected": false,
+   "correct_in_candidates": false,
+   "candidates": [
+    {
+     "value": 10.0,
+     "order": 17,
+     "label_row": "cash and cash equivalents",
+     "layer": "local_ocr",
+     "source_line": "Deferred tax assets (25-3) 5 114 555 561 022"
+    }
+   ]
+  }
+ ],
+ "page_5_stripped_md": "Translation from Arabic\n\nTelecom Egvpt Company\n\n(An Egyptian Joint Stock Company)\n\nCondensed Separate Interim Statement of Financial Position as of:\n\n \n    Note  30/6/2024  31/12/2023  \n    No.  L.E, (000)    L. E. (000)  \n  Assets          \n  Non Current Assets          \n  Fixed assets and projects under construction  (12)  89 842 411  76 244 954  \n  Intangible assets ( licenses and frequencies)    20 327 981  14 964 829  \n  Usufruct assets  (13)  7 254 571  6 474 753  \n  Right of use assets ( lease contracts)  (14-1)  756 005    752 388  \n  Investments in subsidiaries and associates  (15)  6 645 875  6 645 875  \n  Financial assets at FVOCI    83 442    83 442  \n  Deferred tax assets  (25-3)  5 114 555    561 022  \n  Total Non Current Assets    130 024 840  105 727 263  \n  Current Assets          \n  Inventories  (16)  5 732 698  3 623 500  \n  Trade and notes receivables  (17)  12 985 847  7 752 132  \n  Current income tax  (25-5)  672 222    762 104  \n  Debtors and other debit balances  (18)  11 374 911  5 081 497  \n  Debit balances with subsidiaries  (29-1)  2 706 233  1 139 091  \n  Cash and cash equivalents  (19)  6 000 305  10   272 954  \n  Total Current Assets    39 472 216  28 631 278  \n  Total Assets    169 497 056  134 358 541  \n  Equity          \n  Capital  (23)  17 070 716  17 070 716  \n  Reserves  (24)  6 052 339  5 733 122  \n  Retained earnings    4 081 823  13 349 113  \n  Total Equity    27 204 878  36 152 951  \n  Non Current Liabilities          \n  Long term loans and credit facilities  (20)  33 991 082  19 725 744  \n  Lease obligations  (14-2)  747 167    745 718  \n  Creditors and other credit balances  (21)  15 928 525  13 567 712  \n  Total Non  Current Liabilities    50 666 774  34 039 174  \n  Current Liabilities          \n  Short term loans and credit facilities  (20)  46 745 326  29 590 441  \n  Lease obligations  (14-2)  217 568    175 020  \n  Creditors and other credit balances  (21)  33 524 304  25 538 574  \n  Credit balances to subsidiaries and associates  (29-1)  10 850 524  8 163 108  \n  Provisions  (22)  287 682    699 273  \n  Total Current Liabilities    91 625 404  64 166 416  \n  Total Liabilities    142 292 178  98 205 590  \n  Total Equity and Liabilities    169 497 056  134 358 541  \n \n\nThe accompanying notes on pages (6) to (26) are an integral part of these Condensed Separate Interim Financial Statements.\n\n \n  Director of Financial Affairs  Chief  Financial Officer  Managing Director &amp;  \n        Chief Executive Qfficer,  \n    Act. wat times    \n  haber        \n  \"Ehab Abdo \"    \" Wael Hanafy \"  \"Mohamed Nasr\"  \n  Board of Directors approval      Chairman  \n  M. Ar        \n \n\n\"Maged Osman\"\n\nLimited Review Report \"attached\"",
+ "page_6_stripped_md": "## telecomegypf”\n\nTranslation from Arabic\n\n## Telecom Egypt Company\n\n(An Egyptian Joint Stock Company)\n\nCondensed Separate Interim Statement of Income\n\n \n      For the six months ended :  For the three months ended  \n    Note  30/6/2024  30/6/2023    30/6/2024  30/6/2023  \n    No.  L.E.(000)  L.E.(000)  L.E.(000)  L.E(000)  \n  Operating revenues  (3)  27 727 014  21 899 104  15 134 943  11 141 423  \n  Operating costs  (4)  (18 799 203)  (13 227 521) (10 092 969)  (6 790 060)  \n  Gross Profit    8 927 811  8 671 583  5 041 974  4 351 363  \n  Other income  (5)  1 580 356  809 560  1 096 989  482 716  \n  Selling and distributing expenses  (6)  (2 295 738)  (1 766 331)  (1 233 379)  (948 927)  \n  General and administrative expenses  (7)  (2 784 659)  (2 090 924)   (1 396 814)  (1 101 791)  \n  Expected creidt loss    ( 274 569)  ( 121 188)    (22 201)  \n  Other expenses    (113 073)  (50 762)  ( 5 882)  (2815)  \n  Operating profit    5 040 128  5 451 938  3 502 888  2 758 345  \n  Finance income    282 749  333 801  (248 031)  133 885  \n  Finance cost    (5 345 736)  (2 117 808)  (3 266 954)  (1 135 149)  \n  Net finance cost  (8)  (5 062 987)  (1 784 007)  (3 514 985)  (1 001 264)  \n  Income from investments in subsidiaries and associates  (9)  3 166 460  2 430 397  25 000  2 107 410  \n  Net profit for the period before income tax    3 143 601  6 098 328  12 903  3 864 491  \n  Income tax  (25-1)  1 272 749  (373 645)  18 082  ( 601 255)  \n  Net profit for the period after income tax    4 416 350  5 724 683  30 985  3 263 236  \n  Basic and diluted earning per share for the period (L.E. / Share)  (11)  2.59  3.35  0.02  1.91  \n \n\nThe accompanying notes on pages (6) to (26) are an integral part of these condensed separate interim financial statements."
+}

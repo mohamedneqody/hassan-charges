@@ -1,0 +1,1798 @@
+{
+ "final_routes_same_code": {
+  "A_fullpage_local_no_focus": {
+   "gt_cells": 40,
+   "captured": 40,
+   "signed_exact": 39,
+   "decisive": 0,
+   "false_accepted_count": 0,
+   "far": null,
+   "categories": {
+    "CORRECT_BLOCKED": 39,
+    "OCR_RECOGNITION": 1
+   }
+  },
+  "B_focused_local": {
+   "gt_cells": 40,
+   "captured": 40,
+   "signed_exact": 40,
+   "decisive": 0,
+   "false_accepted_count": 0,
+   "far": null,
+   "categories": {
+    "CORRECT_BLOCKED": 40
+   }
+  },
+  "C_vision_REPLAY_frozen_d010bd8": {
+   "gt_cells": 40,
+   "captured": 28,
+   "signed_exact": 21,
+   "decisive": 1,
+   "false_accepted_count": 0,
+   "far": 0.0,
+   "categories": {
+    "CORRECT_BLOCKED": 20,
+    "OCR_RECOGNITION": 6,
+    "NOT_CAPTURED": 12,
+    "WRONG_ROW(=pretax_income 2024)": 1,
+    "CORRECT_DECISIVE": 1
+   }
+  }
+ },
+ "A_per_cell": [
+  {
+   "field": "fixed_assets",
+   "year": 2024,
+   "gt": 89842411.0,
+   "selected": 89842411.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "inventory",
+   "year": 2024,
+   "gt": 5732698.0,
+   "selected": 5732698.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "accounts_receivable",
+   "year": 2024,
+   "gt": 12985847.0,
+   "selected": 12985847.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "cash",
+   "year": 2024,
+   "gt": 6000305.0,
+   "selected": 6000305.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "current_assets",
+   "year": 2024,
+   "gt": 39472216.0,
+   "selected": 39472216.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "total_assets",
+   "year": 2024,
+   "gt": 169497056.0,
+   "selected": 169497056.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "equity",
+   "year": 2024,
+   "gt": 27204878.0,
+   "selected": 27204878.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "accounts_payable",
+   "year": 2024,
+   "gt": 33524304.0,
+   "selected": 33524304.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "current_liabilities",
+   "year": 2024,
+   "gt": 91625404.0,
+   "selected": 91625404.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "total_liabilities",
+   "year": 2024,
+   "gt": 142292178.0,
+   "selected": 142292178.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "revenue",
+   "year": 2024,
+   "gt": 27727014.0,
+   "selected": 27727014.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "cost_of_revenue",
+   "year": 2024,
+   "gt": -18799203.0,
+   "selected": -18799203.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "gross_profit",
+   "year": 2024,
+   "gt": 8927811.0,
+   "selected": 8927811.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "operating_income",
+   "year": 2024,
+   "gt": 5040128.0,
+   "selected": 5040128.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "pretax_income",
+   "year": 2024,
+   "gt": 3143601.0,
+   "selected": 3143601.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "income_tax_expense",
+   "year": 2024,
+   "gt": 1272749.0,
+   "selected": 1272749.0,
+   "raw_source": "DERIVED",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "net_income",
+   "year": 2024,
+   "gt": 4416350.0,
+   "selected": 4416350.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "operating_cash_flow",
+   "year": 2024,
+   "gt": 11329526.0,
+   "selected": 11329526.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "investing_cash_flow",
+   "year": 2024,
+   "gt": -26010844.0,
+   "selected": -26010844.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "financing_cash_flow",
+   "year": 2024,
+   "gt": 10246257.0,
+   "selected": 10246257.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "fixed_assets",
+   "year": 2023,
+   "gt": 76244954.0,
+   "selected": 76244954.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "inventory",
+   "year": 2023,
+   "gt": 3623500.0,
+   "selected": 3623500.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "accounts_receivable",
+   "year": 2023,
+   "gt": 7752132.0,
+   "selected": 7752132.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "cash",
+   "year": 2023,
+   "gt": 10272954.0,
+   "selected": 10.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "OCR_RECOGNITION"
+  },
+  {
+   "field": "current_assets",
+   "year": 2023,
+   "gt": 28631278.0,
+   "selected": 28631278.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "total_assets",
+   "year": 2023,
+   "gt": 134358541.0,
+   "selected": 134358541.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "equity",
+   "year": 2023,
+   "gt": 36152951.0,
+   "selected": 36152951.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "accounts_payable",
+   "year": 2023,
+   "gt": 25538574.0,
+   "selected": 25538574.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "current_liabilities",
+   "year": 2023,
+   "gt": 64166416.0,
+   "selected": 64166416.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "total_liabilities",
+   "year": 2023,
+   "gt": 98205590.0,
+   "selected": 98205590.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "revenue",
+   "year": 2023,
+   "gt": 21899104.0,
+   "selected": 21899104.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "cost_of_revenue",
+   "year": 2023,
+   "gt": -13227521.0,
+   "selected": -13227521.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "gross_profit",
+   "year": 2023,
+   "gt": 8671583.0,
+   "selected": 8671583.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "operating_income",
+   "year": 2023,
+   "gt": 5451938.0,
+   "selected": 5451938.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "pretax_income",
+   "year": 2023,
+   "gt": 6098328.0,
+   "selected": 6098328.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "income_tax_expense",
+   "year": 2023,
+   "gt": -373645.0,
+   "selected": -373645.0,
+   "raw_source": "DERIVED",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "net_income",
+   "year": 2023,
+   "gt": 5724683.0,
+   "selected": 5724683.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "operating_cash_flow",
+   "year": 2023,
+   "gt": 8543713.0,
+   "selected": 8543713.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "investing_cash_flow",
+   "year": 2023,
+   "gt": -11935977.0,
+   "selected": -11935977.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "financing_cash_flow",
+   "year": 2023,
+   "gt": 6112704.0,
+   "selected": 6112704.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  }
+ ],
+ "B_per_cell": [
+  {
+   "field": "fixed_assets",
+   "year": 2024,
+   "gt": 89842411.0,
+   "selected": 89842411.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     827.1,
+     405.1,
+     896.5,
+     413.9
+    ],
+    "render_scale": 2.0
+   },
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "inventory",
+   "year": 2024,
+   "gt": 5732698.0,
+   "selected": 5732698.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     835.9,
+     616.6,
+     898.3,
+     625.6
+    ],
+    "render_scale": 2.0
+   },
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "accounts_receivable",
+   "year": 2024,
+   "gt": 12985847.0,
+   "selected": 12985847.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     828.8,
+     638.2,
+     900.0,
+     647.3
+    ],
+    "render_scale": 2.0
+   },
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "cash",
+   "year": 2024,
+   "gt": 6000305.0,
+   "selected": 6000305.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     834.1,
+     725.4,
+     898.3,
+     734.9
+    ],
+    "render_scale": 2.0
+   },
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "current_assets",
+   "year": 2024,
+   "gt": 39472216.0,
+   "selected": 39472216.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     827.0,
+     747.6,
+     900.1,
+     757.1
+    ],
+    "render_scale": 2.0
+   },
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "total_assets",
+   "year": 2024,
+   "gt": 169497056.0,
+   "selected": 169497056.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     820.0,
+     769.3,
+     898.3,
+     778.7
+    ],
+    "render_scale": 2.0
+   },
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "equity",
+   "year": 2024,
+   "gt": 27204878.0,
+   "selected": 27204878.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     820.0,
+     1242.8,
+     900.1,
+     1252.1
+    ],
+    "render_scale": 2.0
+   },
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "accounts_payable",
+   "year": 2024,
+   "gt": 33524304.0,
+   "selected": 33524304.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     828.8,
+     1133.2,
+     900.1,
+     1142.9
+    ],
+    "render_scale": 2.0
+   },
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "current_liabilities",
+   "year": 2024,
+   "gt": 91625404.0,
+   "selected": 91625404.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     827.2,
+     1199.2,
+     900.0,
+     1207.9
+    ],
+    "render_scale": 2.0
+   },
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "total_liabilities",
+   "year": 2024,
+   "gt": 142292178.0,
+   "selected": 142292178.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     820.0,
+     1221.4,
+     900.1,
+     1230.7
+    ],
+    "render_scale": 2.0
+   },
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "revenue",
+   "year": 2024,
+   "gt": 27727014.0,
+   "selected": 27727014.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": {
+    "page": 6,
+    "bbox_px": [
+     902.2,
+     623.6,
+     986.9,
+     642.5
+    ],
+    "render_scale": 2.0
+   },
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "cost_of_revenue",
+   "year": 2024,
+   "gt": -18799203.0,
+   "selected": -18799203.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": {
+    "page": 6,
+    "bbox_px": [
+     665.1,
+     671.3,
+     756.6,
+     691.2
+    ],
+    "render_scale": 2.0
+   },
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "gross_profit",
+   "year": 2024,
+   "gt": 8927811.0,
+   "selected": 8927811.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": {
+    "page": 6,
+    "bbox_px": [
+     909.1,
+     718.3,
+     986.6,
+     735.2
+    ],
+    "render_scale": 2.0
+   },
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "operating_income",
+   "year": 2024,
+   "gt": 5040128.0,
+   "selected": 5040128.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": {
+    "page": 6,
+    "bbox_px": [
+     912.3,
+     1024.0,
+     986.6,
+     1041.3
+    ],
+    "render_scale": 2.0
+   },
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "pretax_income",
+   "year": 2024,
+   "gt": 3143601.0,
+   "selected": 3143601.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "income_tax_expense",
+   "year": 2024,
+   "gt": 1272749.0,
+   "selected": 1272749.0,
+   "raw_source": "DERIVED",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": {
+    "page": 9,
+    "bbox_px": [
+     876.3,
+     698.3,
+     979.9,
+     714.6
+    ],
+    "render_scale": 2.0
+   },
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "net_income",
+   "year": 2024,
+   "gt": 4416350.0,
+   "selected": 4416350.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "operating_cash_flow",
+   "year": 2024,
+   "gt": 11329526.0,
+   "selected": 11329526.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "investing_cash_flow",
+   "year": 2024,
+   "gt": -26010844.0,
+   "selected": -26010844.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "financing_cash_flow",
+   "year": 2024,
+   "gt": 10246257.0,
+   "selected": 10246257.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "fixed_assets",
+   "year": 2023,
+   "gt": 76244954.0,
+   "selected": 76244954.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     1011.3,
+     403.8,
+     1087.9,
+     413.3
+    ],
+    "render_scale": 2.0
+   },
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "inventory",
+   "year": 2023,
+   "gt": 3623500.0,
+   "selected": 3623500.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     1020.2,
+     614.9,
+     1089.6,
+     624.1
+    ],
+    "render_scale": 2.0
+   },
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "accounts_receivable",
+   "year": 2023,
+   "gt": 7752132.0,
+   "selected": 7752132.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     1020.1,
+     636.7,
+     1089.7,
+     646.2
+    ],
+    "render_scale": 2.0
+   },
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "cash",
+   "year": 2023,
+   "gt": 10272954.0,
+   "selected": 10272954.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     1014.5,
+     724.1,
+     1089.7,
+     733.7
+    ],
+    "render_scale": 2.0
+   },
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "current_assets",
+   "year": 2023,
+   "gt": 28631278.0,
+   "selected": 28631278.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     1018.4,
+     747.7,
+     1089.6,
+     756.6
+    ],
+    "render_scale": 2.0
+   },
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "total_assets",
+   "year": 2023,
+   "gt": 134358541.0,
+   "selected": 134358541.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     1011.3,
+     769.5,
+     1087.9,
+     779.0
+    ],
+    "render_scale": 2.0
+   },
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "equity",
+   "year": 2023,
+   "gt": 36152951.0,
+   "selected": 36152951.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     1013.2,
+     1242.9,
+     1089.6,
+     1252.0
+    ],
+    "render_scale": 2.0
+   },
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "accounts_payable",
+   "year": 2023,
+   "gt": 25538574.0,
+   "selected": 25538574.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     1013.0,
+     1131.8,
+     1089.7,
+     1141.6
+    ],
+    "render_scale": 2.0
+   },
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "current_liabilities",
+   "year": 2023,
+   "gt": 64166416.0,
+   "selected": 64166416.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     1018.5,
+     1199.3,
+     1091.3,
+     1207.8
+    ],
+    "render_scale": 2.0
+   },
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "total_liabilities",
+   "year": 2023,
+   "gt": 98205590.0,
+   "selected": 98205590.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     1018.4,
+     1221.4,
+     1091.4,
+     1230.7
+    ],
+    "render_scale": 2.0
+   },
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "revenue",
+   "year": 2023,
+   "gt": 21899104.0,
+   "selected": 21899104.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": {
+    "page": 6,
+    "bbox_px": [
+     1030.7,
+     623.8,
+     1111.8,
+     642.0
+    ],
+    "render_scale": 2.0
+   },
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "cost_of_revenue",
+   "year": 2023,
+   "gt": -13227521.0,
+   "selected": -13227521.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": {
+    "page": 6,
+    "bbox_px": [
+     1033.7,
+     671.1,
+     1115.4,
+     691.2
+    ],
+    "render_scale": 2.0
+   },
+   "status": "CONFLICT",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "gross_profit",
+   "year": 2023,
+   "gt": 8671583.0,
+   "selected": 8671583.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": {
+    "page": 6,
+    "bbox_px": [
+     1040.7,
+     717.8,
+     1111.6,
+     734.8
+    ],
+    "render_scale": 2.0
+   },
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "operating_income",
+   "year": 2023,
+   "gt": 5451938.0,
+   "selected": 5451938.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": {
+    "page": 6,
+    "bbox_px": [
+     1040.8,
+     1024.2,
+     1111.6,
+     1040.8
+    ],
+    "render_scale": 2.0
+   },
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "pretax_income",
+   "year": 2023,
+   "gt": 6098328.0,
+   "selected": 6098328.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "income_tax_expense",
+   "year": 2023,
+   "gt": -373645.0,
+   "selected": -373645.0,
+   "raw_source": "DERIVED",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": {
+    "page": 9,
+    "bbox_px": [
+     1030.8,
+     844.3,
+     1124.8,
+     861.2
+    ],
+    "render_scale": 2.0
+   },
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "net_income",
+   "year": 2023,
+   "gt": 5724683.0,
+   "selected": 5724683.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "operating_cash_flow",
+   "year": 2023,
+   "gt": 8543713.0,
+   "selected": 8543713.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "investing_cash_flow",
+   "year": 2023,
+   "gt": -11935977.0,
+   "selected": -11935977.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "financing_cash_flow",
+   "year": 2023,
+   "gt": 6112704.0,
+   "selected": 6112704.0,
+   "raw_source": "SCANNED_OCR",
+   "source_layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  }
+ ],
+ "C_per_cell_vision_replay": [
+  {
+   "field": "fixed_assets",
+   "year": 2024,
+   "gt": 89842411.0,
+   "selected": 89842411.0,
+   "raw_source": "VISION_MODEL",
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "inventory",
+   "year": 2024,
+   "gt": 5732698.0,
+   "selected": 5732698.0,
+   "raw_source": "VISION_MODEL",
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "accounts_receivable",
+   "year": 2024,
+   "gt": 12985847.0,
+   "selected": 12985847.0,
+   "raw_source": "VISION_MODEL",
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "cash",
+   "year": 2024,
+   "gt": 6000305.0,
+   "selected": 6000305.0,
+   "raw_source": "VISION_MODEL",
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "current_assets",
+   "year": 2024,
+   "gt": 39472216.0,
+   "selected": 39472216.0,
+   "raw_source": "VISION_MODEL",
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "total_assets",
+   "year": 2024,
+   "gt": 169497056.0,
+   "selected": 20327981.0,
+   "raw_source": "VISION_MODEL",
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "OCR_RECOGNITION"
+  },
+  {
+   "field": "equity",
+   "year": 2024,
+   "gt": 27204878.0,
+   "selected": 27204878.0,
+   "raw_source": "VISION_MODEL",
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "accounts_payable",
+   "year": 2024,
+   "gt": 33524304.0,
+   "selected": null,
+   "raw_source": null,
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "NOT_CAPTURED",
+   "category": "NOT_CAPTURED"
+  },
+  {
+   "field": "current_liabilities",
+   "year": 2024,
+   "gt": 91625404.0,
+   "selected": 50666774.0,
+   "raw_source": "VISION_MODEL",
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "OCR_RECOGNITION"
+  },
+  {
+   "field": "total_liabilities",
+   "year": 2024,
+   "gt": 142292178.0,
+   "selected": 142292178.0,
+   "raw_source": "VISION_MODEL",
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "revenue",
+   "year": 2024,
+   "gt": 27727014.0,
+   "selected": 27727014.0,
+   "raw_source": "VISION_MODEL",
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "cost_of_revenue",
+   "year": 2024,
+   "gt": -18799203.0,
+   "selected": null,
+   "raw_source": null,
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "NOT_CAPTURED",
+   "category": "NOT_CAPTURED"
+  },
+  {
+   "field": "gross_profit",
+   "year": 2024,
+   "gt": 8927811.0,
+   "selected": 8927811.0,
+   "raw_source": "VISION_MODEL",
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "operating_income",
+   "year": 2024,
+   "gt": 5040128.0,
+   "selected": 11374911.0,
+   "raw_source": "VISION_MODEL",
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "CONFLICT",
+   "category": "OCR_RECOGNITION"
+  },
+  {
+   "field": "pretax_income",
+   "year": 2024,
+   "gt": 3143601.0,
+   "selected": null,
+   "raw_source": null,
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "NOT_CAPTURED",
+   "category": "NOT_CAPTURED"
+  },
+  {
+   "field": "income_tax_expense",
+   "year": 2024,
+   "gt": 1272749.0,
+   "selected": 1272749.0,
+   "raw_source": "VISION_MODEL",
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "CONFLICT",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "net_income",
+   "year": 2024,
+   "gt": 4416350.0,
+   "selected": 3143601.0,
+   "raw_source": "VISION_MODEL",
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "CONFLICT",
+   "category": "WRONG_ROW(=pretax_income 2024)"
+  },
+  {
+   "field": "operating_cash_flow",
+   "year": 2024,
+   "gt": 11329526.0,
+   "selected": null,
+   "raw_source": null,
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "NOT_CAPTURED",
+   "category": "NOT_CAPTURED"
+  },
+  {
+   "field": "investing_cash_flow",
+   "year": 2024,
+   "gt": -26010844.0,
+   "selected": null,
+   "raw_source": null,
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "NOT_CAPTURED",
+   "category": "NOT_CAPTURED"
+  },
+  {
+   "field": "financing_cash_flow",
+   "year": 2024,
+   "gt": 10246257.0,
+   "selected": null,
+   "raw_source": null,
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "NOT_CAPTURED",
+   "category": "NOT_CAPTURED"
+  },
+  {
+   "field": "fixed_assets",
+   "year": 2023,
+   "gt": 76244954.0,
+   "selected": 76244954.0,
+   "raw_source": "VISION_MODEL",
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "inventory",
+   "year": 2023,
+   "gt": 3623500.0,
+   "selected": 3623500.0,
+   "raw_source": "VISION_MODEL",
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "accounts_receivable",
+   "year": 2023,
+   "gt": 7752132.0,
+   "selected": 7752132.0,
+   "raw_source": "VISION_MODEL",
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "cash",
+   "year": 2023,
+   "gt": 10272954.0,
+   "selected": 10272954.0,
+   "raw_source": "VISION_MODEL",
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "current_assets",
+   "year": 2023,
+   "gt": 28631278.0,
+   "selected": 28631278.0,
+   "raw_source": "VISION_MODEL",
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "total_assets",
+   "year": 2023,
+   "gt": 134358541.0,
+   "selected": 14964829.0,
+   "raw_source": "VISION_MODEL",
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "OCR_RECOGNITION"
+  },
+  {
+   "field": "equity",
+   "year": 2023,
+   "gt": 36152951.0,
+   "selected": 36152951.0,
+   "raw_source": "VISION_MODEL",
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "accounts_payable",
+   "year": 2023,
+   "gt": 25538574.0,
+   "selected": null,
+   "raw_source": null,
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "NOT_CAPTURED",
+   "category": "NOT_CAPTURED"
+  },
+  {
+   "field": "current_liabilities",
+   "year": 2023,
+   "gt": 64166416.0,
+   "selected": 34039174.0,
+   "raw_source": "VISION_MODEL",
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "OCR_RECOGNITION"
+  },
+  {
+   "field": "total_liabilities",
+   "year": 2023,
+   "gt": 98205590.0,
+   "selected": 98205590.0,
+   "raw_source": "VISION_MODEL",
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "revenue",
+   "year": 2023,
+   "gt": 21899104.0,
+   "selected": 21899104.0,
+   "raw_source": "VISION_MODEL",
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "cost_of_revenue",
+   "year": 2023,
+   "gt": -13227521.0,
+   "selected": null,
+   "raw_source": null,
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "NOT_CAPTURED",
+   "category": "NOT_CAPTURED"
+  },
+  {
+   "field": "gross_profit",
+   "year": 2023,
+   "gt": 8671583.0,
+   "selected": 8671583.0,
+   "raw_source": "VISION_MODEL",
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "UNVERIFIED",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "operating_income",
+   "year": 2023,
+   "gt": 5451938.0,
+   "selected": 5081497.0,
+   "raw_source": "VISION_MODEL",
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "CONFLICT",
+   "category": "OCR_RECOGNITION"
+  },
+  {
+   "field": "pretax_income",
+   "year": 2023,
+   "gt": 6098328.0,
+   "selected": null,
+   "raw_source": null,
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "NOT_CAPTURED",
+   "category": "NOT_CAPTURED"
+  },
+  {
+   "field": "income_tax_expense",
+   "year": 2023,
+   "gt": -373645.0,
+   "selected": -373645.0,
+   "raw_source": "VISION_MODEL",
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "CONFLICT",
+   "category": "CORRECT_BLOCKED"
+  },
+  {
+   "field": "net_income",
+   "year": 2023,
+   "gt": 5724683.0,
+   "selected": 5724683.0,
+   "raw_source": "VISION_MODEL",
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "VERIFIED_EXACT",
+   "category": "CORRECT_DECISIVE"
+  },
+  {
+   "field": "operating_cash_flow",
+   "year": 2023,
+   "gt": 8543713.0,
+   "selected": null,
+   "raw_source": null,
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "NOT_CAPTURED",
+   "category": "NOT_CAPTURED"
+  },
+  {
+   "field": "investing_cash_flow",
+   "year": 2023,
+   "gt": -11935977.0,
+   "selected": null,
+   "raw_source": null,
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "NOT_CAPTURED",
+   "category": "NOT_CAPTURED"
+  },
+  {
+   "field": "financing_cash_flow",
+   "year": 2023,
+   "gt": 6112704.0,
+   "selected": null,
+   "raw_source": null,
+   "source_layers": null,
+   "local_bbox": null,
+   "status": "NOT_CAPTURED",
+   "category": "NOT_CAPTURED"
+  }
+ ]
+}

@@ -224,7 +224,8 @@ def _financialdata_to_parts(data) -> tuple[
 
 
 def _adaptive_local_reread_scan(raw: bytes, notes: list[str]) -> tuple[
-        list[dict[int, dict[str, float]]], list[list[dict]], dict]:
+        list[dict[int, dict[str, float]]], list[list[dict]], dict,
+        dict[int, bytes]]:
     """Local re-read for PURE scans (no text layer): the first
     LOCAL_REREAD_MAX_PAGES pages through local Indra OCR (zero API) — the
     degradation path when the vision layer is BLOCKED."""
@@ -243,7 +244,7 @@ def _adaptive_local_reread_scan(raw: bytes, notes: list[str]) -> tuple[
         if not indra_available():
             notes.append("Local-only degradation impossible: local Indra "
                          "OCR unavailable.")
-            return out_parts, out_caps, out_sources
+            return out_parts, out_caps, out_sources, {}
         pdf = pdfium.PdfDocument(io.BytesIO(raw))
         pages = list(range(1, min(len(pdf), LOCAL_REREAD_MAX_PAGES) + 1))
         import io as _io
@@ -316,7 +317,7 @@ def _adaptive_local_reread_scan(raw: bytes, notes: list[str]) -> tuple[
     except Exception as exc:
         notes.append(f"Local-only degradation failed: {type(exc).__name__}: "
                      f"{str(exc)[:120]}")
-    return out_parts, out_caps, out_sources
+    return out_parts, out_caps, out_sources, locals().get("pngs", {}) or {}
 
 
 def load_financial_data(file_name: str, raw: bytes, progress_cb=None, page_range=None, fast_mode: bool = False) -> FinancialData:
@@ -359,7 +360,7 @@ def load_financial_data(file_name: str, raw: bytes, progress_cb=None, page_range
                     kind=KIND_SCANNED_NO_TEXT, pages_total=0,
                     pages_with_text=0, quality_score=0.0,
                     text_layer_trusted=False)
-                local_parts, local_caps, local_sources =                     _adaptive_local_reread_scan(raw, notes)
+                local_parts, local_caps, local_sources, local_pngs =                     _adaptive_local_reread_scan(raw, notes)
                 if not local_parts:
                     raise
                 data = merge_parsed(local_parts, notes,
@@ -381,7 +382,7 @@ def load_financial_data(file_name: str, raw: bytes, progress_cb=None, page_range
                         data, raw,
                         getattr(data, "field_sources", {}) or {},
                         {"years": sorted(data.years)},
-                        [], [], notes)
+                        sorted(local_pngs), list(local_pngs.values()), notes)
                 except Exception:
                     pass
                 return data
@@ -712,6 +713,11 @@ def _looks_like_year_header(line: str, years: list[int]) -> bool:
     return True
 
 
+from src.extraction.normalizer import (  # noqa: E402
+    _CURRENT_SECTION_FIELDS, _NONCURRENT_SECTION_FIELDS, match_field,
+)
+
+
 def _parse_pdf_text_lines(lines: list[str]) -> list[pd.DataFrame]:
     """Fallback for text-only PDFs.
 
@@ -725,6 +731,11 @@ def _parse_pdf_text_lines(lines: list[str]) -> list[pd.DataFrame]:
     frames: list[pd.DataFrame] = []
     rows: list[list[object]] = []
     active_years: list[int] = []
+    # Statement-section context (المهمة: repeated same-label rows —
+    # «Creditors and other credit balances» prints under BOTH the non-current
+    # AND the current liabilities sections; the section header above the row
+    # disambiguates where the number belongs)
+    section: str | None = None
 
     def _flush() -> None:
         nonlocal rows
@@ -765,6 +776,17 @@ def _parse_pdf_text_lines(lines: list[str]) -> list[pd.DataFrame]:
             continue
         if not active_years:
             continue
+        low_line = line.lower()
+        if "non current" in low_line or "non-current" in low_line:
+            if "liabilities" in low_line:
+                section = "non-current-liabilities"
+            elif "assets" in low_line:
+                section = "non-current-assets"
+        elif "current" in low_line:
+            if "liabilities" in low_line:
+                section = "current-liabilities"
+            elif "assets" in low_line:
+                section = "current-assets"
         atoms = [(m.group(0), m.group(0).startswith("("))
                  for m in _NUMBER_TOKEN.finditer(line)]
         numbers = [n for n in (parse_number(t) for t, _p in atoms)
@@ -782,6 +804,17 @@ def _parse_pdf_text_lines(lines: list[str]) -> list[pd.DataFrame]:
         label = _NUMBER_TOKEN.sub(" ", line).strip(" -–—.:") or None
         if label is None or not numbers:
             continue
+        canonical = match_field(label)
+        if canonical is not None:
+            # section contradiction: a CURRENT-section field captured under
+            # the NON-CURRENT section (or the reverse) is a different
+            # printed line — the row is skipped, never mis-captured
+            if section == "non-current-liabilities" and canonical in (
+                    _CURRENT_SECTION_FIELDS):
+                continue
+            if section == "current-liabilities" and canonical in (
+                    _NONCURRENT_SECTION_FIELDS):
+                continue
         # Keep at most as many numbers as active year columns.
         rows.append([label] + numbers[: len(active_years)])
 

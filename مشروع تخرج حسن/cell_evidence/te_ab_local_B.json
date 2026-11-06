@@ -1,6 +1,6 @@
 {
  "route": "B",
- "seconds": 10.5,
+ "seconds": 13.8,
  "profile": {
   "kind": "SCANNED_NO_TEXT",
   "pages_total": 0,
@@ -20,7 +20,16 @@
    "layers": [
     "local_ocr"
    ],
-   "local_bbox": null
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     827.1,
+     405.1,
+     896.5,
+     413.9
+    ],
+    "render_scale": 2.0
+   }
   },
   "fixed_assets|2023": {
    "captured": 76244954.0,
@@ -30,27 +39,16 @@
    "layers": [
     "local_ocr"
    ],
-   "local_bbox": null
-  },
-  "total_assets|2024": {
-   "captured": 20327981.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
-   "source": "SCANNED_OCR",
-   "layers": [
-    "local_ocr"
-   ],
-   "local_bbox": null
-  },
-  "total_assets|2023": {
-   "captured": 14964829.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
-   "source": "SCANNED_OCR",
-   "layers": [
-    "local_ocr"
-   ],
-   "local_bbox": null
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     1011.3,
+     403.8,
+     1087.9,
+     413.3
+    ],
+    "render_scale": 2.0
+   }
   },
   "inventory|2024": {
    "captured": 5732698.0,
@@ -60,7 +58,16 @@
    "layers": [
     "local_ocr"
    ],
-   "local_bbox": null
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     835.9,
+     616.6,
+     898.3,
+     625.6
+    ],
+    "render_scale": 2.0
+   }
   },
   "inventory|2023": {
    "captured": 3623500.0,
@@ -70,7 +77,16 @@
    "layers": [
     "local_ocr"
    ],
-   "local_bbox": null
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     1020.2,
+     614.9,
+     1089.6,
+     624.1
+    ],
+    "render_scale": 2.0
+   }
   },
   "accounts_receivable|2024": {
    "captured": 12985847.0,
@@ -80,7 +96,16 @@
    "layers": [
     "local_ocr"
    ],
-   "local_bbox": null
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     828.8,
+     638.2,
+     900.0,
+     647.3
+    ],
+    "render_scale": 2.0
+   }
   },
   "accounts_receivable|2023": {
    "captured": 7752132.0,
@@ -90,47 +115,54 @@
    "layers": [
     "local_ocr"
    ],
-   "local_bbox": null
-  },
-  "operating_income|2024": {
-   "captured": 11374911.0,
-   "status": "CONFLICT",
-   "gate": "not_decisive",
-   "source": "SCANNED_OCR",
-   "layers": [
-    "local_ocr"
-   ],
-   "local_bbox": null
-  },
-  "operating_income|2023": {
-   "captured": 5081497.0,
-   "status": "CONFLICT",
-   "gate": "not_decisive",
-   "source": "SCANNED_OCR",
-   "layers": [
-    "local_ocr"
-   ],
-   "local_bbox": null
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     1020.1,
+     636.7,
+     1089.7,
+     646.2
+    ],
+    "render_scale": 2.0
+   }
   },
   "cash|2024": {
    "captured": 6000305.0,
-   "status": "CONFLICT",
+   "status": "UNVERIFIED",
    "gate": "not_decisive",
    "source": "SCANNED_OCR",
    "layers": [
     "local_ocr"
    ],
-   "local_bbox": null
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     834.1,
+     725.4,
+     898.3,
+     734.9
+    ],
+    "render_scale": 2.0
+   }
   },
   "cash|2023": {
-   "captured": 10.0,
-   "status": "CONFLICT",
+   "captured": 10272954.0,
+   "status": "UNVERIFIED",
    "gate": "not_decisive",
    "source": "SCANNED_OCR",
    "layers": [
     "local_ocr"
    ],
-   "local_bbox": null
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     1014.5,
+     724.1,
+     1089.7,
+     733.7
+    ],
+    "render_scale": 2.0
+   }
   },
   "current_assets|2024": {
    "captured": 39472216.0,
@@ -140,7 +172,16 @@
    "layers": [
     "local_ocr"
    ],
-   "local_bbox": null
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     827.0,
+     747.6,
+     900.1,
+     757.1
+    ],
+    "render_scale": 2.0
+   }
   },
   "current_assets|2023": {
    "captured": 28631278.0,
@@ -150,7 +191,54 @@
    "layers": [
     "local_ocr"
    ],
-   "local_bbox": null
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     1018.4,
+     747.7,
+     1089.6,
+     756.6
+    ],
+    "render_scale": 2.0
+   }
+  },
+  "total_assets|2024": {
+   "captured": 169497056.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     820.0,
+     769.3,
+     898.3,
+     778.7
+    ],
+    "render_scale": 2.0
+   }
+  },
+  "total_assets|2023": {
+   "captured": 134358541.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     1011.3,
+     769.5,
+     1087.9,
+     779.0
+    ],
+    "render_scale": 2.0
+   }
   },
   "retained_earnings|2024": {
    "captured": 4081823.0,
@@ -160,7 +248,16 @@
    "layers": [
     "local_ocr"
    ],
-   "local_bbox": null
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     834.1,
+     877.5,
+     898.3,
+     886.8
+    ],
+    "render_scale": 2.0
+   }
   },
   "retained_earnings|2023": {
    "captured": 13349113.0,
@@ -170,7 +267,16 @@
    "layers": [
     "local_ocr"
    ],
-   "local_bbox": null
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     1013.0,
+     876.2,
+     1089.7,
+     886.0
+    ],
+    "render_scale": 2.0
+   }
   },
   "equity|2024": {
    "captured": 27204878.0,
@@ -180,7 +286,16 @@
    "layers": [
     "local_ocr"
    ],
-   "local_bbox": null
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     820.0,
+     1242.8,
+     900.1,
+     1252.1
+    ],
+    "render_scale": 2.0
+   }
   },
   "equity|2023": {
    "captured": 36152951.0,
@@ -190,7 +305,16 @@
    "layers": [
     "local_ocr"
    ],
-   "local_bbox": null
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     1013.2,
+     1242.9,
+     1089.6,
+     1252.0
+    ],
+    "render_scale": 2.0
+   }
   },
   "long_term_debt|2024": {
    "captured": 33991082.0,
@@ -200,7 +324,16 @@
    "layers": [
     "local_ocr"
    ],
-   "local_bbox": null
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     827.1,
+     964.1,
+     900.1,
+     973.4
+    ],
+    "render_scale": 2.0
+   }
   },
   "long_term_debt|2023": {
    "captured": 19725744.0,
@@ -210,47 +343,16 @@
    "layers": [
     "local_ocr"
    ],
-   "local_bbox": null
-  },
-  "accounts_payable|2024": {
-   "captured": 15928525.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
-   "source": "SCANNED_OCR",
-   "layers": [
-    "local_ocr"
-   ],
-   "local_bbox": null
-  },
-  "accounts_payable|2023": {
-   "captured": 13567712.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
-   "source": "SCANNED_OCR",
-   "layers": [
-    "local_ocr"
-   ],
-   "local_bbox": null
-  },
-  "current_liabilities|2024": {
-   "captured": 50666774.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
-   "source": "SCANNED_OCR",
-   "layers": [
-    "local_ocr"
-   ],
-   "local_bbox": null
-  },
-  "current_liabilities|2023": {
-   "captured": 34039174.0,
-   "status": "UNVERIFIED",
-   "gate": "not_decisive",
-   "source": "SCANNED_OCR",
-   "layers": [
-    "local_ocr"
-   ],
-   "local_bbox": null
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     1013.1,
+     962.8,
+     1089.6,
+     972.1
+    ],
+    "render_scale": 2.0
+   }
   },
   "short_term_debt|2024": {
    "captured": 46745326.0,
@@ -260,7 +362,16 @@
    "layers": [
     "local_ocr"
    ],
-   "local_bbox": null
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     827.1,
+     1089.7,
+     900.0,
+     1098.7
+    ],
+    "render_scale": 2.0
+   }
   },
   "short_term_debt|2023": {
    "captured": 29590441.0,
@@ -270,7 +381,92 @@
    "layers": [
     "local_ocr"
    ],
-   "local_bbox": null
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     1013.2,
+     1088.5,
+     1089.5,
+     1097.1
+    ],
+    "render_scale": 2.0
+   }
+  },
+  "accounts_payable|2024": {
+   "captured": 33524304.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     828.8,
+     1133.2,
+     900.1,
+     1142.9
+    ],
+    "render_scale": 2.0
+   }
+  },
+  "accounts_payable|2023": {
+   "captured": 25538574.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     1013.0,
+     1131.8,
+     1089.7,
+     1141.6
+    ],
+    "render_scale": 2.0
+   }
+  },
+  "current_liabilities|2024": {
+   "captured": 91625404.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     827.2,
+     1199.2,
+     900.0,
+     1207.9
+    ],
+    "render_scale": 2.0
+   }
+  },
+  "current_liabilities|2023": {
+   "captured": 64166416.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     1018.5,
+     1199.3,
+     1091.3,
+     1207.8
+    ],
+    "render_scale": 2.0
+   }
   },
   "total_liabilities|2024": {
    "captured": 142292178.0,
@@ -280,7 +476,16 @@
    "layers": [
     "local_ocr"
    ],
-   "local_bbox": null
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     820.0,
+     1221.4,
+     900.1,
+     1230.7
+    ],
+    "render_scale": 2.0
+   }
   },
   "total_liabilities|2023": {
    "captured": 98205590.0,
@@ -290,7 +495,16 @@
    "layers": [
     "local_ocr"
    ],
-   "local_bbox": null
+   "local_bbox": {
+    "page": 5,
+    "bbox_px": [
+     1018.4,
+     1221.4,
+     1091.4,
+     1230.7
+    ],
+    "render_scale": 2.0
+   }
   },
   "revenue|2024": {
    "captured": 27727014.0,
@@ -300,7 +514,16 @@
    "layers": [
     "local_ocr"
    ],
-   "local_bbox": null
+   "local_bbox": {
+    "page": 6,
+    "bbox_px": [
+     902.2,
+     623.6,
+     986.9,
+     642.5
+    ],
+    "render_scale": 2.0
+   }
   },
   "revenue|2023": {
    "captured": 21899104.0,
@@ -310,7 +533,16 @@
    "layers": [
     "local_ocr"
    ],
-   "local_bbox": null
+   "local_bbox": {
+    "page": 6,
+    "bbox_px": [
+     1030.7,
+     623.8,
+     1111.8,
+     642.0
+    ],
+    "render_scale": 2.0
+   }
   },
   "cost_of_revenue|2024": {
    "captured": -18799203.0,
@@ -320,17 +552,35 @@
    "layers": [
     "local_ocr"
    ],
-   "local_bbox": null
+   "local_bbox": {
+    "page": 6,
+    "bbox_px": [
+     665.1,
+     671.3,
+     756.6,
+     691.2
+    ],
+    "render_scale": 2.0
+   }
   },
   "cost_of_revenue|2023": {
    "captured": -13227521.0,
-   "status": "UNVERIFIED",
+   "status": "CONFLICT",
    "gate": "not_decisive",
    "source": "SCANNED_OCR",
    "layers": [
     "local_ocr"
    ],
-   "local_bbox": null
+   "local_bbox": {
+    "page": 6,
+    "bbox_px": [
+     1033.7,
+     671.1,
+     1115.4,
+     691.2
+    ],
+    "render_scale": 2.0
+   }
   },
   "gross_profit|2024": {
    "captured": 8927811.0,
@@ -340,7 +590,16 @@
    "layers": [
     "local_ocr"
    ],
-   "local_bbox": null
+   "local_bbox": {
+    "page": 6,
+    "bbox_px": [
+     909.1,
+     718.3,
+     986.6,
+     735.2
+    ],
+    "render_scale": 2.0
+   }
   },
   "gross_profit|2023": {
    "captured": 8671583.0,
@@ -350,7 +609,54 @@
    "layers": [
     "local_ocr"
    ],
-   "local_bbox": null
+   "local_bbox": {
+    "page": 6,
+    "bbox_px": [
+     1040.7,
+     717.8,
+     1111.6,
+     734.8
+    ],
+    "render_scale": 2.0
+   }
+  },
+  "operating_income|2024": {
+   "captured": 5040128.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": {
+    "page": 6,
+    "bbox_px": [
+     912.3,
+     1024.0,
+     986.6,
+     1041.3
+    ],
+    "render_scale": 2.0
+   }
+  },
+  "operating_income|2023": {
+   "captured": 5451938.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": {
+    "page": 6,
+    "bbox_px": [
+     1040.8,
+     1024.2,
+     1111.6,
+     1040.8
+    ],
+    "render_scale": 2.0
+   }
   },
   "interest_expense|2024": {
    "captured": -5345736.0,
@@ -400,7 +706,16 @@
    "layers": [
     "local_ocr"
    ],
-   "local_bbox": null
+   "local_bbox": {
+    "page": 9,
+    "bbox_px": [
+     876.3,
+     698.3,
+     979.9,
+     714.6
+    ],
+    "render_scale": 2.0
+   }
   },
   "income_tax_expense|2023": {
    "captured": -373645.0,
@@ -410,7 +725,16 @@
    "layers": [
     "local_ocr"
    ],
-   "local_bbox": null
+   "local_bbox": {
+    "page": 9,
+    "bbox_px": [
+     1030.8,
+     844.3,
+     1124.8,
+     861.2
+    ],
+    "render_scale": 2.0
+   }
   },
   "net_income|2024": {
    "captured": 4416350.0,
@@ -551,6 +875,8 @@
  },
  "notes": [
   "Vision path BLOCKED: ExtractionError: Could not read the financial statements from this file. (AI vision extraction needs API keys (GEMINI_API_KEYS in .env) to read this scanned PDF.)",
-  "Local-only degradation: Indra re-read of pages 1-12 → 4 tables (layer local_ocr, zero API) — values stay GATED until a trusted layer or a human review confirms them."
+  "Local-only degradation: Indra re-read of pages 1-12 → 4 tables (layer local_ocr, zero API) — values stay GATED until a trusted layer or a human review confirms them.",
+  "Focused local verification: 1 fragment captures superseded by their complete row magnitudes (geometry-based selection).",
+  "Focused local verification: 81 local_ocr candidates from geometric segment reads (zero API) — cross-layer agreement attests, conflicts stay gated for human review."
  ]
 }

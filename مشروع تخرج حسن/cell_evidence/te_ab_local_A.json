@@ -1,0 +1,556 @@
+{
+ "route": "A",
+ "seconds": 9.9,
+ "profile": {
+  "kind": "SCANNED_NO_TEXT",
+  "pages_total": 0,
+  "pages_with_text": 0,
+  "quality_score": 0.0,
+  "text_layer_trusted": false,
+  "metrics": {},
+  "trust_threshold": 0.6
+ },
+ "extraction_source": "SCANNED_OCR",
+ "cells": {
+  "fixed_assets|2024": {
+   "captured": 89842411.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "fixed_assets|2023": {
+   "captured": 76244954.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "inventory|2024": {
+   "captured": 5732698.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "inventory|2023": {
+   "captured": 3623500.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "accounts_receivable|2024": {
+   "captured": 12985847.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "accounts_receivable|2023": {
+   "captured": 7752132.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "cash|2024": {
+   "captured": 6000305.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "cash|2023": {
+   "captured": 10.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "current_assets|2024": {
+   "captured": 39472216.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "current_assets|2023": {
+   "captured": 28631278.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "total_assets|2024": {
+   "captured": 169497056.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "total_assets|2023": {
+   "captured": 134358541.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "retained_earnings|2024": {
+   "captured": 4081823.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "retained_earnings|2023": {
+   "captured": 13349113.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "equity|2024": {
+   "captured": 27204878.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "equity|2023": {
+   "captured": 36152951.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "long_term_debt|2024": {
+   "captured": 33991082.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "long_term_debt|2023": {
+   "captured": 19725744.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "short_term_debt|2024": {
+   "captured": 46745326.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "short_term_debt|2023": {
+   "captured": 29590441.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "accounts_payable|2024": {
+   "captured": 33524304.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "accounts_payable|2023": {
+   "captured": 25538574.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "current_liabilities|2024": {
+   "captured": 91625404.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "current_liabilities|2023": {
+   "captured": 64166416.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "total_liabilities|2024": {
+   "captured": 142292178.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "total_liabilities|2023": {
+   "captured": 98205590.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "revenue|2024": {
+   "captured": 27727014.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "revenue|2023": {
+   "captured": 21899104.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "cost_of_revenue|2024": {
+   "captured": -18799203.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "cost_of_revenue|2023": {
+   "captured": -13227521.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "gross_profit|2024": {
+   "captured": 8927811.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "gross_profit|2023": {
+   "captured": 8671583.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "operating_income|2024": {
+   "captured": 5040128.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "operating_income|2023": {
+   "captured": 5451938.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "interest_expense|2024": {
+   "captured": -5345736.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "interest_expense|2023": {
+   "captured": -2117808.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "pretax_income|2024": {
+   "captured": 3143601.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "pretax_income|2023": {
+   "captured": 6098328.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "income_tax_expense|2024": {
+   "captured": 1272749.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "DERIVED",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "income_tax_expense|2023": {
+   "captured": -373645.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "DERIVED",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "net_income|2024": {
+   "captured": 4416350.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "net_income|2023": {
+   "captured": 5724683.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "operating_cash_flow|2024": {
+   "captured": 11329526.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "operating_cash_flow|2023": {
+   "captured": 8543713.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "capex|2024": {
+   "captured": -19927966.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "capex|2023": {
+   "captured": -9722228.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "investing_cash_flow|2024": {
+   "captured": -26010844.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "investing_cash_flow|2023": {
+   "captured": -11935977.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "total_debt|2024": {
+   "captured": 80736408.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "DERIVED",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "total_debt|2023": {
+   "captured": 49316185.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "DERIVED",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "financing_cash_flow|2024": {
+   "captured": 10246257.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "financing_cash_flow|2023": {
+   "captured": 6112704.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "SCANNED_OCR",
+   "layers": [
+    "local_ocr"
+   ],
+   "local_bbox": null
+  },
+  "borrowings_excl_leases|2024": {
+   "captured": 80736408.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "DERIVED",
+   "layers": [],
+   "local_bbox": null
+  },
+  "borrowings_excl_leases|2023": {
+   "captured": 49316185.0,
+   "status": "UNVERIFIED",
+   "gate": "not_decisive",
+   "source": "DERIVED",
+   "layers": [],
+   "local_bbox": null
+  }
+ },
+ "notes": [
+  "Vision path BLOCKED: ExtractionError: Could not read the financial statements from this file. (AI vision extraction needs API keys (GEMINI_API_KEYS in .env) to read this scanned PDF.)",
+  "Local-only degradation: Indra re-read of pages 1-12 → 4 tables (layer local_ocr, zero API) — values stay GATED until a trusted layer or a human review confirms them."
+ ]
+}

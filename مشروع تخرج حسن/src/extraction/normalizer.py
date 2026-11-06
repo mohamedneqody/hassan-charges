@@ -166,6 +166,55 @@ _FIELD_NEGATIVE_PATTERNS: dict[str, tuple[str, ...]] = {
 # A raw cell containing a percent sign is a ratio, never an absolute amount.
 _PERCENT_CHARS = ("%", "٪")
 
+# Component/flow QUALIFIERS that void a GENERIC alias match (المهمة: رقم
+# صحيح على مفهوم خاطئ). «Intangible assets» is not total_assets; «Cash
+# paid…» is not the cash balance; «equity securities» is not equity;
+# «Non Current Liabilities» is not current_liabilities. Generic only —
+# no document-specific words.
+_GENERIC_ALIAS_VETOES: dict[str, tuple[str, ...]] = {
+    "total_assets": ("intangible", "under construction", "right of use",
+                     "fixed assets", "financial assets", "non current",
+                     "non-current", "fair value", "amortized cost",
+                     "usufruct", "lease", "investments", "inventories",
+                     "receivable", "deferred"),
+    "cash": ("paid", "receipts", "purchases", "provided by", "used in",
+             "net change", "net increase", "net decrease", "beginning",
+             "collected", "at the end"),
+    "equity": ("securities", "fair value", "method", "changes in",
+               "statement of"),
+    "current_liabilities": ("non current", "non-current"),
+    "current_assets": ("non current", "non-current"),
+    "total_liabilities": ("non current", "non-current", "current"),
+}
+
+# A generic alias must match at WORD BOUNDARIES — «ebit» inside «debit»,
+# «debt» inside «debtors» are NOT matches.
+_WORD_BOUNDARY_CACHE: dict = {}
+
+
+def _alias_matches(norm: str, alias: str) -> bool:
+    import re as _re
+
+    pat = _WORD_BOUNDARY_CACHE.get(alias)
+    if pat is None:
+        pat = _re.compile(
+            r"(?<![a-z0-9])" + _re.escape(alias) + r"(?![a-z0-9])")
+        _WORD_BOUNDARY_CACHE[alias] = pat
+    return bool(pat.search(norm))
+
+
+# Statement-section context for repeated same-label rows (المهمة: «Creditors
+# and other credit balances» prints under BOTH the non-current AND the
+# current liabilities sections — the label alone is ambiguous; the section
+# header above the row disambiguates). Generic accounting structure.
+_CURRENT_SECTION_FIELDS = frozenset({
+    "accounts_payable", "current_liabilities", "inventory", "cash",
+    "accounts_receivable",
+})
+_NONCURRENT_SECTION_FIELDS = frozenset({
+    "long_term_debt", "non_current_lease_liabilities",
+})
+
 
 def match_field(label: object) -> str | None:
     """Map a raw line-item label to a canonical field, or None."""
@@ -180,10 +229,16 @@ def match_field(label: object) -> str | None:
     if norm in _ALIAS_LOOKUP:
         field = _ALIAS_LOOKUP[norm]
     else:
-        # Substring fallback: longest alias contained in the label.
+        # Substring fallback: longest alias contained in the label, at WORD
+        # BOUNDARIES («ebit» ⊄ «debit», «debt» ⊄ «debtors»), and generic
+        # aliases are VOIDED by component/flow qualifiers.
         for alias in _SORTED_ALIASES:
-            if len(alias) >= 4 and alias in norm:
+            if len(alias) >= 4 and _alias_matches(norm, alias):
                 field = _ALIAS_LOOKUP[alias]
+                vetoes = _GENERIC_ALIAS_VETOES.get(field)
+                if vetoes and any(v in norm for v in vetoes):
+                    field = None          # a qualified component, keep scanning
+                    continue
                 break
     # A "before tax" row is NEVER net income — however the OCR phrased it
     # ("صافي ربح العام قبل ضريبة الدخل" / "قبل الضريبة" are pretax, not net).

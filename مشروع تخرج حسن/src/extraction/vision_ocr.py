@@ -1461,6 +1461,7 @@ def _focused_local_cell_verification(data, raw, field_sources, doc_years,
     order = max((o for cands in data.candidates.values()
                  for ys in cands.values() for _v, o in ys), default=0) + 1
     appended = 0
+    _fragment_map: dict = {}      # (field, year) -> [(full_v, group_segs, page)]
     import threading
 
     tls = threading.local()
@@ -1522,16 +1523,29 @@ def _focused_local_cell_verification(data, raw, field_sources, doc_years,
                 self.conf = getattr(sg, "conf", None)
 
         segs = [_Seg(x) for x in segs]
-        # year columns from the printed year-header SEGMENTS
-        year_cols: dict[int, list[float]] = {}
+        # year COLUMNS from the printed year-header segments — every header
+        # segment is a column (a statement may print FOUR: 6-month and
+        # 3-month periods side by side, years repeating); column ranges are
+        # the midpoints between adjacent header centers
+        header_cols: list[tuple[int, float]] = []
         for seg in segs:
             y = _extract_year_token(seg.text or "")
             if y in years:
-                year_cols.setdefault(y, []).append(_cx(seg))
-        if not year_cols:
+                header_cols.append((y, _cx(seg)))
+        if not header_cols:
             continue
-        col_cx = {y: sum(v) / len(v) for y, v in year_cols.items()}
-        col_years = sorted(col_cx)
+        header_cols.sort(key=lambda t: t[1])
+        bounds = [(-1e18, None)]
+        for i in range(1, len(header_cols)):
+            mid = (header_cols[i - 1][1] + header_cols[i][1]) / 2.0
+            bounds[-1] = (bounds[-1][0], mid)
+            bounds.append((mid, None))
+
+        def _column_of(cx: float) -> int:
+            for i, (lo, hi) in enumerate(bounds):
+                if lo <= cx < (hi if hi is not None else 1e18):
+                    return i
+            return len(bounds) - 1
 
         # label segments for the page's target fields
         for seg in segs:
@@ -1546,29 +1560,42 @@ def _focused_local_cell_verification(data, raw, field_sources, doc_years,
             if fld is None:
                 continue
             band_cy, band_h = _cy(seg), max(seg.box[3] - seg.box[1], 4.0)
+            # tight ROW bounds (المهمة: حدود الصف): the label's own printed
+            # line only — a ±1.5×h band swallowed NEIGHBORING rows on the
+            # ~20px-pitch TE scan and mixed their numbers into the chain
             row_nums = [sg for sg in segs
                         if sg is not seg and _is_number_text(sg.text or "")
-                        and abs(_cy(sg) - band_cy) <= band_h * 1.5 + 6.0]
+                        and abs(_cy(sg) - band_cy) <= band_h * 0.75 + 3.0]
             if not row_nums:
                 continue
-            # chain horizontally-adjacent 1-3 digit fragments into magnitudes;
-            # each magnitude keeps ITS OWN segment group (for the bbox)
+            # chain horizontally-adjacent fragments WITHIN ONE COLUMN, then
+            # one magnitude per column (المهمة 3: أعمدة مالية هندسية)
             row_nums.sort(key=lambda sg: sg.box[0])
-            mags: list[tuple[float, float, list]] = []   # (value, cx, group)
-            cur: list = []
-            for sg in row_nums + [None]:
-                if sg is not None and cur and _chains_box(cur[-1], sg):
-                    cur.append(sg)
-                else:
-                    if cur:
-                        joined = " ".join(x.text.strip() for x in cur)
-                        v = parse_number(joined)
-                        if v is not None:
-                            mags.append((v, sum(_cx(x) for x in cur)
-                                         / len(cur), list(cur)))
-                    cur = [sg] if sg is not None else []
-            for v, cx, grp in mags:
-                year = min(col_years, key=lambda yy: abs(col_cx[yy] - cx))
+            col_nums: dict[int, list] = {}
+            for sg in row_nums:
+                col_nums.setdefault(_column_of(_cx(sg)), []).append(sg)
+            mags: list[tuple[float, int, float, list]] = []   # (value, col, cx, group)
+            for col_i, col_segs in sorted(col_nums.items()):
+                cur: list = []
+                for sg in col_segs + [None]:
+                    if sg is not None and cur and _chains_box(cur[-1], sg):
+                        cur.append(sg)
+                    else:
+                        if cur:
+                            joined = " ".join(x.text.strip() for x in cur)
+                            v = parse_number(joined)
+                            if v is not None:
+                                mags.append((v, col_i, sum(_cx(x) for x in cur)
+                                             / len(cur), list(cur)))
+                        cur = [sg] if sg is not None else []
+            # drop leading note-REFERENCE magnitudes per column: «(19)» before
+            # the real year values is a note number, never a statement amount
+            for col_i in list(col_nums):
+                col_mags = [m for m in mags if m[1] == col_i]
+                if len(col_mags) > 1 and abs(col_mags[0][0]) <= 999:
+                    mags = [m for m in mags if m is not col_mags[0]]
+            for v, col_i, cx, grp in mags:
+                year = header_cols[col_i][0]
                 if (fld, year) not in targets:
                     continue
                 # the provenance bbox is the VALUE segment's own box (the
@@ -1587,8 +1614,49 @@ def _focused_local_cell_verification(data, raw, field_sources, doc_years,
                     .append({"page": page,
                              "bbox_px": [round(x, 1) for x in ubox],
                              "render_scale": render_scale})
+                if len(grp) > 1:
+                    _fragment_map.setdefault((fld, year), []).append(
+                        (v, list(grp), page))
                 order += 1
                 appended += 1
+    # Fragment-superseding selection (المهمة: تصحيح اختيار المرشح بهندسة
+    # الصف — لا GT): when a cell's captured value is EXACTLY one FRAGMENT
+    # of a chained magnitude the pass read on the SAME page row (an OCR
+    # split like «10» + «272 954»), the complete magnitude supersedes the
+    # fragment. The fragment stays in candidates/replaced_values — nothing
+    # is hidden, and the cell remains on the normal verification ladder.
+    superseded = 0
+    for (fld, year), info in list(_fragment_map.items()):
+        base_v = data.values.get(fld, {}).get(year)
+        if base_v is None:
+            continue
+        for full_v, frags, page in info:
+            frag_vals = []
+            for f in frags:
+                try:
+                    frag_vals.append(abs(parse_number(
+                        f.text.strip().replace(" ", "") or "0") or 0))
+                except Exception:
+                    frag_vals.append(0.0)
+            if any(abs(base_v - fv) <= max(1.0, 1e-9 * max(abs(base_v), 1))
+                   for fv in frag_vals) and abs(base_v - full_v) > 1.0:
+                data.replaced_values = getattr(data, "replaced_values", {})
+                data.replaced_values.setdefault((fld, year), []).append(base_v)
+                data.values.setdefault(fld, {})[year] = full_v
+                data.candidates.setdefault(fld, {}).setdefault(year, []) \
+                    .append((full_v, 10 ** 9))
+                data.notes.append(
+                    f"Row-geometry selection: '{fld}' in {year} — the "
+                    f"captured {base_v:,.0f} is a FRAGMENT of the printed "
+                    f"magnitude {full_v:,.0f} (segments chained by box "
+                    f"adjacency on page {page}); fragment preserved in "
+                    "candidates.")
+                superseded += 1
+                break
+    if superseded and notes is not None:
+        notes.append(f"Focused local verification: {superseded} fragment "
+                     "captures superseded by their complete row magnitudes "
+                     "(geometry-based selection).")
     if appended:
         if notes is not None:
             notes.append(
@@ -1607,17 +1675,19 @@ def _is_number_text(text: str) -> bool:
 
 
 def _chains_box(prev_seg, next_seg) -> bool:
-    """Horizontal chaining: same row, adjacent boxes, 1-3 digit fragments
-    («169» «497» «056»)."""
-    import re as _re
-
+    """Horizontal chaining: same row, adjacent boxes — 1-3 digit fragments
+    («169» «497» «056») AND an OCR-split magnitude whose tail kept its
+    groups («10» + «272 954» = «10 272 954»). The JOINED string must parse
+    as a valid magnitude (checked by the caller)."""
     gap = next_seg.box[0] - prev_seg.box[2]
     h = max(prev_seg.box[3] - prev_seg.box[1], 4.0)
     if gap > h * 1.6 or gap < -h * 0.5:
         return False
     pt = (prev_seg.text or "").strip()
     nt = (next_seg.text or "").strip()
-    return bool(_re.fullmatch(r"\d{1,3}", pt) and _re.fullmatch(r"\d{1,3}", nt))
+    import re as _re
+
+    return bool(_re.fullmatch(r"[\d ]+", pt) and _re.fullmatch(r"[\d ]+", nt))
 
 
 def _chains(prev_tok: str, next_tok: str) -> bool:

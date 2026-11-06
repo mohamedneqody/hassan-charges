@@ -1,0 +1,46 @@
+{
+  "document": "efg_standalone_fy2024.pdf",
+  "sha256": "47ff4cd38776aa3848a1ce66fe11dc587ce9c99bc5e8e26018b94b83bc7ee7c0",
+  "source": "https://efgholding.com/uploads/EFG_Holding_Standalone_Financial_Statement_FY_2024_9d60a658ae.pdf",
+  "company": "EFG Holding Company (Egyptian Joint Stock Company)",
+  "scope": "SEPARATE (standalone) financial statements FY2024 — translation from Arabic; born-digital PDF (52/55 pages with text layer); financial-services holding company — statement vocabulary differs fundamentally from industrial companies (investment income, no inventory, no cost of goods sold)",
+  "currency": "EGP thousands (in EGP Thousands printed on every statement)",
+  "fiscal_year_end": "31 December",
+  "gt_built_by": "visual reading of rendered pages 5 (financial position) and 6 (income statement) + text-layer verification of page 9 (cash flows)",
+  "frozen_before_pipeline_run": true,
+  "no_derived_gt": "every cell below is a PRINTED line — no derived ground truth",
+  "cells": {
+    "2024": {
+      "total_assets":         {"value": 25284931, "page": 5},
+      "total_liabilities":    {"value": 14541406, "page": 5, "note": "PRINTED line"},
+      "equity":               {"value": 10743525, "page": 5, "note": "printed as 'Total equity'"},
+      "current_assets":       {"value": 15164132, "page": 5},
+      "current_liabilities":  {"value": 12670105, "page": 5},
+      "cash":                 {"value": 1725533, "page": 5, "note": "'Cash and cash equivalents' current assets"},
+      "accounts_payable":     {"value": 1718752, "page": 5, "note": "'Creditors and other credit balances' under CURRENT liabilities section"},
+      "fixed_assets":         {"value": 239596, "page": 5},
+      "revenue":              {"value": 4242232, "page": 6, "note": "printed 'Total revenues' — a holding-company revenue summary"},
+      "pretax_income":        {"value": 413031, "page": 6, "note": "'Profit before tax'"},
+      "net_income":           {"value": -345735, "page": 6, "note": "printed '(Loss) profit of the year' — NEGATIVE (loss)"},
+      "operating_cash_flow":  {"value": -633867, "page": 9, "printed": "( 633 867)"},
+      "investing_cash_flow":  {"value": -205906, "page": 9, "printed": "( 205 906)"},
+      "financing_cash_flow":  {"value": -1941524, "page": 9, "printed": "( 1 941 524)"}
+    },
+    "2023": {
+      "total_assets":         {"value": 19041842, "page": 5},
+      "total_liabilities":    {"value": 7835622, "page": 5},
+      "equity":               {"value": 11206220, "page": 5},
+      "current_assets":       {"value": 10929877, "page": 5},
+      "current_liabilities":  {"value": 7040571, "page": 5},
+      "cash":                 {"value": 1351067, "page": 5},
+      "accounts_payable":     {"value": 1042716, "page": 5},
+      "fixed_assets":         {"value": 225807, "page": 5},
+      "revenue":              {"value": 2432823, "page": 6},
+      "pretax_income":        {"value": 674335, "page": 6},
+      "net_income":           {"value": 426886, "page": 6},
+      "operating_cash_flow":  {"value": 2903, "page": 9, "note": "printed '2 903' — positive, tiny"},
+      "investing_cash_flow":  {"value": -1237, "page": 9},
+      "financing_cash_flow":  {"value": -842367, "page": 9}
+    }
+  }
+}

@@ -1,0 +1,39 @@
+{
+ "step1_extraction": {
+  "captured_cells": 56,
+  "automatic_decisive": 40,
+  "extraction_source": "VISION_MODEL",
+  "profile": {
+   "kind": "SCANNED_NO_TEXT",
+   "text_layer_trusted": false,
+   "note": "pure scan — every value read by the vision model layer; same-layer agreement is an echo until an independent layer (local OCR) confirms"
+  }
+ },
+ "step2_human_review": {
+  "chain_integrity": true,
+  "reviews_recorded": 40,
+  "human_verified_cells": 40,
+  "chain_path": "C:\\Users\\zbook\\AppData\\Local\\Temp\\te_review_ty4a77xo\\human_reviews.json",
+  "reviewer": "test-reviewer (PBKDF2 PIN + 5 confirmations + HMAC chain)"
+ },
+ "step3_indicators": {
+  "automatic_only_decisive": 8,
+  "human_assisted_decisive": 40,
+  "health_score": 52.5,
+  "health_coverage": 1.0,
+  "health_policy": "تغطية البيانات 100% | الركائز المحسوبة: ['cash', 'leverage', 'liquidity', 'profitability'] | المحجوبة/الناقصة: لا شيء | درجة كلية",
+  "debt_ratio_2024": 0.8394964570948064,
+  "current_ratio_2024": 0.4307999122164853,
+  "roe_2024": 13.940976418241856
+ },
+ "step4_report": {
+  "excel": "D:\\hassan_charges\\مشروع تخرج حسن\\cell_evidence\\te_report\\te_analysis.xlsx",
+  "excel_bytes": 16893,
+  "html": "D:\\hassan_charges\\مشروع تخرج حسن\\cell_evidence\\te_report\\te_analysis.html",
+  "html_has_human_trail": true
+ },
+ "separation": {
+  "automatic_verification": "same-layer local_ocr reads — ALL gated (decisive 0) per the correlated-source rule",
+  "human_verification": "40 printed values attested through the documented review chain (PIN + confirmations + HMAC)"
+ }
+}

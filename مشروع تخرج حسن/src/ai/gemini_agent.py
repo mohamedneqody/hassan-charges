@@ -268,10 +268,12 @@ def _audit_comments(
     missing = [m["metric"] for m in payload["metrics"] if m["metric"] not in commented]
 
     suspects: list[tuple[str, str]] = []
+    global_allowed = _global_allowed_numbers(payload)
     for metric, comment in analysis.ratio_comments:
-        allowed = allowed_by_metric.get(metric)
-        if allowed is None:
-            continue
+        # a comment on a metric Python never computed is audited against
+        # the GLOBAL allowlist (previously it was silently skipped — a
+        # hallucinated metric name with an invented number survived)
+        allowed = allowed_by_metric.get(metric) or global_allowed
         for value in _float_tokens(comment):
             if not _is_allowed(value, allowed):
                 suspects.append((metric, comment))

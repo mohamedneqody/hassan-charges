@@ -80,6 +80,13 @@ class NotesIndex:
             text = (pages_text[page] or "").strip()
             if not text:
                 continue
+            # Input hygiene (تدقيق RAG — المهمة 3): Indra's markdown wraps
+            # tables in HTML tags; the tag tokens («td», «tr», «th»)
+            # pollute the TF-IDF space and push the PRIMARY statement
+            # pages out of every retrieval. Strip the tags BEFORE chunking
+            # so the printed numbers become the searchable content.
+            text = re.sub(r"<[^>]+>", " ", text)
+            text = re.sub(r"[ 	]{2,}", " ", text)
             # split into paragraph-like chunks (blank lines / table rows kept
             # together per block); a chunk ≈ 3-6 lines keeps sources precise
             blocks = [b.strip() for b in re.split(r"\n\s*\n", text) if b.strip()]

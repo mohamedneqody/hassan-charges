@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>معاينة التصميم — محلل القوائم المالية | MVP Preview</title>
+<style>
+:root{
+  --bg:#f4f6fb; --panel:#ffffff; --ink:#1a2332; --ink2:#5a6a7e;
+  --brand:#0e5a8a; --brand2:#1179b8; --accent:#0e9f8a;
+  --ok:#0e9f6e; --okbg:#e6f7f0; --human:#1179b8; --humanbg:#e8f2fb;
+  --warn:#c77700; --warnbg:#fff4e0; --bad:#c0392b; --badbg:#fdecea;
+  --conv:#7c5cbf; --convbg:#f1ebfb; --line:#e3e8f0;
+  --sidebar:#122b3f; --sidebar2:#0c2032; --side-ink:#c8d6e2;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Segoe UI",Tahoma,"Noto Kufi Arabic",sans-serif;background:var(--bg);color:var(--ink);font-size:14.5px}
+.layout{display:flex;min-height:100vh}
+/* ── sidebar ── */
+.side{width:232px;background:linear-gradient(180deg,var(--sidebar),var(--sidebar2));color:var(--side-ink);padding:18px 0;position:fixed;top:0;bottom:0;right:0;overflow-y:auto}
+.brand{padding:4px 20px 16px;border-bottom:1px solid rgba(255,255,255,.08)}
+.brand h1{font-size:17px;color:#fff;font-weight:700}
+.brand small{font-size:11px;opacity:.7;display:block;margin-top:3px}
+.nav{margin-top:14px}
+.nav a{display:flex;align-items:center;gap:10px;padding:11px 20px;color:var(--side-ink);text-decoration:none;font-size:13.5px;border-right:3px solid transparent;cursor:pointer}
+.nav a:hover{background:rgba(255,255,255,.06)}
+.nav a.on{background:rgba(17,121,184,.25);border-right-color:var(--brand2);color:#fff;font-weight:600}
+.nav .ico{width:20px;text-align:center}
+.nav .tag{margin-right:auto;font-size:10px;background:var(--bad);color:#fff;padding:1px 7px;border-radius:8px}
+.lang{padding:14px 20px;border-top:1px solid rgba(255,255,255,.08);margin-top:10px}
+.lang button{width:100%;padding:7px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:7px;cursor:pointer;font-size:12.5px}
+.demo-flag{margin:12px 20px 0;background:var(--warn);color:#fff;font-size:11px;padding:7px 10px;border-radius:7px;line-height:1.5}
+/* ── main ── */
+.main{margin-right:232px;flex:1;padding:22px 28px;min-width:0}
+.topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px}
+.topbar h2{font-size:21px}
+.topbar .file{font-size:12.5px;color:var(--ink2)}
+.pill{font-size:11.5px;padding:4px 12px;border-radius:14px;font-weight:600}
+.pill.prelim{background:var(--warnbg);color:var(--warn);border:1px solid #f0d9a8}
+.pill.final{background:var(--okbg);color:var(--ok)}
+.view{display:none}.view.on{display:block;animation:fade .25s}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1}}
+/* cards & grids */
+.grid{display:grid;gap:14px}
+.g4{grid-template-columns:repeat(4,1fr)}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g2{grid-template-columns:2fr 1fr}
+@media(max-width:1200px){.g4{grid-template-columns:repeat(2,1fr)}.g3,.g2{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:16px 18px}
+.card h3{font-size:13px;color:var(--ink2);font-weight:600;margin-bottom:8px}
+.kpi .v{font-size:23px;font-weight:700;letter-spacing:.2px}
+.kpi .u{font-size:11px;color:var(--ink2);margin-top:2px}
+.kpi .d{font-size:12px;margin-top:6px;font-weight:600}
+.up{color:var(--ok)}.down{color:var(--bad)}
+.sec{margin:22px 0 12px;font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px}
+.sec small{font-weight:400;color:var(--ink2);font-size:12px}
+/* badges */
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;padding:2.5px 9px;border-radius:10px;font-weight:600;white-space:nowrap}
+.b-auto{background:var(--okbg);color:var(--ok)}
+.b-human{background:var(--humanbg);color:var(--human)}
+.b-pend{background:var(--warnbg);color:var(--warn)}
+.b-conf{background:var(--badbg);color:var(--bad)}
+.b-conv{background:var(--convbg);color:var(--conv)}
+/* tables */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:#f0f4f9;color:var(--ink2);font-size:11.5px;padding:8px 10px;text-align:right;font-weight:600;position:sticky;top:0}
+td{padding:8px 10px;border-top:1px solid var(--line)}
+tr:hover td{background:#f7fafd}
+.num{font-variant-numeric:tabular-nums;font-weight:600}
+.tblwrap{background:var(--panel);border:1px solid var(--line);border-radius:11px;overflow:auto;max-height:520px}
+/* health */
+.hwrap{display:flex;gap:22px;align-items:center;flex-wrap:wrap}
+.gauge{width:150px;height:150px;border-radius:50%;background:conic-gradient(var(--warn) 0 189deg,#e8ecf2 189deg 360deg);display:grid;place-items:center;margin:auto}
+.gauge>div{width:110px;height:110px;background:var(--panel);border-radius:50%;display:grid;place-items:center;text-align:center}
+.gauge b{font-size:30px;color:var(--warn)}
+.gauge small{font-size:10.5px;color:var(--ink2)}
+.pillar{margin:9px 0}
+.pillar .bar{height:8px;background:#e8ecf2;border-radius:5px;overflow:hidden}
+.pillar .bar i{display:block;height:100%;border-radius:5px}
+.pillar .lbl{display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px}
+/* gemini */
+.comment{border-right:3px solid var(--brand2);background:var(--panel);border-radius:8px;padding:10px 14px;margin-bottom:9px;font-size:13.5px}
+.comment .who{font-size:11px;color:var(--ink2);margin-bottom:3px;display:flex;gap:8px;align-items:center}
+.comment .fact,.comment .infer{font-size:9.5px;padding:1px 7px;border-radius:8px;font-weight:600}
+.fact{background:var(--okbg);color:var(--ok)}.infer{background:#fdf1e0;color:#b06a00}
+.ai-head{display:flex;gap:10px;align-items:center;background:linear-gradient(90deg,#0e5a8a,#0e9f8a);color:#fff;border-radius:11px;padding:13px 18px;margin-bottom:14px}
+/* chat */
+.chatbox{background:var(--panel);border:1px solid var(--line);border-radius:11px;display:flex;flex-direction:column;height:520px}
+.chatlog{flex:1;overflow-y:auto;padding:16px}
+.msg{margin-bottom:13px;display:flex;gap:9px}
+.msg .bub{max-width:78%;padding:9px 13px;border-radius:11px;font-size:13.5px;line-height:1.7}
+.msg.u{justify-content:flex-end}
+.msg.u .bub{background:var(--brand2);color:#fff;border-bottom-left-radius:3px}
+.msg.a .bub{background:#f0f4f9;border:1px solid var(--line);border-bottom-right-radius:3px}
+.cite{display:inline-block;font-size:10.5px;background:#e4ecf5;color:var(--brand);border-radius:5px;padding:1px 7px;margin:5px 2px 0;cursor:pointer}
+.cite:hover{background:#d3e2f0}
+.chatin{display:flex;gap:8px;padding:11px;border-top:1px solid var(--line)}
+.chatin input{flex:1;padding:9px 13px;border:1px solid var(--line);border-radius:8px;font-family:inherit;font-size:13.5px}
+.chatin button{padding:9px 20px;background:var(--brand2);color:#fff;border:0;border-radius:8px;cursor:pointer;font-weight:600}
+.chips{display:flex;gap:7px;padding:0 11px 11px;flex-wrap:wrap}
+.chips button{font-size:11.5px;padding:4px 11px;border-radius:12px;border:1px solid var(--line);background:#f7f9fc;cursor:pointer;color:var(--ink2)}
+/* review */
+.rrow{display:flex;align-items:center;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:11px 15px;margin-bottom:9px;flex-wrap:wrap}
+.rrow .fld{font-weight:700;min-width:170px}
+.rrow .vals{display:flex;gap:14px;font-size:12.5px;color:var(--ink2)}
+.rrow .btns{margin-right:auto;display:flex;gap:7px}
+.btn{padding:6px 15px;border-radius:7px;border:0;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit}
+.btn.ok{background:var(--ok);color:#fff}.btn.hum{background:var(--human);color:#fff}.btn.no{background:var(--bad);color:#fff}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink2)}
+/* reports + modal */
+.rep{display:flex;gap:14px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:15px 18px;margin-bottom:10px}
+.rep .ico{font-size:30px}
+.rep b{display:block}.rep small{color:var(--ink2)}
+.rep .dl{margin-right:auto}
+.modal{display:none;position:fixed;inset:0;background:rgba(10,20,35,.55);z-index:50;place-items:center}
+.modal.on{display:grid}
+.mbox{background:#fff;border-radius:13px;width:min(560px,92vw);padding:20px 22px}
+.mbox h4{margin-bottom:10px}
+.mthumb{background:#122b3f;color:#8fb3cc;border-radius:9px;height:170px;display:grid;place-items:center;font-size:12px;margin:9px 0;text-align:center;padding:10px;line-height:1.7}
+.mclose{float:left;background:none;border:0;font-size:19px;cursor:pointer;color:var(--ink2)}
+.foot{margin-top:26px;font-size:11px;color:var(--ink2);text-align:center}
+.dir-ltr{direction:ltr;text-align:left}
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="side">
+    <div class="brand"><h1>📊 محلل القوائم المالية</h1><small>نسخة معاينة التصميم — Preview</small></div>
+    <div class="demo-flag">🧪 بيانات تجريبية من تشغيل TE الموثق (40 خانة بشري-معتمدة) — لأغراض مراجعة التصميم فقط</div>
+    <nav class="nav">
+      <a class="on" data-v="dash"><span class="ico">◆</span> لوحة القيادة</a>
+      <a data-v="stmts"><span class="ico">▤</span> القوائم المالية</a>
+      <a data-v="kpi"><span class="ico">∿</span> المؤشرات المالية</a>
+      <a data-v="health"><span class="ico">♥</span> Health Score</a>
+      <a data-v="gemini"><span class="ico">✦</span> تفسير Gemini</a>
+      <a data-v="chat"><span class="ico">💬</span> محادثة المستند</a>
+      <a data-v="review"><span class="ico">✎</span> مراجعة البيانات <span class="tag">12</span></a>
+      <a data-v="reports"><span class="ico">⇩</span> التقارير</a>
+    </nav>
+    <div class="lang">
+      <button onclick="alert('Preview: EN layout mirrors this RTL shell')">English (معاينة)</button>
+    </div>
+  </aside>
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <h2 id="vtitle">لوحة القيادة</h2>
+        <div class="file">📄 te_standalone_h1_2024.pdf · Telecom Egypt · 30 صفحة · فترة المقارنة 2023 → 2024</div>
+      </div>
+      <span class="pill prelim" id="statuspill">⚠ تقرير أولي — 12 بندًا حرجًا بانتظار المراجعة</span>
+    </div>
+
+    <!-- ═══ 1. DASHBOARD ═══ -->
+    <section class="view on" id="v-dash">
+      <div class="grid g4">
+        <div class="card kpi"><h3>الإيرادات 2024</h3><div class="v num">27.73 <small style="font-size:11px">مليار ج.م</small></div><div class="d up">▲ 26.6% عن 2023 <span class="badge b-auto">آلي عبر-طبقتين</span></div></div>
+        <div class="card kpi"><h3>صافي الربح 2024</h3><div class="v num">4.42 <small style="font-size:11px">مليار ج.م</small></div><div class="d down">▼ 22.8% عن 2023 <span class="badge b-human">معتمد بشريًا</span></div></div>
+        <div class="card kpi"><h3>إجمالي الأصول</h3><div class="v num">169.50 <small style="font-size:11px">مليار ج.م</small></div><div class="d up">▲ 26.1% <span class="badge b-auto">آلي عبر-طبقتين</span></div></div>
+        <div class="card kpi"><h3>نسبة الدين</h3><div class="v num">0.839</div><div class="d down">▲ من 0.583 — رافعة مرتفعة <span class="badge b-human">معتمد بشريًا</span></div></div>
+      </div>
+      <div class="sec">توزيع حالات الخانات الأربعين <small>كل رقم يظهر بحالته الفعلية</small></div>
+      <div class="grid g3">
+        <div class="card"><h3>حسب حالة التحقق</h3>
+          <div class="pillar"><div class="lbl"><span>آلي — تصديق عبر-طبقتين</span><b>17</b></div><div class="bar"><i style="width:42.5%;background:var(--ok)"></i></div></div>
+          <div class="pillar"><div class="lbl"><span>بشري — عبر سلسلة المراجعة</span><span>12</span></div><div class="bar"><i style="width:30%;background:var(--human)"></i></div></div>
+          <div class="pillar"><div class="lbl"><span>يحتاج مراجعة (أحادي الطبقة)</span><span>9</span></div><div class="bar"><i style="width:22.5%;background:var(--warn)"></i></div></div>
+          <div class="pillar"><div class="lbl"><span>تعارض — محجوب</span><span>2</span></div><div class="bar"><i style="width:5%;background:var(--bad)"></i></div></div>
+          <div style="font-size:11.5px;color:var(--ink2);margin-top:8px">40/40 ملتقطة · Signed Exact للآلي = 38/40 (95%) · FA = 0</div>
+        </div>
+        <div class="card"><h3>صافي الربح: مسار 2024</h3>
+          <div style="font-size:12.5px;line-height:2">
+            الربح قبل الضريبة <b class="num">3,143,601</b> <span class="badge b-conv">اتفاقية: مطبوع</span><br>
+            الضرائب (ائتمان) <b class="num">+1,272,749</b> <span class="badge b-conv">اتفاقية إشارة</span><br>
+            <b>صافي الربح <span class="num">4,416,350</span></b> <span class="badge b-human">بشري</span><br>
+            <span style="color:var(--ink2);font-size:11.5px">⚠ الائتمان الضريبي (+1.27M) يفسّر ارتفاع الصافي عن قبل الضريبة — معلن في التقرير</span>
+          </div>
+        </div>
+        <div class="card"><h3>Beneish M-Score</h3>
+          <div style="padding:14px 0;text-align:center">
+            <div style="font-size:26px;color:var(--ink2)">— غير قابل للحساب</div>
+            <div style="font-size:12px;color:var(--ink2);margin-top:8px;line-height:1.7">SGAI (مصروفات البيع والإدارة) غير موجود ضمن الخانات الموثقة لهذا المستند.<br>المكونات الستة المتاحة معروضة في تبويب المؤشرات.</div>
+          </div>
+        </div>
+      </div>
+      <div class="sec">آخر عمليات النظام</div>
+      <div class="card" style="font-size:12.5px;color:var(--ink2);line-height:2">
+        ✓ استخراج: 40/40 خانة ملتقطة (رؤية + محلي عبر-طبقتين) · ✓ سلسلة المراجعة: 40 إقرارًا موثقًا (HMAC سليم) · ✓ Gemini: 44 تعليقًا + 4 توصيات (صفر أرقام مختلقة بعد المدقق) · ✓ RAG: 55/55 صفحة إيضاحات مفهرسة · ✓ PDF: 6 صفحات (257KB)
+      </div>
+    </section>
+
+    <!-- ═══ 2. STATEMENTS ═══ -->
+    <section class="view" id="v-stmts">
+      <div class="sec" style="margin-top:0">قائمة المركز المالي — كما قُرئت من الصفحة 5 <small>انقر أي رقم لفتح مصدره من المستند</small></div>
+      <div class="tblwrap">
+        <table>
+          <thead><tr><th>البند</th><th>الإيضاح</th><th>31/12/2024</th><th>31/12/2023</th><th>الحالة</th><th>المصدر</th></tr></thead>
+          <tbody>
+            <tr><td>ممتلكات ومعدات</td><td class="dir-ltr">(12)</td><td class="num">89,842,411</td><td class="num">76,244,954</td><td><span class="badge b-auto">آلي عبر-طبقتين</span></td><td><a class="cite" onclick="openSrc('ممتلكات ومعدات','2024','89,842,411','ص5',5)">ص5 · الصف 12</a></td></tr>
+            <tr><td>أصول غير ملموسة</td><td class="dir-ltr">(13)</td><td class="num">20,327,981</td><td class="num">14,964,829</td><td><span class="badge b-auto">آلي</span></td><td><a class="cite" onclick="openSrc('أصول غير ملموسة','2024','20,327,981','ص5',5)">ص5</a></td></tr>
+            <tr><td><b>إجمالي الأصول غير المتداولة</b></td><td></td><td class="num"><b>130,024,840</b></td><td class="num"><b>105,727,263</b></td><td><span class="badge b-auto">آلي</span></td><td><a class="cite" onclick="openSrc('إجمالي الأصول غير المتداولة','2024','130,024,840','ص5',5)">ص5</a></td></tr>
+            <tr><td>المخزون</td><td class="dir-ltr">(16)</td><td class="num">5,732,698</td><td class="num">3,623,500</td><td><span class="badge b-auto">آلي</span></td><td><a class="cite" onclick="openSrc('المخزون','2024','5,732,698','ص5',5)">ص5</a></td></tr>
+            <tr><td>نقدية وما في حكمها</td><td class="dir-ltr">(19)</td><td class="num">6,000,305</td><td class="num">10,272,954</td><td><span class="badge b-human">معتمد بشريًا</span></td><td><a class="cite" onclick="openSrc('نقدية وما في حكمها','2024','6,000,305','ص5',5)">ص5</a></td></tr>
+            <tr><td><b>إجمالي الأصول المتداولة</b></td><td></td><td class="num"><b>39,472,216</b></td><td class="num"><b>28,631,278</b></td><td><span class="badge b-human">بشري</span></td><td><a class="cite" onclick="openSrc('إجمالي الأصول المتداولة','2024','39,472,216','ص5',5)">ص5</a></td></tr>
+            <tr style="background:#f0f6fc"><td><b>إجمالي الأصول</b></td><td></td><td class="num" style="font-size:14px"><b>169,497,056</b></td><td class="num"><b>134,358,541</b></td><td><span class="badge b-auto">آلي عبر-طبقتين</span></td><td><a class="cite" onclick="openSrc('إجمالي الأصول','2024','169,497,056','ص5',5)">ص5</a></td></tr>
+            <tr><td>دائنون وأرصدة دائنة أخرى</td><td class="dir-ltr">(21)</td><td class="num">1,718,752</td><td class="num">1,042,716</td><td><span class="badge b-human">معتمد بشريًا</span></td><td><a class="cite" onclick="openSrc('دائنون — قسم المتداولة','2024','1,718,752','ص5',5)">ص5 · قسم المتداولة</a></td></tr>
+            <tr><td>ضريبة الدخل المتداولة</td><td class="dir-ltr">(30)</td><td class="num">3,511,467</td><td class="num">1,702,098</td><td><span class="badge b-auto">آلي</span></td><td><a class="cite" onclick="openSrc('ضريبة الدخل المتداولة','2024','3,511,467','ص5',5)">ص5</a></td></tr>
+            <tr><td><b>إجمالي الالتزامات المتداولة</b></td><td></td><td class="num"><b>6,467,099</b></td><td class="num"><b>4,740,794</b></td><td><span class="badge b-auto">آلي</span></td><td><a class="cite" onclick="openSrc('إجمالي الالتزامات المتداولة','2024','6,467,099','ص5',5)">ص5</a></td></tr>
+            <tr><td><b>إجمالي الالتزامات</b></td><td></td><td class="num"><b>142,292,178</b></td><td class="num"><b>98,205,590</b></td><td><span class="badge b-human">معتمد بشريًا (تصحيح صف)</span></td><td><a class="cite" onclick="openSrc('إجمالي الالتزامات','2024','142,292,178','ص5',5)">ص5</a></td></tr>
+            <tr style="background:#f0f6fc"><td><b>إجمالي حقوق الملكية والالتزامات</b></td><td></td><td class="num" style="font-size:14px"><b>169,497,056</b></td><td class="num"><b>134,358,541</b></td><td><span class="badge b-auto">آلي — مطابق للأصول</span></td><td><a class="cite" onclick="openSrc('إجمالي حقوق الملكية والالتزامات','2024','169,497,056','ص5',5)">ص5</a></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="sec">قائمة الدخل — الصفحة 6</div>
+      <div class="tblwrap"><table>
+        <thead><tr><th>البند</th><th>31/12/2024</th><th>31/12/2023</th><th>الحالة</th><th>المصدر</th></tr></thead>
+        <tbody>
+          <tr><td>الإيرادات</td><td class="num">27,727,014</td><td class="num">21,899,104</td><td><span class="badge b-auto">آلي عبر-طبقتين</span></td><td><a class="cite" onclick="openSrc('الإيرادات','2024','27,727,014','ص6',6)">ص6</a></td></tr>
+          <tr><td>تكلفة الإيرادات <span class="badge b-conv">اتفاقية: مخزنة موجبة</span></td><td class="num">18,799,203</td><td class="num">13,227,521</td><td><span class="badge b-conv">مطابقة المقدار — الإشارة باتفاقية</span></td><td><a class="cite" onclick="openSrc('تكلفة الإيرادات','2024','(18 799 203)','ص6',6)">ص6</a></td></tr>
+          <tr><td><b>مجمل الربح</b></td><td class="num"><b>8,927,811</b></td><td class="num"><b>8,671,583</b></td><td><span class="badge b-auto">آلي</span></td><td><a class="cite" onclick="openSrc('مجمل الربح','2024','8,927,811','ص6',6)">ص6</a></td></tr>
+          <tr><td><b>الربح التشغيلي</b></td><td class="num"><b>5,040,128</b></td><td class="num"><b>5,451,938</b></td><td><span class="badge b-pend">أحادي الطبقة → مراجعة</span></td><td><a class="cite" onclick="openSrc('الربح التشغيلي','2024','5,040,128','ص6',6)">ص6</a></td></tr>
+          <tr><td>صافي الربح قبل الضريبة</td><td class="num">3,143,601</td><td class="num">6,098,328</td><td><span class="badge b-pend">أحادي الطبقة → مراجعة</span></td><td><a class="cite" onclick="openSrc('صافي الربح قبل الضريبة','2024','3,143,601','ص6',6)">ص6</a></td></tr>
+          <tr><td>الضريبة (ائتمان) <span class="badge b-conv">اتفاقية إشارة</span></td><td class="num">+1,272,749</td><td class="num">(373,645)</td><td><span class="badge b-human">بشري — بند الحسم</span></td><td><a class="cite" onclick="openSrc('الضريبة — ائتمان','2024','+1,272,749','ص6',6)">ص6</a></td></tr>
+          <tr style="background:#f0f6fc"><td><b>صافي الربح للفترة</b></td><td class="num"><b>4,416,350</b></td><td class="num"><b>5,724,683</b></td><td><span class="badge b-human">معتمد بشريًا</span></td><td><a class="cite" onclick="openSrc('صافي الربح للفترة','2024','4,416,350','ص6',6)">ص6</a></td></tr>
+        </tbody>
+      </table></div>
+      <div class="card" style="margin-top:14px;font-size:12.5px;color:var(--ink2)">
+        ℹ️ قائمة التدفقات النقدية (ص9) وقائمة التغيرات في حقوق الملكية (ص8) بنفس العرض — كل بند يحمل حالته ورابط صفحته.
+      </div>
+    </section>
+
+    <!-- ═══ 3. INDICATORS ═══ -->
+    <section class="view" id="v-kpi">
+      <div class="sec" style="margin-top:0">المؤشرات المحسوبة <small>38/40 Signed Exact · FA = 0</small></div>
+      <div class="grid g2">
+        <div class="tblwrap"><table>
+          <thead><tr><th>المؤشر</th><th>2024</th><th>2023</th><th>الحالة</th></tr></thead>
+          <tbody>
+            <tr><td>هامش مجمل الربح</td><td class="num">32.2%</td><td class="num">39.6%</td><td><span class="badge b-human">بشري</span></td></tr>
+            <tr><td>هامش الربح التشغيلي</td><td class="num">18.2%</td><td class="num">24.9%</td><td><span class="badge b-pend">أحادي الطبقة</span></td></tr>
+            <tr><td>هامش صافي الربح</td><td class="num">15.9%</td><td class="num">26.1%</td><td><span class="badge b-human">بشري</span></td></tr>
+            <tr><td>ROE</td><td class="num">13.9%</td><td class="num">17.3%</td><td><span class="badge b-auto">آلي — متوسطات</span></td></tr>
+            <tr><td>ROA</td><td class="num">1.5%</td><td class="num">1.3%</td><td><span class="badge b-auto">آلي</span></td></tr>
+          </tbody></table>
+          <div class="card" style="margin-top:10px;border:0"><h3>الربحية</h3></div>
+        </div>
+        <div class="tblwrap"><table>
+          <thead><tr><th>المؤشر</th><th>2024</th><th>2023</th><th>الحالة</th></tr></thead>
+          <tbody>
+            <tr><td>نسبة التداول</td><td class="num">0.431</td><td class="num">0.572</td><td><span class="badge b-human">بشري</span></td></tr>
+            <tr><td>النسبة السريعة</td><td class="num">0.359</td><td class="num">0.498</td><td><span class="badge b-human">بشري</span></td></tr>
+            <tr><td>نسبة الدين</td><td class="num">0.839</td><td class="num">0.583</td><td><span class="badge b-human">بشري (تصحيح صف)</span></td></tr>
+            <tr><td>الدين / حقوق الملكية</td><td class="num">2.97</td><td class="num">1.99</td><td><span class="badge b-auto">آلي — اقتراض</span></td></tr>
+            <tr><td>تغطية الفوائد</td><td class="num">6.32×</td><td class="num">—</td><td><span class="badge b-pend">أحادي الطبقة</span></td></tr>
+            <tr><td>دوران الأصول</td><td class="num">0.183</td><td class="num">0.163</td><td><span class="badge b-auto">آلي — متوسطات</span></td></tr>
+            <tr><td>FCF</td><td class="num">2,209,819</td><td class="num">—</td><td><span class="badge b-pend">أحادي الطبقة</span></td></tr>
+          </tbody></table>
+          <div class="card" style="margin-top:10px;border:0"><h3>السيولة والمديونية والكفاءة</h3></div>
+        </div>
+      </div>
+      <div class="sec">Beneish M-Score <small>يُعرض فقط عند اكتمال مدخلاته</small></div>
+      <div class="card" style="border-style:dashed">
+        <b style="color:var(--ink2)">غير قابل للحساب — مرفوض العرض</b>
+        <div style="font-size:12.5px;color:var(--ink2);margin-top:7px;line-height:1.8">
+          المكونات الستة المتاحة: DSRI 1.323 · GMI 1.230 · AQI 1.087 · SGI 1.266 · LVGI 0.871 · TATA −0.041<br>
+          المفقود: <b>SGAI</b> (مصروفات البيع والإدارة) — الخانات الموثقة لهذا المستند لا تشملها. الموديل يرفض إصدار M-Score جزئي (لا اختلاق).
+        </div>
+      </div>
+      <div class="sec">DuPont <small>مفكك ومتحقق منه</small></div>
+      <div class="card">
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:13.5px">
+          <span class="badge b-auto">هامش 15.93%</span><b>×</b>
+          <span class="badge b-auto">دوران 0.183</span><b>×</b>
+          <span class="badge b-auto">رافعة 4.796</span><b>=</b>
+          <span class="badge b-auto">ROE 13.94%</span>
+          <span style="color:var(--ok);font-size:12px">✓ مطابق للـROE المباشر (reconciles)</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ 4. HEALTH ═══ -->
+    <section class="view" id="v-health">
+      <div class="sec" style="margin-top:0">الدرجة الصحية <small>محسوبة من القيم المعتمدة فقط</small></div>
+      <div class="hwrap">
+        <div class="card" style="width:230px"><div class="gauge"><div><div><b>52.5</b><br><small>من 100</small></div></div></div>
+          <div style="text-align:center;font-size:12px;color:var(--ink2);margin-top:9px">درجة كلية — السياسة معلنة أدناه</div></div>
+        <div class="card" style="flex:1;min-width:320px">
+          <div class="pillar"><div class="lbl"><span>السيولة (25%)</span><b>21/100</b></div><div class="bar"><i style="width:21%;background:var(--bad)"></i></div></div>
+          <div class="pillar"><div class="lbl"><span>المديونية (25%)</span><b>18/100</b></div><div class="bar"><i style="width:18%;background:var(--bad)"></i></div></div>
+          <div class="pillar"><div class="lbl"><span>الربحية (30%)</span><b>64/100</b></div><div class="bar"><i style="width:64%;background:var(--brand2)"></i></div></div>
+          <div class="pillar"><div class="lbl"><span>التدفق النقدي (20%)</span><b>87/100</b></div><div class="bar"><i style="width:87%;background:var(--ok)"></i></div></div>
+          <div style="font-size:12px;color:var(--ink2);margin-top:12px;line-height:1.9;background:var(--warnbg);border-radius:8px;padding:9px 13px">
+            السياسة: تغطية البيانات 100% · الركائز المحسوبة: سيولة، مديونية، ربحية، نقدية · لا شيء محجوب.<br>
+            <b style="color:var(--warn)">⚠ رافعة مرتفعة (D/E 2.97) وسيولة ضعيفة (0.43×) — مخاطر ظاهرة في الدرجة ولا تختفي بتجميعها.</b>
+          </div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:14px;font-size:12.5px;color:var(--ink2)">
+        الحارس: الدرجة الكاملة تُحسب فقط بعد حسم البنود الحرجة (السياسة ترفض الحسم عند ركيزة حرجة ناقصة — مثبت باختبار التغطية 0.25 → رفض). علم التقرير الحالي: <b>أولي — 12 بندًا معلقًا</b>.
+      </div>
+    </section>
+
+    <!-- ═══ 5. GEMINI ═══ -->
+    <section class="view" id="v-gemini">
+      <div class="ai-head"><div><b>✦ تفسير Gemini — بناءً على الأرقام الموثقة فقط</b><div style="font-size:11.5px;opacity:.85;margin-top:3px">gemini-3.6-flash · 44 تعليقًا + 4 توصيات · صفر أرقام مختلقة بعد المدقق · الحقائق مميزة عن الاستنتاجات</div></div></div>
+      <div class="comment"><div class="who"><b>الإيرادات</b><span class="fact">حقيقة — رقم محسوب</span><span style="font-size:10.5px">سنة 2024 مقابل 2023</span></div>ارتفعت الإيرادات من ج.م21.9M إلى ج.م27.73M. يعكس هذا النمو زيادة وتيرة النشاط التجاري وتوسع المبيعات.</div>
+      <div class="comment"><div class="who"><b>مجمل الربح</b><span class="fact">حقيقة</span></div>ارتفع مجمل الربح من ج.م8.67M إلى ج.م8.93M. قد يشير ذلك إلى نمو الأرباح المباشرة رغم ضغوط التكاليف. <span class="infer">استنتاج</span></div>
+      <div class="comment"><div class="who"><b>الربح التشغيلي</b><span class="fact">حقيقة</span></div>انخفض الربح التشغيلي من ج.م5.45M إلى ج.م5.04M. يعكس هذا التراجع انخفاض كفاءة الأداء التشغيلي الأساسي.</div>
+      <div class="comment"><div class="who"><b>صافي الربح</b><span class="fact">حقيقة</span></div>انخفض صافي الربح من ج.م5.72M إلى ج.م4.42M. قد يعود هذا إلى ارتفاع المصاريف غير التشغيلية والضرائب. <span class="infer">استنتاج</span></div>
+      <div class="comment"><div class="who"><b>هامش مجمل الربح</b><span class="fact">حقيقة</span></div>انخفض الهامش من 39.6% إلى 32.2% — تراجع ربحية المبيعات بسبب زيادة التكاليف.</div>
+      <div class="sec">التوصيات <small>كل رقم داخلها متتبع لأصل محسوب — المدقق يسقط غير المتتبع</small></div>
+      <div class="comment"><div class="who"><b>توصية 1 — السيولة</b><span class="infer">استنتاج مبني على Current Ratio 0.45→0.43</span></div>تحسين إدارة السيولة قصيرة الأجل وإعادة هيكلة الالتزامات لتفادي مخاطر الإعسار.</div>
+      <div class="comment"><div class="who"><b>توصية 2 — التكاليف</b><span class="infer">استنتاج مبني على تكلفة المبيعات 60.4%→67.8%</span></div>السيطرة على تكاليف المبيعات المباشرة لحماية الهوامش الربحية التنافسية.</div>
+      <div class="comment"><div class="who"><b>توصية 3 — الرفع المالي</b><span class="infer">مبني على D/E من 1.99x إلى 2.97x</span></div>الحد من التوسع في التمويل بالدين لتخفيض مخاطر الرفع المالي.</div>
+      <div class="card" style="font-size:12px;color:var(--ink2)">حد موثق: خلط السنوات داخل نص حر غير مكشوف عدديًا — يبقى على عرض جدول المؤشرات المرجعي.</div>
+    </section>
+
+    <!-- ═══ 6. RAG CHAT ═══ -->
+    <section class="view" id="v-chat">
+      <div class="sec" style="margin-top:0">محادثة المستند <small>على إيضاحات EFG (55 صفحة مفهرسة) — المسرد الثنائي يربط السؤال العربي بالنص الإنجليزي</small></div>
+      <div class="chatbox">
+        <div class="chatlog">
+          <div class="msg u"><div class="bub">ما ربحية السهم للفترة؟</div></div>
+          <div class="msg a"><div class="bub">بحسب الإيضاح 11 (Basic and Diluted Earnings per Share): صافي الربح للفترة 4,416,350 (2024) مقابل 5,724,683 (2023)، وربحية السهم <b>2.59</b> لعام 2024 مقابل <b>3.35</b> لعام 2023 (بالقوسين للأرباح لكل سهم مخففة).
+            <div><span class="cite" onclick="openSrc('الإيضاح 11 — ربحية السهم','2024','2.59','ص19',19)">📄 صفحة 19 — الإيضاح 11</span><span class="cite" onclick="openSrc('قائمة الدخل','2024','0.29','ص6',6)">📄 صفحة 6</span><span class="cite">🔗 سياسة IFRS 33 — ص48</span></div>
+          </div></div>
+          <div class="msg u"><div class="bub">ما صافي النقدية المستخدمة في الأنشطة الاستثمارية؟</div></div>
+          <div class="msg a"><div class="bub">صافي النقدية المستخدمة في الأنشطة الاستثمارية: <b>(205,906)</b> لعام 2024 مقابل (1,237) لعام 2023 — أبرز البنود: شراء أصول ثابتة (391,808)، شراء أصول غير ملموسة (6,475,490)، فائدة ائتمانية 192,191.
+            <div><span class="cite" onclick="openSrc('قائمة التدفقات — الاستثمارية','2024','(205 906)','ص9',9)">📄 صفحة 9 — قائمة التدفقات</span><span class="cite">🔗 سياسة النقد وما يعادله — ص25</span></div>
+          </div></div>
+          <div class="msg u"><div class="bub">ما مخاطر الائتمان التي تواجه الشركة؟</div></div>
+          <div class="msg a"><div class="bub">بحسب إيضاح مخاطر الائتمان (ص32-34): الشركة تتعرض لمخاطر ائتمان عبر الذمم المدينة والنقدية بالبنوك — القيمة القصوى للتعرض مطابقة للقيم الدفترية، ولا توجد أصول ضمانة جوهرية.
+            <div><span class="cite" onclick="openSrc('إيضاح مخاطر الائتمان','2024','—','ص32',32)">📄 صفحة 32 — مخاطر الائتمان</span><span class="cite" onclick="openSrc('مخاطر السوق والسيولة','2024','—','ص34',34)">📄 صفحة 34</span></div>
+          </div></div>
+        </div>
+        <div class="chips">
+          <button>ما السياسات المحاسبية؟</button><button>إيضاح الضرائب المؤجلة؟</button><button>مصروفات البنود غير النقدية؟</button>
+        </div>
+        <div class="chatin"><input placeholder="اسأل المستند… (معاينة — الاسترجاع من NotesIndex الموجود دون تغييره)"><button>إرسال</button></div>
+      </div>
+      <div class="card" style="margin-top:11px;font-size:12px;color:var(--ink2)">
+        القيد الموثق: الاسترجاع أحادي اللغة أُغلق بالمسرد (سؤال عربي ← مفردات إنجليزية)؛ **صفحات القوائم الممسوحة (ص5-9) لا تدخل الفهرس النصي** — تُستشهد من المراجعة الموثقة. المحرك (TF-IDF + المسرد) دون تغيير.
+      </div>
+    </section>
+
+    <!-- ═══ 7. REVIEW ═══ -->
+    <section class="view" id="v-review">
+      <div class="sec" style="margin-top:0">طابور المراجعة <small>12 بندًا حرجًا معلقًا — كل قرار يُوثق في سلسلة HMAC</small></div>
+      <div class="rrow">
+        <div class="fld">إجمالي الالتزامات 2024</div>
+        <div class="vals"><span>الآلة: 15,928,525 <span class="badge b-conf">صف خطأ — قسم غير المتداولة</span></span></div>
+        <div class="btns"><button class="btn ok">اعتماد الصحيح 142,292,178</button><button class="btn hum">تصحيح</button><button class="btn no">رفض</button><button class="btn ghost" onclick="openSrc('إجمالي الالتزامات','2024','—','ص5',5)">📄 المصدر ص5</button></div>
+      </div>
+      <div class="rrow">
+        <div class="fld">الربح التشغيلي 2024</div>
+        <div class="vals"><span>الآلة: 5,040,128 <span class="badge b-pend">أحادي الطبقة (رؤية فقط)</span></span></div>
+        <div class="btns"><button class="btn ok">اعتماد</button><button class="btn hum">تصحيح</button><button class="btn no">رفض</button><button class="btn ghost" onclick="openSrc('الربح التشغيلي','2024','—','ص6',6)">📄 ص6</button></div>
+      </div>
+      <div class="rrow">
+        <div class="fld">صافي الربح قبل الضريبة 2024</div>
+        <div class="vals"><span>الآلة: 3,143,601 <span class="badge b-pend">أحادي الطبقة</span></span></div>
+        <div class="btns"><button class="btn ok">اعتماد</button><button class="btn hum">تصحيح</button><button class="btn no">رفض</button><button class="btn ghost" onclick="openSrc('صافي الربح قبل الضريبة','2024','—','ص6',6)">📄 ص6</button></div>
+      </div>
+      <div class="rrow">
+        <div class="fld">تكلفة الإيرادات 2024</div>
+        <div class="vals"><span>الآلة: 18,799,203 <span class="badge b-conv">اتفاقية إشارة — المطبوع سالب</span></span></div>
+        <div class="btns"><button class="btn ok">اعتماد بالاتفاقية</button><button class="btn hum">تصحيح</button><button class="btn no">رفض</button><button class="btn ghost" onclick="openSrc('تكلفة الإيرادات','2024','(18 799 203)','ص6',6)">📄 ص6</button></div>
+      </div>
+      <div class="card" style="font-size:12px;color:var(--ink2);margin-top:6px">+ 8 بنود أخرى بأحادي الطبقة · كل قرار يسجل: المراجع (PBKDF2 PIN) · التأكيدات الخمسة · بصمات الصفحة · سلسلة HMAC التسلسلية · سحب الإقرار عند تغير المصدر.</div>
+    </section>
+
+    <!-- ═══ 8. REPORTS ═══ -->
+    <section class="view" id="v-reports">
+      <div class="sec" style="margin-top:0">التقارير <small>من نفس النتائج المعتمدة — اتساق مثبت بين الصيغ</small></div>
+      <div class="rep"><div class="ico">📊</div><div><b>تقرير Excel تفاعلي</b><small>الملخص · المؤشرات · الجداول · أثر المراجعة البشرية — 16.7KB</small></div><span class="dl btn ok">تنزيل XLSX</span></div>
+      <div class="rep"><div class="ico">🌐</div><div><b>تقرير HTML</b><small>نفس الأرقام والتعليقات — يتضمن علم أولي/نهائي وأثر المراجعة — 15.5KB</small></div><span class="dl btn ok">فتح HTML</span></div>
+      <div class="rep"><div class="ico">📕</div><div><b>تقرير PDF</b><small>LibreOffice HTML→PDF — 6 صفحات · 257KB · الدرجة والشركة والعلم في طبقة النص ✓ (منتج فعلي مثبت)</small></div><span class="dl btn ok">تنزيل PDF</span></div>
+      <div class="card" style="font-size:12.5px;color:var(--ink2)">اتساق مثبت باختبار: الدرجة الصحية في Excel ≈ HTML (±تقريب) · الشركة والفترة والوحدة موحدة · التوصيات بلا أرقام غير متتبعة (المدقق يسقطها).</div>
+    </section>
+
+    <div class="foot">معاينة تصميم مستقلة — لا تستبدل الواجهة الحالية ولا تغير مسارات الإنتاج · البيانات من تشغيل TE الموثق · 279 اختبارًا تمر على الكود المجمد</div>
+  </main>
+</div>
+
+<!-- source modal -->
+<div class="modal" id="srcmodal" onclick="if(event.target===this)this.classList.remove('on')">
+  <div class="mbox">
+    <button class="mclose" onclick="document.getElementById('srcmodal').classList.remove('on')">✕</button>
+    <h4 id="m-title">—</h4>
+    <div style="font-size:12.5px;color:var(--ink2);margin-bottom:4px">السنة: <b id="m-year">—</b> · القيمة المطبوعة: <b class="num" id="m-val">—</b></div>
+    <div class="mthumb">🖼️ صورة الصفحة الأصلية (ص<span id="m-page">—</span>) مع تحديد bounding-box للخانة<br><small>في الإنتاج: القصاصة الفعلية من المستند + إحداثيات bbox المحفوظة لكل مرشح</small></div>
+    <div style="font-size:12.5px;line-height:1.8">
+      حالة التحقق: <span id="m-status">—</span><br>
+      المصدر: طبقة الرؤية (Gemini JSON) + الطبقة المحلية (Indra segments) — الاتفاق عبر-طبقتين = تصديق<br>
+      الإيضاح المرتبط: يُستشهد من RAG عند توفر نص الصفحة
+    </div>
+  </div>
+</div>
+
+<script>
+const TITLES={dash:"لوحة القيادة",stmts:"القوائم المالية",kpi:"المؤشرات المالية",health:"Health Score",gemini:"تفسير Gemini",chat:"محادثة المستند",review:"مراجعة البيانات",reports:"التقارير"};
+document.querySelectorAll(".nav a").forEach(a=>{
+  a.addEventListener("click",()=>{
+    document.querySelectorAll(".nav a").forEach(x=>x.classList.remove("on"));
+    document.querySelectorAll(".view").forEach(x=>x.classList.remove("on"));
+    a.classList.add("on");
+    const v=a.dataset.v;
+    document.getElementById("v-"+v).classList.add("on");
+    document.getElementById("vtitle").textContent=TITLES[v];
+    window.scrollTo({top:0});
+  });
+});
+function openSrc(field,year,val,pageLabel,pageNo){
+  document.getElementById("m-title").textContent="مصدر: "+field;
+  document.getElementById("m-year").textContent=year;
+  document.getElementById("m-val").textContent=val;
+  document.getElementById("m-page").textContent=pageNo;
+  document.getElementById("m-status").textContent="آلي عبر-طبقتين (رؤية + Indra) — أو بشري حسب الشارة في الجدول";
+  document.getElementById("srcmodal").classList.add("on");
+}
+</script>
+</body>
+</html>

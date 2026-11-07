@@ -63,6 +63,49 @@ class NotesChunk:
     score: float = 0.0
 
 
+_AR_EN_GLOSSARY: dict[str, str] = {
+    "إيرادات": "revenues revenue", "الإيرادات": "revenues revenue",
+    "ربح": "profit", "أرباح": "profit earnings", "الربح": "profit",
+    "خسارة": "loss", "الخسارة": "loss",
+    "ضريبة": "tax income", "الضرائب": "tax", "الضريبة": "tax",
+    "نقدية": "cash", "النقدية": "cash", "نقدا": "cash",
+    "قروض": "loans borrowings", "قرض": "loans",
+    "التزامات": "liabilities liabilities", "الالتزامات": "liabilities",
+    "أصول": "assets", "الأصول": "assets",
+    "حقوق الملكية": "equity", "حقوق الملكيه": "equity",
+    "تدفقات": "cash flows", "التدفقات النقدية": "cash flows",
+    "تشغيل": "operating operating activities",
+    "استثمار": "investing investment", "استثمارات": "investments",
+    "تمويل": "financing", "التمويلية": "financing activities",
+    "مخاطر": "risk risks", "المخاطر": "risks risk",
+    "سياسات محاسبية": "accounting policies",
+    "السياسات المحاسبية": "accounting policies",
+    "مجلس الإدارة": "board of directors",
+    "مجموعة": "group consolidated", "الشركات التابعة": "subsidiaries",
+    "مستحق": "accrued", "مخصص": "provision provisions",
+    "مبيعات": "revenue sales", "المخزون": "inventory inventories",
+    "ذمم مدينة": "receivables debtors", "ذمم دائنة": "payables creditors",
+    "عجز": "deficit", "فائض": "surplus",
+    "ربحية السهم": "earnings per share",
+    "مجمد": "impairment", "مماطلة": "impairment",
+}
+
+
+def _expand_query(question: str) -> str:
+    """The question + glossary expansions for any Arabic finance term found
+    in it (cross-language retrieval without a translation service)."""
+    expanded = question
+    low = question.lower()
+    for ar, en in _AR_EN_GLOSSARY.items():
+        if ar in question or ar in low:
+            expanded = f"{expanded} {en}"
+    return expanded
+
+
+
+
+
+
 @dataclass
 class NotesIndex:
     """TF-IDF index over notes-page chunks. Built once per analyzed file."""
@@ -129,11 +172,16 @@ class NotesIndex:
             self._norms.append(norm if norm else 1.0)
 
     # ── search ──
+
+# Minimal bilingual finance glossary (المهمة 1 — أقل تعديل ممكن على RAG
+# الموجود): expands the QUERY tokens with the other language's equivalents
+# so an Arabic question can retrieve from English-translation notes and
+# vice versa. No translation service, no new library — a fixed term map.
     def search(self, question: str, top_k: int = 5) -> list[NotesChunk]:
         if not self.chunks:
             return []
         q_tf: dict[str, float] = {}
-        for tok in _tokens(question):
+        for tok in _tokens(_expand_query(question)):
             q_tf[tok] = q_tf.get(tok, 0.0) + 1.0
         if not q_tf:
             return []

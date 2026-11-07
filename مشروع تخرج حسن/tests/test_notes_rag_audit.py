@@ -79,15 +79,16 @@ def test_retrieved_chunks_bind_value_to_page(efg_index):
     assert any(c.page == 6 for c in chunks)
 
 
-def test_arabic_question_on_english_notes_is_a_known_limitation(efg_index):
-    """HONEST finding: the TF-IDF retrieval is monolingual — an Arabic
-    question against the English-translation notes retrieves nothing
-    relevant. Reported; no cross-language layer added."""
+def test_arabic_question_retrieves_via_the_glossary(efg_index):
+    """The bilingual glossary CLOSED the monolingual gap: an Arabic
+    question ('صافي الربح' -> profit) now retrieves the relevant
+    English policy-note chunk (page 48, profit sharing)."""
     chunks = efg_index.search("ما صافي الربح للفترة؟", top_k=5)
     hits = [c for c in chunks
             if any(w in (c.text or "").lower()
                    for w in ("earnings", "profit"))]
-    assert not hits
+    assert hits, "the glossary must bridge AR->EN retrieval"
+    assert any(c.page == 48 for c in hits)
 
 
 def test_formulate_answer_is_local_and_quotes_sources(efg_index):

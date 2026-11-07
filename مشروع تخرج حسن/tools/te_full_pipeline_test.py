@@ -55,6 +55,12 @@ def main() -> dict:
                                fast_mode=True)
     automatic_dl = {(e["field"], e["year"]): e
                     for e in build_decision_log(data)}
+    # persist the AUTOMATIC decision log (statuses BEFORE any human review)
+    (PROJ / "cell_evidence/te_auto_decision_log.json").write_text(
+        json.dumps([{k: e[k] for k in ("field", "year", "status", "source",
+                                       "final", "winner_layers")
+                     if k in e} for e in build_decision_log(data)],
+                   ensure_ascii=False, indent=1), encoding="utf-8")
     automatic_decisive = sum(
         1 for e in automatic_dl.values()
         if decide(e["status"]) in ("use", "use_disclosed"))

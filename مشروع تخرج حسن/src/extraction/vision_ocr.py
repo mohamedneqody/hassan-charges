@@ -1436,6 +1436,7 @@ def _focused_local_cell_verification(data, raw, field_sources, doc_years,
         from src.config import FIELD_ALIASES
         from src.extraction.local_ocr import indra_available
         from src.extraction.normalizer import (
+            _CURRENT_SECTION_FIELDS, _NONCURRENT_SECTION_FIELDS,
             _majority_vote, build_decision_log, parse_number,
         )
         from src.extraction import spatial_cells as _SC
@@ -1547,6 +1548,41 @@ def _focused_local_cell_verification(data, raw, field_sources, doc_years,
                     return i
             return len(bounds) - 1
 
+        # Statement-section context (المهمة 1): the SAME generic rules the
+        # text parser uses — section-header segments («Current Liabilities»,
+        # «Non Current Liabilities», …) ordered by y; a repeated same-label
+        # row («Creditors and other credit balances») belongs to the section
+        # header ABOVE it, so a current-section field under the non-current
+        # header is a DIFFERENT printed line and never becomes a candidate.
+        section_bands: list[tuple[float, str]] = []
+        for sg in segs:
+            t_low = (sg.text or "").strip().lower()
+            if _is_number_text(t_low) or not t_low:
+                continue
+            sec = None
+            if "non current" in t_low or "non-current" in t_low:
+                if "liabilit" in t_low:
+                    sec = "non-current-liabilities"
+                elif "asset" in t_low:
+                    sec = "non-current-assets"
+            elif "current" in t_low:
+                if "liabilit" in t_low:
+                    sec = "current-liabilities"
+                elif "asset" in t_low:
+                    sec = "current-assets"
+            if sec:
+                section_bands.append((_cy(sg), sec))
+        section_bands.sort()
+
+        def _section_at(cy: float) -> str | None:
+            cur = None
+            for band_cy, sec in section_bands:
+                if band_cy <= cy:
+                    cur = sec
+                else:
+                    break
+            return cur
+
         # label segments for the page's target fields
         for seg in segs:
             text = (seg.text or "").strip()
@@ -1558,6 +1594,11 @@ def _focused_local_cell_verification(data, raw, field_sources, doc_years,
                                           FIELD_ALIASES.get(f, [])[:3]
                                           if len(k) >= 4))), None)
             if fld is None:
+                continue
+            row_section = _section_at(_cy(seg))
+            if row_section == "non-current-liabilities"                     and fld in _CURRENT_SECTION_FIELDS:
+                continue        # a different printed line (non-current slice)
+            if row_section == "current-liabilities"                     and fld in _NONCURRENT_SECTION_FIELDS:
                 continue
             band_cy, band_h = _cy(seg), max(seg.box[3] - seg.box[1], 4.0)
             # tight ROW bounds (المهمة: حدود الصف): the label's own printed

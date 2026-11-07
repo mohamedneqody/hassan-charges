@@ -1,7 +1,7 @@
 {
  "step1_extraction": {
-  "captured_cells": 56,
-  "automatic_decisive": 40,
+  "captured_cells": 54,
+  "automatic_decisive": 39,
   "extraction_source": "VISION_MODEL",
   "profile": {
    "kind": "SCANNED_NO_TEXT",
@@ -13,11 +13,11 @@
   "chain_integrity": true,
   "reviews_recorded": 40,
   "human_verified_cells": 40,
-  "chain_path": "C:\\Users\\zbook\\AppData\\Local\\Temp\\te_review_ty4a77xo\\human_reviews.json",
+  "chain_path": "C:\\Users\\zbook\\AppData\\Local\\Temp\\te_review_yrm0n7q8\\human_reviews.json",
   "reviewer": "test-reviewer (PBKDF2 PIN + 5 confirmations + HMAC chain)"
  },
  "step3_indicators": {
-  "automatic_only_decisive": 8,
+  "automatic_only_decisive": 6,
   "human_assisted_decisive": 40,
   "health_score": 52.5,
   "health_coverage": 1.0,
@@ -28,7 +28,7 @@
  },
  "step4_report": {
   "excel": "D:\\hassan_charges\\مشروع تخرج حسن\\cell_evidence\\te_report\\te_analysis.xlsx",
-  "excel_bytes": 16893,
+  "excel_bytes": 16757,
   "html": "D:\\hassan_charges\\مشروع تخرج حسن\\cell_evidence\\te_report\\te_analysis.html",
   "html_has_human_trail": true
  },

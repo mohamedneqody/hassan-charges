@@ -62,3 +62,78 @@ def decisive_values(data) -> dict[tuple[str, object], dict]:
                            else None),
         }
     return out
+
+
+# ── MVP safety guard (المهمة 3): critical fields NEVER skip human review ───
+CRITICAL_FIELDS = frozenset({
+    "revenue", "net_income", "total_assets", "total_liabilities",
+    "equity", "operating_cash_flow", "current_assets",
+    "current_liabilities", "pretax_income", "cost_of_revenue",
+    "accounts_payable", "short_term_debt", "long_term_debt",
+})
+
+
+def pending_critical_review(decision_log: list[dict]) -> list[dict]:
+    """The critical-benefit MVP guard: VERIFIED_EXACT/VERIFIED_DERIVED alone
+    NEVER exempt a CRITICAL financial field from review when its evidence
+    failed a safety check. A critical field NEEDS review when its decision-
+    log entry shows: CONFLICT / UNVERIFIED / MISSING status, OR a
+    sign conflict (the reason text carries it), OR identity_ok is False
+    (the accounting identity contradicted the capture).
+
+    Returns the list of pending entries — a non-empty list means the
+    report is PRELIMINARY (reviewable), never a verified-final one.
+    """
+    # identity-group members: fields the identity engine actually evaluated
+    # (identity_ok=False by default means "never participated", NOT
+    # "contradicted" — current_assets/operating_cash_flow have no identity)
+    identity_members = {
+        f for target, comps in [
+            (("net_income",), (("pretax_income", 1), ("income_tax_expense", -1))),
+            (("total_assets",), (("total_liabilities", 1), ("equity", 1))),
+            (("gross_profit",), (("revenue", 1), ("cost_of_revenue", -1))),
+            (("operating_income",), (("gross_profit", 1),
+                                     ("operating_expenses", -1))),
+        ] for f in (target,) + tuple(c[0] for c in comps)
+    }
+    pending = []
+    for e in decision_log:
+        if e.get("field") not in CRITICAL_FIELDS:
+            continue
+        if e.get("status") == "VERIFIED_HUMAN":
+            continue          # RESOLVED by the documented human review
+        reason = e.get("reason") or ""
+        # المهمة 3 (حارس الـMVP): a CRITICAL field is exempt from review
+        # ONLY by TWO-LAYER attestation — a VERIFIED_EXACT/DERIVED backed by
+        # ONE layer (e.g. two vision captures of the same wrong row) is
+        # mandatory-review, never auto-final
+        wl = e.get("winner_layers") or []
+        single_layer_backing = bool(wl) and len(set(wl)) < 2
+        needs = (
+            e.get("status") in ("CONFLICT", "UNVERIFIED", "MISSING",
+                                "CROP_ONLY", "MULTI_ROW")
+            or "تعارض الإشارة" in reason
+            or (e.get("identity_ok") is False
+                and e.get("field") in identity_members)
+            or (e.get("final") is not None and e.get("status") == "MISSING")
+            or single_layer_backing
+        )
+        if needs:
+            pending.append({
+                "field": e["field"], "year": e["year"],
+                "final": e.get("final"), "status": e["status"],
+                "why": ("تعارض إشارة" if "تعارض الإشارة" in reason else
+                        "تعارض قراءات" if e["status"] == "CONFLICT" else
+                        "قراءة واحدة/echo" if e["status"] == "UNVERIFIED" else
+                        "غير ملتقطة" if e["status"] == "MISSING" else
+                        "تعارض الهوية المحاسبية" if e.get("identity_ok") is False
+                        else e["status"]),
+            })
+    return pending
+
+
+def report_is_preliminary(decision_log: list[dict]) -> bool:
+    """True while ANY critical field still needs review — the generated
+    report must then be labeled preliminary (reviewable), and a decisive/
+    final report is only produced once this returns False."""
+    return bool(pending_critical_review(decision_log))

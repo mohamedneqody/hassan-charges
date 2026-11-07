@@ -373,6 +373,11 @@ class FinancialData:
     # (text | local_ocr | vision) — the vote independence guard needs both
     candidate_labels: dict = field(default_factory=dict)
     candidate_layers: dict = field(default_factory=dict)
+    # المهمة 2: three SEPARATE sign fields per candidate — the RAW printed
+    # cell string, the parsed signed value (already in candidates), and the
+    # accounting sign convention detected for the row (parentheses/negative
+    # print vs magnitude convention)
+    candidate_raw: dict = field(default_factory=dict)
     # per-candidate snippet geometry: bbox in page pixels + page + render
     # scale (المهمة 3 — إحداثيات القصاصة والمصدر والدقة محفوظة)
     candidate_bbox: dict = field(default_factory=dict)
@@ -500,9 +505,14 @@ def parse_table_full(
             if value is None:
                 continue
             result.setdefault(year, {}).setdefault(canonical, value)
+            raw_cell = str(raw_cell) if raw_cell is not None else ""
+            negative_print = raw_cell.strip().startswith("(")                 and raw_cell.strip().endswith(")")                 or raw_cell.strip().startswith("-")
             captures.append({
                 "field": canonical, "year": year, "value": value,
                 "label_text": str(label).strip(),
+                "raw_printed": raw_cell.strip()[:40],
+                "print_convention": ("negative-printed" if negative_print
+                                     else "magnitude-printed"),
                 # df position → openpyxl 1-based address is computed by the
                 # caller that knows the physical layout; None when unknown
                 "row": None if transposed else int(row_pos) + 1,
@@ -529,10 +539,15 @@ def merge_parsed(parts: list[dict[int, dict[str, float]]], notes: list[str],
         caps = (captures_per_part[pi] if captures_per_part
                 and pi < len(captures_per_part) else [])
         cap_by_key: dict[tuple[int, str], str] = {}
+        raw_by_key: dict[tuple[int, str], dict] = {}
         for c in caps:
             for cyear in ([c["year"]] if isinstance(c.get("year"), int) else []):
                 cap_by_key[(cyear, c["field"])] = normalize_label(
                     c.get("label_text") or "")
+                raw_by_key[(cyear, c["field"])] = {
+                    "raw_printed": str(c.get("raw_printed") or "")[:40],
+                    "print_convention": c.get("print_convention", "unknown"),
+                }
         layer = (part_layers[pi] if part_layers and pi < len(part_layers)
                  else "text")
         for year, fields in part.items():
@@ -543,6 +558,9 @@ def merge_parsed(parts: list[dict[int, dict[str, float]]], notes: list[str],
                 by_year.setdefault(year, []).append((value, order))
                 data.candidate_labels.setdefault(canonical, {}).setdefault(
                     year, []).append(cap_by_key.get((year, canonical), ""))
+                data.candidate_raw.setdefault(canonical, {}).setdefault(
+                    year, []).append(raw_by_key.get((year, canonical), {
+                        "raw_printed": "", "print_convention": "unknown"}))
                 data.candidate_layers.setdefault(canonical, {}).setdefault(
                     year, []).append(layer)
                 order += 1
@@ -1149,6 +1167,28 @@ def build_decision_log(data: FinancialData) -> list[dict]:
                     "بوابة الإسناد المكاني: عمود السنة غير مؤكد هندسيًا "
                     f"({spatial.get('detail', 'لا تحديد')}) — لا تُعتمد "
                     "القراءة VERIFIED_EXACT ولا تمر للمحرك كموثقة")
+            # Sign-conflict guard (المهمة 2 — يمنع الاعتماد عند تعارض
+            # الإشارة بين المصدرين): two candidates with the SAME magnitude
+            # and OPPOSITE signs mean one reader saw the printed
+            # parentheses and the other lost them — the cell can never be
+            # VERIFIED_EXACT/DERIVED on that agreement. Human review can
+            # still resolve it (the override below runs after this).
+            sign_conflict = False
+            for _i, _v1 in enumerate(values):
+                for _v2 in values[_i + 1:]:
+                    if _v1 and _v2 and _v1 * _v2 < 0 and                             abs(abs(_v1) - abs(_v2)) <=                             max(1.0, 1e-6 * max(abs(_v1), abs(_v2))):
+                        sign_conflict = True
+                        break
+                if sign_conflict:
+                    break
+            if sign_conflict and (status in ("VERIFIED_EXACT",
+                                             "VERIFIED_DERIVED",
+                                             "VERIFIED_SOURCE_EXACT")
+                                  or status == "CONFLICT"):
+                status = "CONFLICT"
+                reason = ("تعارض الإشارة بين المصدرين (قوسان مطبوعان مقابل "
+                          "مقدار) — القيمة محجوبة حتى تحسمها المراجعة "
+                          "البشرية")
             log.append({
                 "field": field_name,
                 "year": year,
@@ -1166,6 +1206,8 @@ def build_decision_log(data: FinancialData) -> list[dict]:
                 "confidence": conf,
                 "identity_ok": identity_ok,
                 "source": _value_source(data, field_name, year),
+                "winner_layers": ((vote or {}).get("winner_layers")
+                                  if vote else None),
                 "status": status,
                 "reason": reason,
                 **({"spatial": spatial} if spatial else {}),

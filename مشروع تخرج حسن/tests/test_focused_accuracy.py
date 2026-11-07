@@ -28,7 +28,7 @@ PROJ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJ))
 
 from src.extraction.normalizer import (  # noqa: E402
-    FinancialData, build_decision_log, reconcile,
+    FinancialData, build_decision_log, merge_parsed, reconcile,
 )
 from src.extraction.provenance import SOURCE_SCANNED_OCR  # noqa: E402
 
@@ -272,3 +272,86 @@ def test_far_is_na_when_nothing_is_decisive():
     assert sep["false_acceptance_rate"] is None       # N/A, not 0.0
     assert sep["denominators"]["allowed"] == 0        # the denominator shown
     assert sep["counts"]["false_acceptances"] == 0    # the COUNT is zero too
+
+
+# ── sign fields + sign-conflict guard (المهمة 2) ───────────────────────────
+
+def test_parens_regression_arabic_and_english():
+    """Parenthesized negatives parse negative in BOTH scripts — the TE
+    cost_of_revenue rows print «(18 799 203)»."""
+    from src.extraction.normalizer import parse_number
+
+    assert parse_number("( 18 799 203)") == -18_799_203       # EN parens
+    assert parse_number("(18,799,203)") == -18_799_203        # EN commas
+    assert parse_number("(١٨ ٧٩٩ ٢٠٣)") == -18_799_203        # Arabic-Indic
+    assert parse_number("18 799 203") == 18_799_203           # magnitude print
+
+
+def test_raw_printed_and_convention_reach_the_candidates():
+    """The three sign fields are SEPARATE per candidate: raw printed cell /
+    parsed signed value / print convention — never folded together."""
+    from src.extraction.file_parsers import _parse_pdf_text_lines
+    from src.extraction.normalizer import merge_parsed, parse_table_full
+
+    df_lines = [
+        "30 June 2024 30 June 2023",
+        "Operating costs (4) ( 18 799 203) ( 13 227 521)",
+    ]
+    frames = _parse_pdf_text_lines(df_lines)
+    result, caps = parse_table_full(frames[0])
+    d = merge_parsed([result], [], captures_per_part=[caps],
+                     part_layers=["text"])
+    raw = d.candidate_raw["cost_of_revenue"][2024][0]
+    # the TEXT path's frame cells are already numeric — the raw keeps the
+    # cell as this path saw it (the vision path keeps the original string)
+    assert raw["raw_printed"].startswith("-")
+    assert raw["print_convention"] == "negative-printed"
+    assert d.values["cost_of_revenue"][2024] == -18_799_203  # parsed signed
+
+
+def test_sign_conflict_between_sources_gates_the_cell():
+    """A magnitude-printed capture and a negative-printed capture for the
+    SAME cell can never merge into VERIFIED_EXACT — the sign-conflict guard
+    downgrades to CONFLICT (human review resolves it)."""
+    d = merge_parsed(
+        [{2024: {"cost_of_revenue": 18_799_203.0}},          # magnitude print
+         {2024: {"cost_of_revenue": -18_799_203.0}}],        # negative print
+        [], captures_per_part=[
+            [{"field": "cost_of_revenue", "year": 2024,
+              "value": 18_799_203.0, "label_text": "Operating costs",
+              "raw_printed": "18 799 203",
+              "print_convention": "magnitude-printed"}],
+            [{"field": "cost_of_revenue", "year": 2024,
+              "value": -18_799_203.0, "label_text": "Operating costs",
+              "raw_printed": "(18 799 203)",
+              "print_convention": "negative-printed"}],
+        ], part_layers=["text", "text"])
+    reconcile(d)
+    e = next(e for e in build_decision_log(d)
+             if e["field"] == "cost_of_revenue" and e["year"] == 2024)
+    assert e["status"] == "CONFLICT"
+    assert "تعارض الإشارة" in e["reason"]
+
+
+def test_critical_single_layer_backing_needs_review():
+    """المهمة 3: a CRITICAL field attested by ONE layer (e.g. two vision
+    captures of the same wrong row) is mandatory-review — never auto-final."""
+    from src.analysis.financial_gate import (
+        pending_critical_review, report_is_preliminary,
+    )
+
+    d = merge_parsed(
+        [{2024: {"accounts_payable": 15_928_525.0}},   # the wrong-row capture
+         {2024: {"accounts_payable": 15_928_525.0}}],  # agreeing echo
+        [], captures_per_part=[
+            [{"field": "accounts_payable", "year": 2024,
+              "value": 15_928_525.0, "label_text": "Creditors"}],
+            [{"field": "accounts_payable", "year": 2024,
+              "value": 15_928_525.0, "label_text": "Creditors"}],
+        ], part_layers=["vision", "vision"])
+    reconcile(d)
+    dl = build_decision_log(d)
+    pend = pending_critical_review(dl)
+    ap = [p for p in pend if p["field"] == "accounts_payable"]
+    assert ap, "single-layer-backed critical field must be pending review"
+    assert report_is_preliminary(dl) is True

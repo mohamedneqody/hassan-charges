@@ -125,6 +125,19 @@ def build_html_report(
         else '<p class="muted">None — all available metrics were computed.</p>'
     )
 
+    # MVP safety guard (المهمة 3): the report is PRELIMINARY while any
+    # critical field still needs review — a verified-final report is only
+    # produced once the pending list is empty
+    preliminary = bool(results.get("pending_critical_review"))
+    report_status = (
+        '<div class="meta" style="background:#fff3cd">⚠ تقرير أولي قابل '
+        'للمراجعة — بنود حرجة بانتظار حسم المراجعة البشرية: '
+        f'{len(results["pending_critical_review"])}</div>'
+        if preliminary else
+        '<div class="meta" style="background:#d4edda">✓ تقرير نهائي — كل '
+        'البنود الحرجة تم التحقق منها (آليًا بطبقتين أو بشريًا)</div>'
+    )
+
     # Human-review trail (أثر المراجعة البشرية): every value a human attested
     # carries the reviewer, the machine value before, and the final verdict —
     # taken from the pipeline notes (the chain itself lives in the review log)
@@ -145,6 +158,7 @@ def build_html_report(
 <h1>📊 Financial Statement Analysis — {company}</h1>
 <div class="meta">Period: {prev_y} → {cur_y} · Generated: {generated} ·
 Interpreted by: {ESC(interpreter)} ({ESC(analysis.model)}) · All numbers computed in Python</div>
+{report_status}
 {score_html}
 <h2>Metrics — {prev_y} vs {cur_y}</h2>
 {_metrics_table(results['rows'], prev_y, cur_y, currency)}

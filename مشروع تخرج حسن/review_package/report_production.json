@@ -1,15 +1,33 @@
 {
+ "run_at": "2026-11-08T17:33:22",
+ "code_version": {
+  "head": "088d49c",
+  "dirty_files": [
+   "src/analysis/calculator.py\"",
+   "src/analysis/financial_gate.py\"",
+   "src/dashboard/charts.py\"",
+   "src/dashboard/excel_report.py\"",
+   "src/dashboard/report.py\"",
+   "src/extraction/file_parsers.py\"",
+   "src/extraction/normalizer.py\"",
+   "src/pipeline.py\"",
+   "tests/test_pipeline.py\"",
+   "tools/produce_real_reports.py\"",
+   "tests/test_unit_scale_display.py\"",
+   "tools/build_evidence_bundle.py\"",
+   "tools/build_review_package_v2.py\"",
+   "tools/preview_shots_v2.py\""
+  ]
+ },
+ "purpose": "v2 review package — real reports after the fix round",
+ "audit_conflict_resolution": "te_final_audit_post_fix.json (FA=2) is an INTERMEDIATE run before the two-layer exemption rule; the FINAL ledger for this round is THIS file — one binding per report.",
  "reports": [
   {
    "company": "Telecom Egypt (TE — verified subset)",
    "stem": "TE_Financial_Report_2024",
-   "xlsx": "D:\\hassan_charges\\مشروع تخرج حسن\\review_package\\reports\\TE_Financial_Report_2024.xlsx",
-   "xlsx_bytes": 14666,
-   "html": "D:\\hassan_charges\\مشروع تخرج حسن\\review_package\\reports\\TE_Financial_Report_2024.html",
-   "html_chars": 15561,
-   "pdf": "D:\\hassan_charges\\مشروع تخرج حسن\\review_package\\reports\\TE_Financial_Report_2024.pdf",
+   "xlsx_sha256_16": "3c8ce082b437bf07",
    "pdf_ok": true,
-   "pdf_bytes": 259241,
+   "pdf_sha256_16": "a66bcd1848e1810e",
    "health": 54.5,
    "coverage": 1.0,
    "preliminary": true,
@@ -17,18 +35,58 @@
    "pending_fields": [
     "pretax_income"
    ],
-   "libreoffice_rc": 0
+   "na_metrics": [
+    "التدفق النقدي الحر",
+    "هامش EBITDA",
+    "العائد على رأس المال المستثمر (ROIC)",
+    "الدين إلى حقوق الملكية",
+    "الدين إلى الأصول",
+    "تغطية الفوائد",
+    "هامش التدفق الحر",
+    "التدفق التشغيلي إلى إجمالي الدين",
+    "تغطية النفقات الرأسمالية",
+    "مصاريف البيع إلى الإيرادات",
+    "البحث والتطوير إلى الإيرادات",
+    "التكاليف التمويلية الصافية إلى الإيرادات",
+    "الإهلاك إلى الإيرادات"
+   ],
+   "verification_counts": {
+    "human": 0,
+    "auto_two_layer": 40,
+    "derived": 0,
+    "gated": 0
+   },
+   "gemini": {
+    "wired": true,
+    "freshness": "fresh_live_run",
+    "model": "gemini-3.6-flash",
+    "comments": 40,
+    "recommendations": 4,
+    "notation": "actual units (مليار/مليون)",
+    "dataset": "TE frozen GT 40-cell set, same periods"
+   },
+   "unit_chain": {
+    "stored": "printed values (EGP thousands)",
+    "display_scale": 1000,
+    "evidence": "جميع القيم بآلاف الجنيهات (in EGP Thousands) — مطبوعة على كل ترويسة أعمدة القوائم",
+    "display_example": "27,730,150 ألف → ج.م27.73 مليار"
+   },
+   "period_type": "قوائم منفصلة مرحلية (كونسلسيدد لا) — ستة أشهر منتهية 30/06/2024 مقابل ستة أشهر 30/06/2023 (وليست سنوية)",
+   "reviewer_label": "مراجعة اختبارية موثقة (test-reviewer عبر سلسلة HMAC في جولة القبول) — ليست مراجعة بشرية إنتاجية",
+   "libreoffice_rc": 0,
+   "files": {
+    "xlsx": "TE_Financial_Report_2024.xlsx",
+    "html": "TE_Financial_Report_2024.html",
+    "print_html": "TE_Financial_Report_2024_print.html",
+    "pdf": "TE_Financial_Report_2024.pdf"
+   }
   },
   {
    "company": "EFG Holding (EFG — verified subset)",
    "stem": "EFG_Financial_Report_2024",
-   "xlsx": "D:\\hassan_charges\\مشروع تخرج حسن\\review_package\\reports\\EFG_Financial_Report_2024.xlsx",
-   "xlsx_bytes": 13651,
-   "html": "D:\\hassan_charges\\مشروع تخرج حسن\\review_package\\reports\\EFG_Financial_Report_2024.html",
-   "html_chars": 15072,
-   "pdf": "D:\\hassan_charges\\مشروع تخرج حسن\\review_package\\reports\\EFG_Financial_Report_2024.pdf",
+   "xlsx_sha256_16": "64528ff0f5327d89",
    "pdf_ok": true,
-   "pdf_bytes": 255986,
+   "pdf_sha256_16": "558b33b6f2c66749",
    "health": 35.6,
    "coverage": 1.0,
    "preliminary": true,
@@ -37,7 +95,67 @@
     "revenue",
     "revenue"
    ],
-   "libreoffice_rc": 0
+   "na_metrics": [
+    "مجمل الربح",
+    "الربح التشغيلي",
+    "التدفق النقدي الحر",
+    "هامش مجمل الربح",
+    "هامش الربح التشغيلي",
+    "هامش EBITDA",
+    "العائد على رأس المال المستثمر (ROIC)",
+    "العائد على رأس المال المستخدم (ROCE)",
+    "النسبة السريعة",
+    "الدين إلى حقوق الملكية",
+    "الدين إلى الأصول",
+    "تغطية الفوائد",
+    "دوران المخزون",
+    "دوران الذمم المدينة",
+    "دوران الذمم الدائنة",
+    "أيام المخزون (DIO)",
+    "أيام التحصيل (DSO)",
+    "أيام السداد (DPO)",
+    "دورة التحويل النقدي",
+    "رأس المال العامل التشغيلي",
+    "هامش التدفق الحر",
+    "التدفق التشغيلي إلى إجمالي الدين",
+    "تغطية النفقات الرأسمالية",
+    "تكلفة المبيعات إلى الإيرادات",
+    "المصاريف التشغيلية إلى الإيرادات",
+    "مصاريف البيع إلى الإيرادات",
+    "البحث والتطوير إلى الإيرادات",
+    "التكاليف التمويلية الصافية إلى الإيرادات",
+    "الإهلاك إلى الإيرادات"
+   ],
+   "verification_counts": {
+    "human": 0,
+    "auto_two_layer": 28,
+    "derived": 0,
+    "gated": 2
+   },
+   "gemini": {
+    "wired": true,
+    "freshness": "fresh_live_run",
+    "model": "gemini-3.5-flash",
+    "comments": 24,
+    "recommendations": 4,
+    "notation": "actual units (مليار/مليون)",
+    "dataset": "TE frozen GT 40-cell set, same periods"
+   },
+   "unit_chain": {
+    "stored": "printed values (EGP thousands)",
+    "display_scale": 1000,
+    "evidence": "جميع القيم بآلاف الجنيهات (in EGP Thousands) — مطبوعة على كل قائمة",
+    "display_example": "27,730,150 ألف → ج.م27.73 مليار"
+   },
+   "period_type": "قوائم منفصلة سنوية FY2024 مقابل FY2023",
+   "reviewer_label": "لا توجد مراجعة بشرية — القيم من GT المرجعية المجمّدة",
+   "libreoffice_rc": 0,
+   "files": {
+    "xlsx": "EFG_Financial_Report_2024.xlsx",
+    "html": "EFG_Financial_Report_2024.html",
+    "print_html": "EFG_Financial_Report_2024_print.html",
+    "pdf": "EFG_Financial_Report_2024.pdf"
+   }
   }
  ]
 }

@@ -12,7 +12,7 @@ from src.analysis.comparison import (
     missing_data_report,
 )
 from src.config import REPORT_LANGUAGE
-from src.dashboard.charts import fmt_signed_pct, fmt_value
+from src.dashboard.charts import fmt_signed_pct, fmt_value_ar
 from src.exceptions import InsufficientDataError
 from src.extraction.file_parsers import load_financial_data
 
@@ -29,7 +29,8 @@ def _numeric_direction(change: float | None) -> str | None:
     return "stable"
 
 
-def _metric_entry(row, prev_year: int, curr_year: int, currency: str) -> dict | None:
+def _metric_entry(row, prev_year: int, curr_year: int, currency: str,
+                  scale: int = 1) -> dict | None:
     """One payload entry per metric: exact name + pre-formatted values.
 
     Returns None for metrics that cannot be commented on (no data).
@@ -51,8 +52,8 @@ def _metric_entry(row, prev_year: int, curr_year: int, currency: str) -> dict | 
     else:
         if row.previous is None or row.current is None:
             return None  # a direction needs both years
-        entry["previous"] = fmt_value(row.previous, row.kind, currency)
-        entry["current"] = fmt_value(row.current, row.kind, currency)
+        entry["previous"] = fmt_value_ar(row.previous, row.kind, currency, scale)
+        entry["current"] = fmt_value_ar(row.current, row.kind, currency, scale)
         entry["direction"] = _numeric_direction(row.change)
     entry["assessment"] = _ASSESSMENT.get(row.trend)
     if row.change_pct is not None:
@@ -101,6 +102,8 @@ def run_pipeline(file_name: str, raw: bytes, company: str, progress_cb=None, pag
                 "values": data.values,
                 "notes": data.notes,
                 "currency_hint": data.currency_hint,
+        "unit_scale": getattr(data, "unit_scale", 1),
+        "unit_note": getattr(data, "unit_note", ""),
                 "company_hint": data.company_hint,
                 "confidence": data.confidence,
                 "notes_text": data.notes_text,
@@ -169,6 +172,8 @@ def run_pipeline(file_name: str, raw: bytes, company: str, progress_cb=None, pag
         "notes": data.notes,
         "metric_years_available": data.years,
         "currency_hint": data.currency_hint,
+        "unit_scale": getattr(data, "unit_scale", 1),
+        "unit_note": getattr(data, "unit_note", ""),
         "confidence": data.confidence,
         "notes_text": data.notes_text,
         "field_sources": getattr(data, "field_sources", {}),
@@ -191,8 +196,10 @@ def build_gemini_payload(results: dict, currency: str = "$") -> dict:
 
     ordered_rows = list(results["growth_rows"]) + list(results["rows"])
     metrics = []
+    scale = int(results.get("unit_scale") or 1)
     for row in ordered_rows:
-        entry = _metric_entry(row, results["prev_year"], results["curr_year"], currency)
+        entry = _metric_entry(row, results["prev_year"], results["curr_year"],
+                              currency, scale)
         if entry is not None:
             metrics.append(entry)
 

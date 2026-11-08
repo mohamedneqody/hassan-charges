@@ -137,3 +137,51 @@ def report_is_preliminary(decision_log: list[dict]) -> bool:
     report must then be labeled preliminary (reviewable), and a decisive/
     final report is only produced once this returns False."""
     return bool(pending_critical_review(decision_log))
+
+
+def verification_labels(decision_log: list[dict]) -> dict[str, str]:
+    """Per-field verification labels for report tables (المهمة: حالة
+    التحقق بجوار كل مؤشر). Absolute fields take their OWN decision-log
+    status; ratio metrics (via the registry's required_inputs) take the
+    WORST status of their inputs — never better than the evidence."""
+    from src.analysis.metric_registry import REGISTRY
+
+    by_field = {(e["field"], e.get("year")): e for e in decision_log}
+    order = {"VERIFIED_HUMAN": 0, "VERIFIED_SOURCE_EXACT": 1,
+             "VERIFIED_EXACT": 1, "VERIFIED_DERIVED": 2,
+             "UNVERIFIED": 3, "CONFLICT": 4, "CROP_ONLY": 4,
+             "MULTI_ROW": 4, "MISSING": 5}
+    rank = {"موثق (بشري)": 0, "موثق (آلي عبر-طبقتين)": 1,
+            "موثق (مشتق معلن)": 2, "يحتاج مراجعة": 3, "تعارض — محجوب": 4,
+            "غير متوفر": 5}
+
+    def label_of(e: dict | None) -> str:
+        st = (e or {}).get("status", "MISSING")
+        if st == "VERIFIED_HUMAN":
+            return "موثق (بشري)"
+        if st == "VERIFIED_SOURCE_EXACT":
+            return "موثق (نقل رقمي)"
+        if st == "VERIFIED_EXACT":
+            return "موثق (آلي)"
+        if st == "VERIFIED_DERIVED":
+            return "مشتق معلن"
+        if st in ("CONFLICT", "MULTI_ROW"):
+            return "تعارض — محجوب"
+        if st in ("UNVERIFIED", "CROP_ONLY"):
+            return "يحتاج مراجعة"
+        return "غير متوفر"
+
+    def worst(labels: list[str]) -> str:
+        return max(labels, key=lambda l: rank.get(l, 3)) if labels else "غير متوفر"
+
+    out: dict[str, str] = {}
+    for e in decision_log:
+        out[e["field"]] = label_of(e)
+    for entry in REGISTRY:
+        inputs = [f for f in entry.required_inputs
+                  if any(k[0] == f for k in by_field)]
+        if not inputs:
+            continue
+        labels = [out.get(f, "غير متوفر") for f in inputs]
+        out.setdefault(entry.metric_id, worst(labels))
+    return out

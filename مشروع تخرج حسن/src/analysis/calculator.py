@@ -339,4 +339,15 @@ def compute_year_metrics(
     m.interest_pct = _pct(abs(m.interest_expense) if m.interest_expense is not None else None, m.revenue)
     m.da_pct = _pct(abs(m.depreciation_amortization) if m.depreciation_amortization is not None else None, m.revenue)
     m.tax_rate = _pct(abs(m.income_tax_expense) if m.income_tax_expense is not None else None, m.pretax_income)
+    # المهمة 6: ميّز المنفعة الضريبية عن المصروف — some statements print a
+    # tax CREDIT (TE 2024: +1,272,749 added back: NI = pretax + credit) while
+    # others print an expense. The rate number stays, but its MEANING is
+    # recorded so the report never calls a benefit an expense rate.
+    if m.tax_rate is not None and m.net_income is not None             and m.pretax_income not in (None, 0):
+        if m.net_income > m.pretax_income:
+            m.notes["tax_rate"] = (
+                "Effective tax BENEFIT rate — the tax line increased profit "
+                "(credit), not an expense.")
+        else:
+            m.notes["tax_rate"] = "Effective tax expense rate."
     return m

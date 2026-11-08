@@ -64,6 +64,9 @@ def build_excel_report(results: dict) -> bytes:
     ws.append(["سنوات التحليل", f"{results.get('prev_year')} ← {results.get('curr_year')}"])
     ws.append(["الدرجة الصحية (0-100)", hs.total if hs.total is not None else "غير محسوبة"])
     ws.append(["تصنيف الدرجة", hs.label])
+    unit_scale = int(results.get("unit_scale") or 1)
+    if results.get("unit_note"):
+        ws.append(["وحدة القوائم", results["unit_note"]])
     flags = red_flag_analysis(prev, curr)
     ws.append(["عدد الأعلام الحمراء", len(flags)])
     bn = beneish_m_score(prev, curr)
@@ -73,21 +76,34 @@ def build_excel_report(results: dict) -> bytes:
 
     # --- المؤشرات ---
     ws = wb.create_sheet("المؤشرات")
-    _header(ws, ["المؤشر", "الوحدة", "السنة السابقة", "السنة الحالية", "التغير", "التغير %", "التقييم", "الاتجاه"])
+    _header(ws, ["المؤشر", "الوحدة", "السنة السابقة", "السنة الحالية", "التغير", "التغير %", "التقييم", "الاتجاه", "حالة التحقق"])
+    verif = results.get("verification_status") or {}
     for row in list(results.get("growth_rows") or []) + list(results.get("rows") or []):
         label = row.label_ar or row.label
         unit = {"currency": "عملة", "percent": "%", "ratio": "x"}.get(row.kind, "")
         change_pct = f"{row.change_pct:+.2f}%" if row.change_pct is not None else "—"
-        cells = [
-            ws.cell(row=ws.max_row + 1, column=c, value=v)
+        # currency cells carry the ACTUAL amount (printed value × the
+        # statement's printed-unit scale) so Excel filtering/sorting and
+        # the report/preview all agree on one magnitude — never "27.73M"
+        # for what is really 27.73 billion.
+        def _num(v):
+            if v is None:
+                return "—"
+            return v * unit_scale if (row.kind == "currency"
+                                      and unit_scale != 1) else v
+
+        row_idx = ws.max_row + 1   # ONE row per metric — recomputing
+        cells = [                  # max_row per cell spread the sheet
+            ws.cell(row=row_idx, column=c, value=v)   # diagonally (v1 defect)
             for c, v in enumerate(
                 [label, unit,
-                 row.previous if row.previous is not None else "—",
-                 row.current if row.current is not None else "—",
-                 row.change if row.change is not None else "—",
+                 _num(row.previous),
+                 _num(row.current),
+                 _num(row.change),
                  change_pct,
                  row.status or "—",
-                 row.trend_symbol],
+                 row.trend_symbol,
+                 verif.get(row.key, "—")],
                 start=1,
             )
         ]
@@ -98,6 +114,7 @@ def build_excel_report(results: dict) -> bytes:
                 cell.fill = _POS_FILL
             elif row.status == "Negative" and cell.column in (3, 4):
                 cell.fill = _NEG_FILL
+    ws.auto_filter.ref = f"A1:I{ws.max_row}"
 
     # --- النماذج الأكاديمية ---
     ws = wb.create_sheet("النماذج الأكاديمية")

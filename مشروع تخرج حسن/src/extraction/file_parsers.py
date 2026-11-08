@@ -167,6 +167,64 @@ def _adaptive_local_reread(raw: bytes, profile, notes: list[str]) -> tuple[
     return out_parts, out_caps
 
 
+# ── وحدة الطباعة (المهمة 1 من جولة الإصلاح) ─────────────────────────────
+# القوائم تطبع ترويسة الوحدة («in EGP Thousands» / «بآلاف الجنيهات» /
+# «L.E. '000» / «EGP millions»). القيم المخزنة تبقى كما طُبعت حرفيًا؛
+# المقياس المكتشف يستخدم للعرض فقط، والدليل يُسجل في unit_note.
+_UNIT_HEADER_RULES: list[tuple[str, int, str]] = [
+    (r"\begp\s+thousands\b", 1000,
+     "جميع القيم بآلاف الجنيهات (in EGP Thousands) — من ترويسة القائمة"),
+    (r"\begp\W{0,2}0{3}\b", 1000,
+     "وحدة الطباعة EGP ‘000 — من ترويسة القائمة"),
+    (r"\bl\.?e\.?\s*[‘’’]?\s*0{3}\b", 1000,
+     "وحدة الطباعة L.E. ‘000 — من ترويسة القائمة"),
+    (r"بآلاف\s+الجنيهات|قيم.*?بآلاف", 1000,
+     "وحدة الطباعة: بآلاف الجنيهات — من ترويسة القائمة"),
+    (r"بالآلاف", 1000, "وحدة الطباعة: بالآلاف — من ترويسة القائمة"),
+    (r"\begp\s+millions\b", 1_000_000,
+     "جميع القيم بملايين الجنيهات (in EGP millions) — من ترويسة القائمة"),
+    (r"بملايين\s+الجنيهات", 1_000_000,
+     "وحدة الطباعة: بملايين الجنيهات — من ترويسة القائمة"),
+]
+
+
+def detect_printed_unit(texts) -> tuple[int, str]:
+    """Scan page texts for the printed unit header. Returns (scale, note);
+    (1, "") when nothing printed — the display then treats values as units."""
+    import re as _re
+    for text in texts:
+        if not text:
+            continue
+        for pattern, scale, note in _UNIT_HEADER_RULES:
+            if _re.search(pattern, text, _re.IGNORECASE):
+                return scale, note
+    return 1, ""
+
+
+def _apply_printed_unit(data, raw: bytes, notes: list[str]) -> None:
+    """Detect + attach the printed unit on an extracted FinancialData.
+    Sources, in order: the captured notes_text, then a cheap pdfplumber
+    read of the first pages (where statement headers live)."""
+    texts = [t for t in (getattr(data, "notes_text", {}) or {}).values()]
+    if not texts:
+        try:
+            import pdfplumber
+            import io as _io
+            with pdfplumber.open(_io.BytesIO(raw)) as pdf:
+                texts = [(pg.extract_text() or "")
+                         for pg in pdf.pages[:4]]
+        except Exception:
+            texts = []
+    scale, unit_note = detect_printed_unit(texts)
+    data.unit_scale = scale
+    data.unit_note = unit_note
+    if scale != 1:
+        notes.append(
+            f"وحدة الطباعة: القيم المخزنة كما طُبعت ({unit_note}) — العرض "
+            f"يضربها في {scale} لإظهار القيمة الفعلية. لا تغيير في القيم "
+            "المخزنة ولا في قواعد المطابقة.")
+
+
 def _vision_fallback(raw: bytes, profile, notes: list[str]):
     """Focused vision re-read — GOVERNED: requires ENABLE_VISION_FALLBACK=1,
     a usable key pool, and stays inside VISION_FALLBACK_MAX_PAGES. When the
@@ -535,6 +593,7 @@ def load_financial_data(file_name: str, raw: bytes, progress_cb=None, page_range
     reconcile(data)
     data.currency_hint = _currency_hint_from_frames(frames)
     data.company_hint = _company_hint_from_frames(frames)
+    _apply_printed_unit(data, raw, notes)
     return data
 
 

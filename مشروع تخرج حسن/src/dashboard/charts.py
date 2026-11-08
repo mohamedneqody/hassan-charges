@@ -21,17 +21,58 @@ _FONT = dict(family="Inter, 'Segoe UI', Arial, sans-serif", size=13, color=TEXT_
 # Value formatting
 # ---------------------------------------------------------------------------
 
-def humanize(value: float) -> str:
-    """1,180,000 -> 1.18M  (K / M / B abbreviations)."""
-    abs_v = abs(value)
+def humanize(value: float, scale: int = 1) -> str:
+    """1,180,000 -> 1.18M  (K / M / B abbreviations).
+
+    `scale` = the PRINTED unit factor discovered from the statement header
+    (e.g. 1000 when the statement says "in EGP Thousands"): the stored
+    value is printed thousands, so the display multiplies by the scale to
+    show the ACTUAL currency amount (27,730,150 thousand EGP -> 27.73B,
+    i.e. 27.73 مليار — never the misleading "27.73M"). Default scale=1
+    keeps every legacy caller and test unchanged."""
+    abs_v = abs(value) * scale
+    scaled = value * scale
     for divisor, suffix in ((1e9, "B"), (1e6, "M"), (1e3, "K")):
         if abs_v >= divisor:
-            num = value / divisor
+            num = scaled / divisor
             text = f"{num:.2f}".rstrip("0").rstrip(".")
             return f"{text}{suffix}"
     if abs_v >= 100:
-        return f"{value:,.0f}"
-    return f"{value:,.2f}".rstrip("0").rstrip(".")
+        return f"{scaled:,.0f}"
+    return f"{scaled:,.2f}".rstrip("0").rstrip(".")
+
+
+UNIT_WORDS_AR = {"B": "مليار", "M": "مليون", "K": "ألف"}
+
+
+def _ar_words(h: str) -> str:
+    """27.73B -> 27.73 مليار (the unified Arabic display of the unit chain)."""
+    for suf, word in UNIT_WORDS_AR.items():
+        if h.endswith(suf):
+            return f"{h[:-len(suf)]} {word}"
+    return h
+
+
+def fmt_value_ar(value: float | None, kind: str, currency: str = "$",
+                 scale: int = 1) -> str:
+    """fmt_value with the printed-unit scale and Arabic magnitude words —
+    the report tables and the Gemini payload share this so a number can
+    never read as millions in one place and billions in another."""
+    if value is None:
+        return "N/A"
+    if kind == CURRENCY:
+        return f"{currency}{_ar_words(humanize(value, scale))}"
+    return fmt_value(value, kind, currency)
+
+
+def fmt_signed_ar(value: float | None, kind: str, currency: str = "$",
+                  scale: int = 1) -> str:
+    if value is None:
+        return "N/A"
+    if kind == CURRENCY:
+        sign = "+" if value > 0 else ""
+        return f"{currency}{sign}{_ar_words(humanize(value, scale))}"
+    return fmt_signed(value, kind, currency)
 
 
 def fmt_value(value: float | None, kind: str, currency: str = "$") -> str:

@@ -14,7 +14,7 @@
   --sidebar:#122b3f; --sidebar2:#0c2032; --side-ink:#c8d6e2;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:"Segoe UI",Tahoma,"Noto Kufi Arabic",sans-serif;background:var(--bg);color:var(--ink);font-size:14.5px}
+body{font-family:"Segoe UI",Tahoma,"Noto Kufi Arabic",sans-serif;background:var(--bg);color:var(--ink);font-size:15.5px}
 .layout{display:flex;min-height:100vh}
 /* ── sidebar ── */
 .side{width:232px;background:linear-gradient(180deg,var(--sidebar),var(--sidebar2));color:var(--side-ink);padding:18px 0;position:fixed;top:0;bottom:0;right:0;overflow-y:auto}
@@ -50,9 +50,9 @@ body{font-family:"Segoe UI",Tahoma,"Noto Kufi Arabic",sans-serif;background:var(
 @media(max-width:1200px){.g4{grid-template-columns:repeat(2,1fr)}.g3,.g2{grid-template-columns:1fr}}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:16px 18px}
 .card h3{font-size:13px;color:var(--ink2);font-weight:600;margin-bottom:8px}
-.kpi .v{font-size:23px;font-weight:700;letter-spacing:.2px}
-.kpi .u{font-size:11px;color:var(--ink2);margin-top:2px}
-.kpi .d{font-size:12px;margin-top:6px;font-weight:600}
+.kpi .v{font-size:30px;font-weight:700;letter-spacing:.2px}
+.kpi .u{font-size:12.5px;color:var(--ink2);margin-top:3px}
+.kpi .d{font-size:13px;margin-top:8px;font-weight:600}
 .up{color:var(--ok)}.down{color:var(--bad)}
 .sec{margin:22px 0 12px;font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px}
 .sec small{font-weight:400;color:var(--ink2);font-size:12px}
@@ -116,7 +116,8 @@ tr:hover td{background:#f7fafd}
 .rep .dl{margin-right:auto}
 .modal{display:none;position:fixed;inset:0;background:rgba(10,20,35,.55);z-index:50;place-items:center}
 .modal.on{display:grid}
-.mbox{background:#fff;border-radius:13px;width:min(560px,92vw);padding:20px 22px}
+.mbox{background:#fff;border-radius:13px;width:min(720px,94vw);padding:20px 22px}
+.ev-read{display:inline-block;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:1px 7px;margin:1px 2px;font-size:11px;direction:ltr}
 .mbox h4{margin-bottom:10px}
 .mthumb{background:#122b3f;color:#8fb3cc;border-radius:9px;height:170px;display:grid;place-items:center;font-size:12px;margin:9px 0;text-align:center;padding:10px;line-height:1.7}
 .mclose{float:left;background:none;border:0;font-size:19px;cursor:pointer;color:var(--ink2)}
@@ -384,7 +385,7 @@ body.en .nav a.on{border-left-color:var(--brand2);border-right:0}
       <div class="card" style="font-size:12.5px;color:var(--ink2)">اتساق مثبت باختبار: الدرجة الصحية في Excel ≈ HTML (±تقريب) · الشركة والفترة والوحدة موحدة · التوصيات بلا أرقام غير متتبعة (المدقق يسقطها).</div>
     </section>
 
-    <div class="foot">معاينة تصميم مستقلة — لا تستبدل الواجهة الحالية ولا تغير مسارات الإنتاج · البيانات من تشغيل TE الموثق · 279 اختبارًا تمر على الكود المجمد</div>
+    <div class="foot">معاينة تصميم مستقلة — لا تستبدل الواجهة الحالية ولا تغير مسارات الإنتاج · البيانات من تشغيل TE الموثق · 313 اختبارًا تمر على الكود</div>
   </main>
 </div>
 
@@ -393,16 +394,16 @@ body.en .nav a.on{border-left-color:var(--brand2);border-right:0}
   <div class="mbox">
     <button class="mclose" onclick="document.getElementById('srcmodal').classList.remove('on')">✕</button>
     <h4 id="m-title">—</h4>
-    <div style="font-size:12.5px;color:var(--ink2);margin-bottom:4px">السنة: <b id="m-year">—</b> · القيمة المطبوعة: <b class="num" id="m-val">—</b></div>
-    <div class="mthumb">🖼️ صورة الصفحة الأصلية (ص<span id="m-page">—</span>) مع تحديد bounding-box للخانة<br><small>في الإنتاج: القصاصة الفعلية من المستند + إحداثيات bbox المحفوظة لكل مرشح</small></div>
-    <div style="font-size:12.5px;line-height:1.8">
+    <div style="font-size:12.5px;color:var(--ink2);margin-bottom:4px">السنة: <b id="m-year">—</b> · القيمة المطبوعة: <b class="num" id="m-val">—</b> · الصفحة: <b id="m-page">—</b></div>
+    <div id="m-ev"></div>
+    <div style="font-size:12.5px;line-height:1.8;margin-top:8px">
       حالة التحقق: <span id="m-status">—</span><br>
-      المصدر: طبقة الرؤية (Gemini JSON) + الطبقة المحلية (Indra segments) — الاتفاق عبر-طبقتين = تصديق<br>
-      الإيضاح المرتبط: يُستشهد من RAG عند توفر نص الصفحة
+      <small style="color:var(--ink2)">الأدلة أدناه حقيقية من سجل المراجعة: القصاصة هي البكسل الذي قرأته الآلة فعليًا، والمستطيل الأحمر موضعها على صفحة المستند وفق bbox المحفوظ وقت الاستخراج، مع هاش القصاصة. عند عدم وجود حزمة لنفس (البند، السنة) يُعرض أقرب دليل حقيقي متاح مع إفصاح — لا صور توضيحية مصطنعة.</small>
     </div>
   </div>
 </div>
 
+<script src="evidence_bundle.js"></script>
 <script>
 const TITLES={dash:"لوحة القيادة",stmts:"القوائم المالية",kpi:"المؤشرات المالية",health:"Health Score",gemini:"تفسير Gemini",chat:"محادثة المستند",review:"مراجعة البيانات",reports:"التقارير"};
 const TITLES_EN={dash:"Dashboard",stmts:"Financial Statements",kpi:"Financial Metrics",health:"Health Score",gemini:"Gemini Analysis",chat:"Document Chat",review:"Data Review",reports:"Reports"};
@@ -446,8 +447,62 @@ function openSrc(field,year,val,pageLabel,pageNo){
   document.getElementById("m-year").textContent=year;
   document.getElementById("m-val").textContent=val;
   document.getElementById("m-page").textContent=pageNo;
-  document.getElementById("m-status").textContent="آلي عبر-طبقتين (رؤية + Indra) — أو بشري حسب الشارة في الجدول";
+  document.getElementById("m-status").textContent="حسب الشارة في الجدول";
+  renderEvidence(field, year);
   document.getElementById("srcmodal").classList.add("on");
+}
+/* حزم الأدلة الحقيقية (evidence_bundle.js): قصاصة البكسل + bbox + القراءات
+   + الهاشات من سجل المراجعة — لا عنصر نائب */
+function renderEvidence(field, year){
+  const box=document.getElementById("m-ev");
+  const keys=Object.keys(EVIDENCE);
+  const sameField=keys.filter(k=>EVIDENCE[k].field && field &&
+      (field.includes(EVIDENCE[k].field.replace(/_/g," ")) ||
+       EVIDENCE[k].field.replace(/_/g," ").includes(field)));
+  let selKey = sameField[0] || keys[0];
+  if(!keys.length){ box.innerHTML="<div class='mthumb'>لا توجد حزم أدلة محمّلة</div>"; return; }
+  const opts=keys.map(k=>{
+    const e=EVIDENCE[k];
+    const lab=(e.field||k)+" — "+e.year;
+    return `<option value="${k}" ${k===selKey?"selected":""}>${lab} · ص${e.page}</option>`;
+  }).join("");
+  box.innerHTML=`
+    <div style="display:flex;gap:8px;align-items:center;margin:6px 0">
+      <label style="font-size:12px;color:var(--ink2)">حزمة الدليل:</label>
+      <select id="ev-sel" onchange="drawEvidence(this.value)" dir="ltr"
+        style="font-size:12px;padding:4px 8px;border:1px solid #d5dbe3;border-radius:7px;flex:1">${opts}</select>
+    </div>
+    <div id="ev-view"></div>`;
+  drawEvidence(selKey);
+}
+function drawEvidence(key){
+  const e=EVIDENCE[key];
+  const view=document.getElementById("ev-view");
+  if(!e){ view.innerHTML=""; return; }
+  const b=e.bbox_rel;
+  const [x0,y0,x1,y1]=b||[0,0,0,0];
+  const rect = b ? `<div style="position:absolute;left:${(x0*100).toFixed(2)}%;top:${(y0*100).toFixed(2)}%;width:${((x1-x0)*100).toFixed(2)}%;height:${((y1-y0)*100).toFixed(2)}%;border:2px solid #e11d48;border-radius:2px;box-shadow:0 0 0 2000px rgba(15,23,42,.45);"></div>` : "";
+  const readings=(e.readings||[]).map(r=>`<span class="ev-read">${String(r).slice(0,80)}</span>`).join(" ");
+  view.innerHTML=`
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <div style="flex:1;min-width:170px">
+        <div style="font-size:11.5px;color:var(--ink2);margin-bottom:3px">القصاصة المقروءة (بكسل حقيقي)</div>
+        <img src="data:image/png;base64,${e.crop_b64}" alt="crop"
+          style="width:100%;max-width:300px;border:1px solid #d5dbe3;border-radius:8px;background:#fff">
+      </div>
+      <div style="flex:1.2;min-width:220px">
+        <div style="font-size:11.5px;color:var(--ink2);margin-bottom:3px">موضعها في صفحة المستند (bbox حفظ وقت الاستخراج)</div>
+        <div style="position:relative;display:inline-block;width:100%;max-width:340px">
+          <img src="data:image/png;base64,${PAGES[String(e.page)]}" alt="page"
+            style="width:100%;border:1px solid #d5dbe3;border-radius:8px;background:#fff">
+          ${rect}
+        </div>
+      </div>
+    </div>
+    <div style="font-size:11.5px;color:var(--ink2);margin-top:6px;line-height:1.7">
+      البند: <b dir="ltr">${e.field}</b> · السنة: ${e.year} · صفحة: ${e.page} · حالة الحزمة: ${e.status}<br>
+      هاش القصاصة: <span dir="ltr">${e.crop_sha256||"—"}</span> · قراءات الطبقات: ${readings||"—"}
+    </div>`;
 }
 </script>
 </body>

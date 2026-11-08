@@ -347,6 +347,11 @@ class FinancialData:
     notes: list[str] = field(default_factory=list)
     currency_hint: str | None = None
     company_hint: str | None = None  # company name read from the document itself
+    # المهمة: وحدة الطباعة المكتشفة من ترويسة القائمة نفسها (مثل
+    # «in EGP Thousands»). القيم المخزنة تبقى كما طُبعت حرفيًا — scale
+    # للعرض فقط، والقرار يوثّق الدليل في unit_note.
+    unit_scale: int = 1
+    unit_note: str = ""
     # field -> year -> independent agreeing reads (1 = single capture,
     # 2 = cross-statement vote or focused verify agree, 3 = 2-of-3 with local
     # OCR). The audit-trail UI surfaces this as witness dots per figure.

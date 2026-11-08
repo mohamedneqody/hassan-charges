@@ -430,8 +430,9 @@ def test_gemini_payload_shape():
     assert payload["metrics"][0]["value"] == "+18.0%"
     assert payload["metrics"][0]["direction"] == "rose"
     # two-year metrics carry pre-formatted strings + direction + assessment
+    # (unit chain: the Arabic magnitude word replaces the ambiguous "M")
     rev = entries["الإيرادات"]
-    assert rev["previous"] == "$1M" and rev["current"] == "$1.18M"
+    assert rev["previous"] == "$1 مليون" and rev["current"] == "$1.18 مليون"
     assert rev["direction"] == "rose" and rev["assessment"] == "improving"
     de = entries["الدين إلى حقوق الملكية"]
     assert de["previous"] == "0.50x" and de["current"] == "0.65x"

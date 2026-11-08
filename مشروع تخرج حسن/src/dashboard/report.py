@@ -12,7 +12,8 @@ from datetime import datetime
 from src.ai.gemini_agent import AIAnalysis
 from src.analysis.comparison import MetricRow
 from src.analysis.score import HealthScore
-from src.dashboard.charts import fmt_signed, fmt_signed_pct, fmt_value
+from src.dashboard.charts import (fmt_signed_ar, fmt_signed_pct,
+                                 fmt_value_ar)
 
 ESC = _html.escape
 
@@ -47,6 +48,21 @@ ol { padding-inline-start: 22px; } li { margin-bottom: 6px; line-height: 1.6; }
 ul { padding-inline-start: 22px; }
 .muted { color: #94a3b8; font-size: .8rem; }
 @media print { body { background: #fff; padding: 0; } .page { border: none; } }
+/* print-safe fallback (المهمة 4): LibreOffice's HTML->PDF does not support
+   flex — linearize the score/pillar boxes so nothing detaches or truncates */
+body.printsafe .score { display: table; width: 100%; }
+body.printsafe .score .num { display: table-cell; vertical-align: middle;
+                             padding-left: 16px; }
+body.printsafe .pillars { display: block; }
+body.printsafe .pillar { display: block; margin: 6px 0; }
+body.printsafe .page { max-width: 100%; padding: 18px 22px; }
+body.printsafe h1 { font-size: 1.35rem; white-space: normal; }
+/* أرقام لا تُكسر بين سطرين — 256.23 مليون لا تنقسم 256.2 / 3 */
+body.printsafe td.num, body.printsafe th { white-space: nowrap; }
+body.printsafe table { width: 100%; table-layout: auto; }
+body.printsafe tr { page-break-inside: avoid; }
+body.printsafe table { font-size: .8rem; }
+body.printsafe .meta { font-size: .82rem; }
 """
 
 
@@ -55,15 +71,22 @@ def _badge(status: str) -> str:
     return f'<span class="badge {cls}">{ESC(status)}</span>'
 
 
-def _metrics_table(rows: list[MetricRow], prev_year: int, curr_year: int, currency: str) -> str:
+def _nb(text: str) -> str:
+    """Non-breaking variant for print cells: spaces join the token so
+    LibreOffice cannot wrap mixed-bidi currency values mid-number."""
+    return text.replace(" ", " ")
+
+
+def _metrics_table(rows: list[MetricRow], prev_year: int, curr_year: int,
+                   currency: str, scale: int = 1) -> str:
     trs = []
     for r in rows:
         trs.append(
             "<tr>"
             f"<td>{ESC(r.category)}</td><td>{ESC(r.label)}</td>"
-            f'<td class="num">{ESC(fmt_value(r.previous, r.kind, currency))}</td>'
-            f'<td class="num">{ESC(fmt_value(r.current, r.kind, currency))}</td>'
-            f'<td class="num">{ESC(fmt_signed(r.change, r.kind, currency))}</td>'
+            f'<td class="num">{ESC(_nb(fmt_value_ar(r.previous, r.kind, currency, scale)))}</td>'
+            f'<td class="num">{ESC(_nb(fmt_value_ar(r.current, r.kind, currency, scale)))}</td>'
+            f'<td class="num">{ESC(_nb(fmt_signed_ar(r.change, r.kind, currency, scale)))}</td>'
             f'<td class="num">{ESC(fmt_signed_pct(r.change_pct))}</td>'
             f"<td>{_badge(r.status)}</td>"
             f"<td>{ESC(r.trend_symbol + ' ' + r.trend) if r.trend != 'N/A' else '–'}</td>"
@@ -82,6 +105,7 @@ def build_html_report(
     analysis: AIAnalysis,
     score: HealthScore,
     currency: str = "$",
+    print_safe: bool = False,
 ) -> str:
     prev_y, cur_y = results["prev_year"], results["curr_year"]
     company = ESC(results["company"])
@@ -129,14 +153,41 @@ def build_html_report(
     # critical field still needs review — a verified-final report is only
     # produced once the pending list is empty
     preliminary = bool(results.get("pending_critical_review"))
-    report_status = (
-        '<div class="meta" style="background:#fff3cd">⚠ تقرير أولي قابل '
-        'للمراجعة — بنود حرجة بانتظار حسم المراجعة البشرية: '
-        f'{len(results["pending_critical_review"])}</div>'
-        if preliminary else
-        '<div class="meta" style="background:#d4edda">✓ تقرير نهائي — كل '
-        'البنود الحرجة تم التحقق منها (آليًا بطبقتين أو بشريًا)</div>'
-    )
+    # المهمة 6: honest labeling — test-reviewer attestations are NOT
+    # production human review; the unit and period type come from the
+    # document, never invented
+    scale = int(results.get("unit_scale") or 1)   # printed-unit factor
+    unit_note = results.get("unit_note") or ""
+    period_type = results.get("period_type") or ""
+    reviewer_label = results.get("reviewer_label") or ""
+    na_metrics = results.get("na_metrics") or []
+    tax_note = (results.get("curr_metrics").notes.get("tax_rate")
+                if results.get("curr_metrics") and
+                results["curr_metrics"].notes.get("tax_rate") else "")
+    if preliminary:
+        pend = results["pending_critical_review"]
+        pend_names = "، ".join(sorted({p["field"] for p in pend}))
+        report_status = (
+            '<div style="background:#fff3cd;border:1px solid #f0d9a8;'
+            'border-radius:9px;padding:11px 16px;margin:10px 0;font-size:.92rem">'
+            '⚠ <b>تقرير أولي قابل للمراجعة</b> — بنود حرجة بانتظار حسم '
+            f'المراجعة: {len(pend)} ({pend_names})'
+            + (f'<br>المراجع: {reviewer_label}' if reviewer_label else "")
+            + "</div>")
+    else:
+        report_status = (
+            '<div style="background:#d4edda;border:1px solid #a7d8bd;'
+            'border-radius:9px;padding:11px 16px;margin:10px 0;font-size:.92rem">'
+            '✓ <b>تقرير نهائي موثق</b> — كل البنود الحرجة تم التحقق منها '
+            "(آليًا بتصديق عبر-طبقتين أو بشريًا)</div>")
+    unit_html = (f'<div class="meta">وحدة القوائم: {unit_note}</div>'
+                 if unit_note else "")
+    period_html = (f'<div class="meta">نوع الفترة: {period_type}</div>'
+                   if period_type else "")
+    na_html = (f'<div class="meta">مؤشرات غير قابلة للحساب (N/A): '
+               f'{"، ".join(str(x) for x in na_metrics)}</div>'
+               if na_metrics else "")
+    tax_html = (f'<div class="meta">{tax_note}</div>' if tax_note else "")
 
     # Human-review trail (أثر المراجعة البشرية): every value a human attested
     # carries the reviewer, the machine value before, and the final verdict —
@@ -154,14 +205,16 @@ def build_html_report(
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
 <title>Financial Analysis — {company}</title><style>{_CSS}</style></head>
-<body><div class="page">
+<body class="{'printsafe' if print_safe else ''}">
+<div class="page">
 <h1>📊 Financial Statement Analysis — {company}</h1>
 <div class="meta">Period: {prev_y} → {cur_y} · Generated: {generated} ·
 Interpreted by: {ESC(interpreter)} ({ESC(analysis.model)}) · All numbers computed in Python</div>
 {report_status}
+{unit_html}{period_html}{tax_html}{na_html}
 {score_html}
 <h2>Metrics — {prev_y} vs {cur_y}</h2>
-{_metrics_table(results['rows'], prev_y, cur_y, currency)}
+{_metrics_table(results['rows'], prev_y, cur_y, currency, scale)}
 <h2>Ratio Commentary</h2>
 {comments}
 <h2>Recommendations</h2>

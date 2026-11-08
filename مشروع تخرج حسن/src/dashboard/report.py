@@ -91,6 +91,9 @@ body.printsafe table.metaln td { border: none; padding: 2px 4px;
                                  vertical-align: top; }
 body.printsafe table.metaln td.mlab { white-space: nowrap; font-weight: 600;
                                       color: #475569; width: 1%; }
+body.printsafe ul { margin: 4px 0; }
+body.printsafe li { margin-bottom: 3px; }
+body.printsafe .comment { padding: 5px 2px; }
 """
 
 
@@ -264,6 +267,13 @@ def build_html_report(
     na_html = _meta("مؤشرات غير قابلة للحساب (N/A)",
                     "، ".join(str(x) for x in na_metrics))
     tax_html = _meta("ملاحظة الضريبة", tax_note)
+    # v4 (نقطة 2): الإخلاء صف في جدول الميتا على الغلاف — لا فقرة ذيلية
+    # تُترك وحيدة في صفحة أخيرة شبه فارغة
+    disclaimer_html = _meta(
+        "إخلاء مسؤولية",
+        "Benchmark mentions, if any, refer to widely accepted general "
+        "guideline levels — not sector averages. This report does not "
+        "constitute investment advice.")
 
     # Human-review trail (أثر المراجعة البشرية): every value a human attested
     # carries the reviewer, the machine value before, and the final verdict —
@@ -278,6 +288,19 @@ def build_html_report(
     )
 
     interpreter = "Gemini AI" if analysis.ok else "deterministic rule-based engine"
+    # v4 (نقطة 3): كل تحليل مبني على قيم غير مراجَعة يُوسم صراحة — تعليقات
+    # Gemini والتوصيات وأي حكم مشتق لا يُقدَّم كحكم نهائي بينما أعمدة
+    # التحقق تقول «يحتاج مراجعة». المعادلات نفسها بلا تغيير.
+    if preliminary:
+        provisional_html = (
+            '<div style="background:#fef3c7;border:1px solid #f0d9a8;'
+            'border-radius:9px;padding:9px 14px;margin:8px 0;font-size:.85rem">'
+            '⚠ <b>تحليل تجريبي غير معتمد</b> — التعليقات والتوصيات التالية '
+            'مولدة آليًا من قيم حالتها «يحتاج مراجعة» (عمود Verification في '
+            'الجدول أعلاه) — تُقرأ كمؤشرات للاستكشاف، وليست حكمًا نهائيًا.'
+            "</div>")
+    else:
+        provisional_html = ""
     # dir=rtl (v3): التقرير عربي أساسًا — غياب اتجاه القاعدة جعل LibreOffice
     # يكسر الأسطر العربية عند الحواف وحتى داخل الكلمات
     return f"""<!DOCTYPE html>
@@ -290,17 +313,17 @@ def build_html_report(
 Interpreted by: {ESC(interpreter)} ({ESC(analysis.model)}) · All numbers computed in Python</div>
 {report_status}
 {score_html}
-{unit_html}{period_html}{tax_html}{na_html}
+{unit_html}{period_html}{tax_html}{na_html}{disclaimer_html}
 <h2>Metrics — {prev_y} vs {cur_y}</h2>
 {_metrics_table(results['rows'], prev_y, cur_y, currency, scale, results.get('verification_status'))}
 <h2>Ratio Commentary</h2>
+{provisional_html}
 {comments}
 <h2>Recommendations</h2>
+{provisional_html}
 {recs}
 <h2>Missing Data</h2>
 {missing}
 <h2>Human Review Trail — أثر المراجعة البشرية</h2>
 {reviews}
-<p class="muted">Benchmark mentions, if any, refer to widely accepted general guideline
-levels — not sector averages. This report does not constitute investment advice.</p>
 </div></body></html>"""

@@ -74,6 +74,9 @@ def build_excel_report(results: dict) -> bytes:
     ws.append(["عدد الأعلام الحمراء", len(flags)])
     bn = beneish_m_score(prev, curr)
     ws.append(["Beneish M-Score", bn.m_score if bn.m_score is not None else "غير محسوب"])
+    if results.get("pending_critical_review"):
+        ws.append(["حالة التحليل", "تحليل تجريبي غير معتمد — النماذج والتعليقات "
+                   "مولدة من قيم تحتاج مراجعة؛ الدرجة الصحية محجوبة وفق السياسة."])
     for m in academic_models(curr):
         ws.append([m.name, m.value if m.value is not None else "غير محسوب"])
 
@@ -130,6 +133,12 @@ def build_excel_report(results: dict) -> bytes:
             " · ".join(f"{k}={v:g}" for k, v in m.components.items()) or "—",
             ", ".join(m.missing) or "—",
         ])
+    # v4 (نقطة 3): النماذج أعلاه محسوبة من قيم حالتها «يحتاج مراجعة» —
+    # المخرجات مؤشرات استكشافية لا حكم نهائي (المعادلات بلا تغيير)
+    if results.get("pending_critical_review"):
+        ws.append(["⚠ حالة النماذج", "تحليل تجريبي غير معتمد",
+                   "محسوبة من قيم تحتاج مراجعة (عمود حالة التحقق في ورقة "
+                   "المؤشرات) — لا تُقدَّم كحكم نهائي على التعثر."])
 
     # --- الأعلام الحمراء ---
     ws = wb.create_sheet("الأعلام الحمراء")

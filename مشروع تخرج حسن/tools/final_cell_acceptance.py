@@ -86,28 +86,68 @@ def main() -> dict:
          "code_head": code["head"]},
         sort_keys=True).encode("utf-8")).hexdigest()[:16]
 
+    # v4 (نقطة 4): FA=0 على صفر قيم معتمدة ليس إثباتًا لسلامة القبول الآلي —
+    # FAR يبقى N/A هنا، والتفريق الثلاثي واجب التوثيق:
+    attested_accepted = sum(
+        r["cells_checked"] - len([
+            m for m in r["mismatches"]])
+        for r in results)  # كل خلايا الإعادة غير معتمدة أصلاً (يحتاج مراجعة)
+    auto_accepted_count = 0   # الإعادة الصادقة لا تمنح أي قيمة حالة اعتماد
+    far = (round(total_fa / auto_accepted_count, 4)
+           if auto_accepted_count else None)   # None = N/A بصدق
+
     out = {
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "what_this_is": (
-            "النتيجة النهائية على مستوى الخلايا: كل قيمة معروضة في تقارير "
-            "v3 مقابل ملف GT المجمد بقراءة مستقلة من الملف. FA = قيم "
-            "اعتمدها التقرير واختلفت عن GT."),
+            "نتيجة مستوى الخلايا: كل قيمة معروضة في التقارير مقابل ملف GT "
+            "المجمد بقراءة مستقلة من الملف. تقيس سلامة إعادة إنتاج GT — "
+            "ولا تقيس دقة الاستخراج ولا سلامة القبول الآلي (انظر "
+            "three_way_distinction)."),
         "code_version": code,
+        "code_state": ("commit نظيف — الملفات أعلاه تحديدًا؛ أي تعديل لاحق "
+                       "على الكود يبطل هذه النتيجة"),
         "run_fingerprint_sha16": fingerprint,
         "historical_note": (
             "te_final_audit_post_fix.json (FA=2) تشغيل وسيط قبل قاعدة "
-            "التصديق عبر-طبقتين — محفوظ ولا يُستبدل؛ هذه هي النتيجة "
-            "النهائية."),
+            "التصديق عبر-طبقتين — محفوظ ولا يُستبدل."),
+        "three_way_distinction": {
+            "1_replay_integrity": {
+                "measured_here": True,
+                "result": f"{total_cells - total_fa}/{total_cells} خلية مطابقة لـGT",
+                "meaning": "صحة إعادة إنتاج قيم GT في التقارير — الإعادة "
+                           "تأخذ قيمها من GT فالمطابقة شرط اتساق لا فضل.",
+            },
+            "2_extraction_accuracy": {
+                "measured_here": False,
+                "result": "غير مقيس هنا",
+                "meaning": "دقة الاستخراج الفعلي من المستندات تُقاس في تقييمات "
+                           "الـholdout المستقلة (TE: FAR 0.0 على التوقيعات في "
+                           "جولة القبول؛ EFG عبر مسار الرؤية) — لا في هذه "
+                           "الإعادة.",
+            },
+            "3_auto_acceptance_accuracy": {
+                "measured_here": False,
+                "result": "FAR = N/A",
+                "meaning": "صفر قيم معتمدة آليًا في هذه الإعادة (كل الحالات "
+                           "«يحتاج مراجعة») — FA=0 على صفر معتمد لا يثبت شيئًا "
+                           "عن سلامة القبول الآلي، ولا يُقدَّم كذلك.",
+            },
+        },
         "total": {"cells_checked": total_cells,
                   "false_accepts": total_fa,
-                  "false_accept_rate": (round(total_fa / total_cells, 4)
-                                        if total_cells else None)},
+                  "auto_accepted_values": auto_accepted_count,
+                  "false_accept_rate": far,      # None = N/A بصدق
+                  "false_accept_rate_display": ("N/A — صفر قيم معتمدة آليًا"
+                                                if far is None else far),
+                  "attested_values_replayed": attested_accepted},
         "reports": results,
     }
     OUT.write_text(json.dumps(out, ensure_ascii=False, indent=1),
                    encoding="utf-8")
-    print(f"cells={total_cells} FA={total_fa} "
-          f"(fingerprint {fingerprint}, code {code['head']})")
+    print(f"cells={total_cells} FA={total_fa} auto_accepted={auto_accepted_count} "
+          f"FAR={'N/A' if far is None else far} "
+          f"(fingerprint {fingerprint}, code {code['head']}, "
+          f"dirty={len(code['dirty'])})")
     print(f"artifact: {OUT}")
     return out
 

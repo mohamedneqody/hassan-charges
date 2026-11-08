@@ -1,0 +1,7 @@
+{
+ "audited_values": 24,
+ "issues": [],
+ "issue_count": 0,
+ "source_of_truth": "independent_docs/te_holdout/gt_te_frozen.json",
+ "note": "المعاينة ديمو من تشغيل TE الموثق — ليست استخراجًا جديدًا ولا تُستهلك في الإنتاج."
+}

@@ -1,14 +1,12 @@
 {
- "run_at": "2026-11-08T18:48:44",
+ "run_at": "2026-11-08T19:32:11",
  "code_version": {
-  "head": "e7bcff5",
+  "head": "99c14b1",
   "dirty_files": [
-   "src/analysis/financial_gate.py\"",
    "src/dashboard/excel_report.py\"",
    "src/dashboard/report.py\"",
-   "tools/produce_real_reports.py\"",
    "tools/final_cell_acceptance.py\"",
-   "tools/preview_shots_v3.py\""
+   "tools/audit_preview_data.py\""
   ]
  },
  "round": "v3 review package — defects 1-6 of the v2 review",
@@ -18,9 +16,9 @@
   {
    "company": "Telecom Egypt (TE — verified subset)",
    "stem": "TE_Financial_Report_2024",
-   "xlsx_sha256_16": "47b0fb2d624d8f81",
+   "xlsx_sha256_16": "6373869056278ca6",
    "pdf_ok": true,
-   "pdf_sha256_16": "947c88e7526a5a11",
+   "pdf_sha256_16": "1ccedd77f60a955c",
    "health": null,
    "coverage": 0.0,
    "health_policy": "تغطية البيانات 0% | الركائز المحسوبة: [] | المحجوبة/الناقصة: ['cash', 'leverage', 'liquidity', 'profitability'] | رُفضت الدرجة: ركيزة سيولة/مديونية ناقصة",
@@ -157,7 +155,7 @@
    "gemini": {
     "wired": true,
     "freshness": "fresh_live_run",
-    "model": "gemini-3.5-flash",
+    "model": "gemini-3.6-flash",
     "comments": 40,
     "recommendations": 4,
     "notation": "actual units (مليار/مليون)",
@@ -190,9 +188,9 @@
   {
    "company": "EFG Holding (EFG — verified subset)",
    "stem": "EFG_Financial_Report_2024",
-   "xlsx_sha256_16": "9cc7dd2b3468294a",
+   "xlsx_sha256_16": "096e09e3aeded470",
    "pdf_ok": true,
-   "pdf_sha256_16": "3e92923e0999cb1c",
+   "pdf_sha256_16": "a0026742a97d3ad9",
    "health": null,
    "coverage": 0.0,
    "health_policy": "تغطية البيانات 0% | الركائز المحسوبة: [] | المحجوبة/الناقصة: ['cash', 'leverage', 'liquidity', 'profitability'] | رُفضت الدرجة: ركيزة سيولة/مديونية ناقصة",
@@ -320,7 +318,7 @@
    "gemini": {
     "wired": true,
     "freshness": "fresh_live_run",
-    "model": "gemini-3.6-flash",
+    "model": "gemini-3.5-flash",
     "comments": 23,
     "recommendations": 4,
     "notation": "actual units (مليار/مليون)",

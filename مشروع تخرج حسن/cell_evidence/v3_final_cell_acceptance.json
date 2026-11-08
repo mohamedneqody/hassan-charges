@@ -1,0 +1,48 @@
+{
+ "generated_at": "2026-11-08T18:50:44",
+ "what_this_is": "النتيجة النهائية على مستوى الخلايا: كل قيمة معروضة في تقارير v3 مقابل ملف GT المجمد بقراءة مستقلة من الملف. FA = قيم اعتمدها التقرير واختلفت عن GT.",
+ "code_version": {
+  "head": "e7bcff5",
+  "dirty": [
+   "M \"مشروع تخرج حسن/src/analysis/financial_gate.py\"",
+   " M \"مشروع تخرج حسن/src/dashboard/excel_report.py\"",
+   " M \"مشروع تخرج حسن/src/dashboard/report.py\"",
+   " M \"مشروع تخرج حسن/tools/produce_real_reports.py\"",
+   "?? \"مشروع تخرج حسن/tools/final_cell_acceptance.py\"",
+   "?? \"مشروع تخرج حسن/tools/preview_shots_v3.py\""
+  ]
+ },
+ "run_fingerprint_sha16": "cf6427b2348421f1",
+ "historical_note": "te_final_audit_post_fix.json (FA=2) تشغيل وسيط قبل قاعدة التصديق عبر-طبقتين — محفوظ ولا يُستبدل؛ هذه هي النتيجة النهائية.",
+ "total": {
+  "cells_checked": 68,
+  "false_accepts": 0,
+  "false_accept_rate": 0.0
+ },
+ "reports": [
+  {
+   "report": "TE_Financial_Report_2024",
+   "gt_file": "gt_te_frozen.json",
+   "gt_sha256_16": "a549d9d8470f0efc",
+   "cells_checked": 40,
+   "false_accepts": 0,
+   "mismatches": [],
+   "outputs_sha256_16": {
+    "xlsx": "47b0fb2d624d8f81",
+    "pdf": "947c88e7526a5a11"
+   }
+  },
+  {
+   "report": "EFG_Financial_Report_2024",
+   "gt_file": "gt_efg_frozen.json",
+   "gt_sha256_16": "f406d9e053cd1def",
+   "cells_checked": 28,
+   "false_accepts": 0,
+   "mismatches": [],
+   "outputs_sha256_16": {
+    "xlsx": "9cc7dd2b3468294a",
+    "pdf": "3e92923e0999cb1c"
+   }
+  }
+ ]
+}

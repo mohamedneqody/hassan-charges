@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""تجميع Financial_AI_Review_Package_v2.zip — جولة إصلاح المراجعة.
+"""تجميع Financial_AI_Review_Package_v3.zip — جولة إصلاح المراجعة.
 
 Contents (NO secrets, NO .env, NO reviewer credentials — the standing
 constraints): the two real reports (+ per-page renders), the v2 preview
@@ -18,7 +18,7 @@ from datetime import datetime
 from pathlib import Path
 
 PROJ = Path(__file__).resolve().parents[1]
-PKG = PROJ / "Financial_AI_Review_Package_v2"
+PKG = PROJ / "Financial_AI_Review_Package_v3"
 
 
 def git_state() -> dict:
@@ -69,7 +69,7 @@ HTML بلا مقياس بكلمات عربية · خلايا Excel بالقيم�
 Gemini بالوحدات الفعلية.
 """
 
-BEFORE_AFTER = """# قبل / بعد — جولة إصلاح المراجعة v2
+BEFORE_AFTER = """# قبل / بعد — جولة إصلاح المراجعة v3 (على أساس v2)
 
 | # | العيب المبلغ | قبل (v1) | بعد (v2) | الدليل في الحزمة |
 |---|---|---|---|---|
@@ -79,36 +79,50 @@ BEFORE_AFTER = """# قبل / بعد — جولة إصلاح المراجعة v2
 | 4 | PDF الطباعة | الغلاف مكسور في LibreOffice | print-safe: العنوان كامل، اللافتة الصادقة، وحدة/نوع الفترة، tr page-break، أرقام بلا كسر | pdf_pages/ |
 | 5 | تحليل Gemini | «No commentary available» | تحليل حي جديد (TE: 40 تعليقًا gemini-3.6-flash · EFG: 24 تعليقًا gemini-3.5-flash) بوحدات صحيحة + القديم محفوظ بإفصاح | report_production.json + reports/*.pdf |
 | 6 | التفسيرات | ضريبة/منفعة ملتبسة، N/A None، DuPont بلا أساس، مرحلي/سنوي ملتبس | ملاحظة المنفعة الضريبية (TE ائتمان / EFG مصروف)، قائمة N/A صريحة، نوع الفترة مرحلي-منفصل TE مقابل سنوي EFG، وسم test-reviewer | reports/*.pdf ص1 |
-| 7 | المعاينة | مودال الأدلة عنصر نائب، فراغ كبير | مودال بالقصاصة الحقيقية + الصفحة + bbox + الهاشات + محدد الحزم + إفصاح؛ خط أكبر وقيم أوضح | preview_v2/09_*.png |
+| 7 | المعاينة | مودال الأدلة عنصر نائب، فراغ كبير | مودال بالقصاصة الحقيقية + الصفحة + bbox + الهاشات + إفصاح؛ خط أكبر وقيم أوضح | preview_v3/09_*.png |
+| 8 | v2: N/A موصوفة «موثق آلي» (13 TE / 21 EFG) | تصنيف من مدخلات ساقطة | أسوأ حالة عبر السنوات + المدخلة الناقصة = «غير متوفر» — متطابق في Excel وHTML وPDF | reports/*.xlsx + pdf_pages/ |
+| 9 | v2: تناقض EFG (الإيراد معلق في السجل وموثق في Excel) + dataset TE داخل سجل EFG | إعادة إنتاج بتزييف تصديق + نص ثابت | إعادة إنتاج صادقة (إحالة واحدة) + هوية dataset مُتحقق منها بالبناء مع هاش GT | report_production.json |
+| 10 | v2: FA=2 وسيط بلا نتيجة نهائية | وصف فقط | قبول نهائي على مستوى الخلايا: 68 خلية مقابل GT، FA=0، مربوط بالكود وبصمة التشغيل | v3_final_cell_acceptance.json |
+| 11 | v2: الغلاف ينقسم صفحتين وMissing Data تقول None | تخطيط متضخم | غلاف صفحة واحدة + ميتا كجداول + Missing صادق يفرق المفقود عن غير القابل | pdf_pages/ |
+| 12 | v2: صور مستند 2022 في نافذة TE 2024 + LTR للسايدبار فقط | مطابقة فضفاضة | مطابقة صارمة (بند، سنة) + رسالة عدم توفر + لوحة أدلة مستقلة + ترجمة LTR كاملة + شارة بيانات تجريبية | preview_v3/09_*.png |
 """
 
-SUMMARY = """# ملخص حزمة المراجعة v2 — {date}
+SUMMARY = """# ملخص حزمة المراجعة v3 — {date}
 
-الكود: {head} (+تعديلات الجولة) · **313 اختبارًا تمر** · لا push ولا نشر
+الكود: {head} (+تعديلات جولة v3) · **313 اختبارًا تمر** · لا push ولا نشر
 
 ## ما في الحزمة
 - `reports/` — TE + EFG: xlsx + html + pdf (طباعة آمنة) + صور الصفحات pdf_pages/
-- `preview_v2/` — 12 لقطة 1920×1080 (RTL + LTR + مودال الأدلة الحقيقية)
-- `preview_html/` — معاينة التصميم المستقلة + evidence_bundle.js (أدلة حقيقية)
-- `report_production.json` — السجل النهائي الواحد (ربط تقرير↔كود↔GT↔تحليل)
+- `preview_v3/` — لقطات 1920×1080 (RTL + LTR مترجم + مودال بلا دليل مطابق + لوحة الأدلة الحقيقية)
+- `preview_html/` — معاينة التصميم المستقلة + evidence_bundle.js
+- `report_production.json` — السجل النهائي الواحد (ربط تقرير↔كود↔GT↔تحليل بهوية dataset مُتحقق منها)
+- `v3_final_cell_acceptance.json` — **القبول النهائي على مستوى الخلايا: 68 خلية مقابل GT، FA=0، مربوط بإصدار الكود وبصمة التشغيل**
 - `unit_verification_log.md` — إثبات سلسلة وحدة القياس (العيب الحرج 1)
-- `before_after.md` — خريطة العيوب السبعة وإصلاحها
-- `te_final_audit_post_fix.json` — سجل التدقيق v1 محفوظ كما هو (انظر السجل: حالة وسيطة قبل قاعدة التصديق عبر-طبقتين)
+- `before_after.md` — خريطة العيوب وإصلاحها (v1 → v2 → v3)
+- `te_final_audit_post_fix.json` — سجل التدقيق القديم (FA=2) محفوظ كما هو — تشغيل وسيط؛ النتيجة النهائية في v3_final_cell_acceptance.json
+
+## ما الذي تغير في v3 (عيوب v2 الستة)
+1. حالات التحقق: أسوأ حالة عبر السنوات + المدخلة الناقصة = «غير متوفر» — لا N/A تُوصف موثقة (متطابق Excel/HTML/PDF)
+2. تناقض EFG: إعادة إنتاج صادقة بإحالة واحدة (بلا تزييف تصديق) — البوابة والسجل وعمود Excel يقولون الشيء نفسه؛ هوية dataset لكل شركة مع هاش GT
+3. القبول الخاطئ: نتيجة نهائية فعلية على مستوى الخلايا (FA=0) مربوط بالكود وبصمة التشغيل
+4. PDF: غلاف صفحة واحدة، الميتا جداول تُغلف سليمًا، عمود التحقق كامل الظهور، Missing Data يفرق المفقود عن غير القابل للحساب
+5. المعاينة: منع أدلة مستند آخر في نافذة المصدر + رسالة عدم توفر + ترجمة LTR كاملة + شارة بيانات تجريبية
+6. الاتساق: عمود التحقق في HTML/PDF مثل Excel، والدرجة الصحية المحجوبة تُعرض كحالة صادقة في الأسطح الثلاثة
 
 ## حدود معلنة بصدق
-- تقارير TE/EFG إعادة إنتاج من قيم GT المجمدة (وليست استخراجًا جديدًا) — اللافتة
-  «أولي قابل للمراجعة» ظاهرة في التقريرين ومراجعهم اختباريون لا إنتاجيون.
-- بُعد القصاصة في مودال المعاينة من سجل مراجعة مستند 2022 الحقيقي (الحزم
-  المتاحة) — الإفصاح داخل المودال نفسه.
-- كسر الأسطر عند حدود الاتجاه (bidi) في تعليقات PDF يظهر ترتيبًا بصريًا
-  مختلفًا في بعض السطور — القيم والوحدات سليمة ومكتملة.
+- تقارير TE/EFG إعادة إنتاج من قيم GT المجمدة **بإحالة واحدة لكل قيمة** (بلا تصديق مُصطنع):
+  كل حالة التحقق «يحتاج مراجعة» والدرجة الصحية محجوبة — اللافتة الأولية ظاهرة في التقريرين.
+- قيم GT نفسها وُثقت اختباريًا (test-reviewer) في جولة القبول — ليست مراجعة بشرية إنتاجية.
+- حزم الأدلة الحقيقية في قسم المراجعة من مستند اختباري 2022 — موسومة بمستندها ولا تدخل نوافذ TE 2024.
+- ثقب معروف لم يُمس (خارج نطاق الجولة): اتفاق echo داخل طبقة واحدة على مستند **موثوق** لا يزال
+  يمنح VERIFIED_EXACT في سجل القرار — البوابة تعلقه فقط للحقول الحرجة وغير الموثوقة.
 """
 
 
 def main() -> dict:
     if PKG.exists():
         shutil.rmtree(PKG)
-    for sub in ("reports", "preview_v2", "preview_html"):
+    for sub in ("reports", "preview_v3", "preview_html"):
         (PKG / sub).mkdir(parents=True)
 
     reports = PROJ / "review_package/reports"
@@ -122,9 +136,9 @@ def main() -> dict:
         shutil.copytree(pages, PKG / "reports" / "pdf_pages",
                         dirs_exist_ok=True)
 
-    shots = PROJ / "design/screenshots_v2"
+    shots = PROJ / "design/screenshots_v3"
     for img in sorted(shots.glob("*.png")):
-        shutil.copy2(img, PKG / "preview_v2" / img.name)
+        shutil.copy2(img, PKG / "preview_v3" / img.name)
 
     shutil.copy2(PROJ / "design/mvp_preview.html",
                  PKG / "preview_html/mvp_preview.html")
@@ -135,17 +149,19 @@ def main() -> dict:
                  PKG / "report_production.json")
     shutil.copy2(PROJ / "cell_evidence/te_final_audit_post_fix.json",
                  PKG / "te_final_audit_post_fix.json")
+    shutil.copy2(PROJ / "cell_evidence/v3_final_cell_acceptance.json",
+                 PKG / "v3_final_cell_acceptance.json")
 
     git = git_state()
     (PKG / "unit_verification_log.md").write_text(
         UNIT_LOG.format(date=datetime.now().strftime("%Y-%m-%d %H:%M"),
                         head=git["head"]), encoding="utf-8")
     (PKG / "before_after.md").write_text(BEFORE_AFTER, encoding="utf-8")
-    (PKG / "review_summary_v2.md").write_text(
+    (PKG / "review_summary_v3.md").write_text(
         SUMMARY.format(date=datetime.now().strftime("%Y-%m-%d %H:%M"),
                        head=git["head"]), encoding="utf-8")
 
-    zpath = PROJ / "Financial_AI_Review_Package_v2.zip"
+    zpath = PROJ / "Financial_AI_Review_Package_v3.zip"
     with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as z:
         for f in sorted(PKG.rglob("*")):
             if f.is_file():

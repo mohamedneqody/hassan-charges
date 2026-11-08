@@ -58,7 +58,10 @@ def build_excel_report(results: dict) -> bytes:
     ws = wb.active
     ws.title = "ملخص"
     _header(ws, ["البند", "القيمة"])
-    hs = compute_health_score(curr)
+    # نفس بوابة التقرير: عمود يحتاج مراجعة في المؤشرات ⟺ أركان محجوبة
+    # هنا — الدرجة لا تُحسب من مدخلات موثقة زورًا (عيب 6 من مراجعة v2)
+    hs = compute_health_score(
+        curr, blocked_fields=set(results.get("blocked_fields") or []))
     ws.append(["الشركة", results.get("company", "—")])
     ws.append(["الملف", results.get("file_name", "—")])
     ws.append(["سنوات التحليل", f"{results.get('prev_year')} ← {results.get('curr_year')}"])

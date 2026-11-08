@@ -141,18 +141,21 @@ def report_is_preliminary(decision_log: list[dict]) -> bool:
 
 def verification_labels(decision_log: list[dict]) -> dict[str, str]:
     """Per-field verification labels for report tables (المهمة: حالة
-    التحقق بجوار كل مؤشر). Absolute fields take their OWN decision-log
-    status; ratio metrics (via the registry's required_inputs) take the
-    WORST status of their inputs — never better than the evidence."""
+    التحقق بجوار كل مؤشر).
+
+    v3 fix (defects 1+2 of the v2 review): a field's label is the WORST
+    across its YEAR entries (v2 collapsed years — a gated 2024 under a
+    verified 2023 printed as «موثق آلي»), and a metric's label is the
+    worst across ALL its required_inputs — a MISSING input is «غير
+    متوفر», never silently dropped (v2 skipped absent inputs, so N/A
+    metrics with one present input printed as verified). The report
+    column can therefore never claim a better state than the evidence
+    or than the pending-review banner."""
     from src.analysis.metric_registry import REGISTRY
 
-    by_field = {(e["field"], e.get("year")): e for e in decision_log}
-    order = {"VERIFIED_HUMAN": 0, "VERIFIED_SOURCE_EXACT": 1,
-             "VERIFIED_EXACT": 1, "VERIFIED_DERIVED": 2,
-             "UNVERIFIED": 3, "CONFLICT": 4, "CROP_ONLY": 4,
-             "MULTI_ROW": 4, "MISSING": 5}
     rank = {"موثق (بشري)": 0, "موثق (آلي عبر-طبقتين)": 1,
-            "موثق (مشتق معلن)": 2, "يحتاج مراجعة": 3, "تعارض — محجوب": 4,
+            "موثق (نقل رقمي)": 1, "موثق (آلي)": 1,
+            "مشتق معلن": 2, "يحتاج مراجعة": 3, "تعارض — محجوب": 4,
             "غير متوفر": 5}
 
     def label_of(e: dict | None) -> str:
@@ -172,16 +175,21 @@ def verification_labels(decision_log: list[dict]) -> dict[str, str]:
         return "غير متوفر"
 
     def worst(labels: list[str]) -> str:
-        return max(labels, key=lambda l: rank.get(l, 3)) if labels else "غير متوفر"
+        return max(labels, key=lambda l: rank.get(l, 3)) if labels \
+            else "غير متوفر"
 
-    out: dict[str, str] = {}
+    # per-field: worst label across the field's year entries
+    by_field_years: dict[str, dict] = {}
     for e in decision_log:
-        out[e["field"]] = label_of(e)
+        by_field_years.setdefault(e["field"], {})[e.get("year")] = e
+    out: dict[str, str] = {
+        f: worst([label_of(e) for e in ymap.values()])
+        for f, ymap in by_field_years.items()}
+
+    # per-metric: worst across ALL required_inputs — missing = غير متوفر
     for entry in REGISTRY:
-        inputs = [f for f in entry.required_inputs
-                  if any(k[0] == f for k in by_field)]
-        if not inputs:
+        labels = [out.get(f, "غير متوفر") for f in entry.required_inputs]
+        if not labels:
             continue
-        labels = [out.get(f, "غير متوفر") for f in inputs]
         out.setdefault(entry.metric_id, worst(labels))
     return out

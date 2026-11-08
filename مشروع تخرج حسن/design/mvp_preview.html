@@ -156,6 +156,7 @@ body.en .nav a.on{border-left-color:var(--brand2);border-right:0}
         <div class="file">📄 te_standalone_h1_2024.pdf · Telecom Egypt · 30 صفحة · فترة المقارنة 2023 → 2024</div>
       </div>
       <span class="pill prelim" id="statuspill">⚠ تقرير أولي — 12 بندًا حرجًا بانتظار المراجعة</span>
+      <span class="pill" id="demopill" style="background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe">بيانات عرض تجريبية من تشغيل موثق — التقارير الفعلية المنتجة في review_package/reports (v3)</span>
     </div>
 
     <!-- ═══ 1. DASHBOARD ═══ -->
@@ -353,6 +354,11 @@ body.en .nav a.on{border-left-color:var(--brand2);border-right:0}
     <!-- ═══ 7. REVIEW ═══ -->
     <section class="view" id="v-review">
       <div class="sec" style="margin-top:0">طابور المراجعة <small>12 بندًا حرجًا معلقًا — كل قرار يُوثق في سلسلة HMAC</small></div>
+      <div class="note" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;font-size:12.5px;color:var(--ink2);margin-bottom:12px">
+        <b>حزم أدلة حقيقية</b> — من سجل مراجعة مستند اختباري 2022 (حزم الإسناد المكاني): القصاصة بكسل حقيقي + موضعها في الصفحة + الهاشات. هذه الأدلة <u>ليست</u> أدلة قيم TE 2024؛ نوافذ مصدر قيم TE تعرض رسالة عدم توفر عند غياب حزمة مطابقة.
+      </div>
+      <div id="real-ev"></div>
+      <div class="sec" style="margin-top:18px">البنود المعلقة</div>
       <div class="rrow">
         <div class="fld">إجمالي الالتزامات 2024</div>
         <div class="vals"><span>الآلة: 15,928,525 <span class="badge b-conf">صف خطأ — قسم غير المتداولة</span></span></div>
@@ -408,6 +414,39 @@ body.en .nav a.on{border-left-color:var(--brand2);border-right:0}
 const TITLES={dash:"لوحة القيادة",stmts:"القوائم المالية",kpi:"المؤشرات المالية",health:"Health Score",gemini:"تفسير Gemini",chat:"محادثة المستند",review:"مراجعة البيانات",reports:"التقارير"};
 const TITLES_EN={dash:"Dashboard",stmts:"Financial Statements",kpi:"Financial Metrics",health:"Health Score",gemini:"Gemini Analysis",chat:"Document Chat",review:"Data Review",reports:"Reports"};
 let isEN=false;
+/* v3 (عيب 5): ترجمة كاملة لمحتوى LTR — واجهة التحكم كلها (عناوين،
+   تسميات، رؤوس جداول، أزرار، شارات، حواشي). مخرجات Gemini والبيانات
+   تبقى بنصها العربي الأصلي مع dir=auto — ترجمتها كانت ستمثل مخرجات
+   المنتج زورًا. */
+const TEXTMAP={
+"لوحة القيادة":"Dashboard","القوائم المالية":"Financial Statements","المؤشرات المالية":"Financial Metrics","تفسير Gemini":"Gemini Analysis","محادثة المستند":"Document Chat","مراجعة البيانات":"Data Review","التقارير":"Reports",
+"نسبة الدين":"Debt Ratio","نسبة التداول":"Current Ratio","النسبة السريعة":"Quick Ratio","صافي الربح 2024":"Net Income 2024","إجمالي الأصول":"Total Assets","إجمالي الالتزامات 2024":"Total Liabilities 2024","الإيرادات 2024":"Revenue 2024","الربح التشغيلي 2024":"Operating Income 2024","تكلفة الإيرادات 2024":"Cost of Revenue 2024","صافي الربح قبل الضريبة 2024":"Pretax Income 2024","الربح التشغيلي":"Operating Income","صافي الربح":"Net Income","صافي الربح قبل الضريبة":"Pretax Income","تكلفة الإيرادات":"Cost of Revenue","المخزون":"Inventory","ممتلكات ومعدات":"PP&E","أصول غير ملموسة":"Intangible Assets","إجمالي الأصول غير المتداولة":"Total Non-current Assets","إجمالي الأصول المتداولة":"Total Current Assets","إجمالي الالتزامات المتداولة":"Total Current Liabilities","إجمالي الالتزامات":"Total Liabilities","ضريبة الدخل المتداولة":"Current Income Tax","دائنون وأرصدة دائنة أخرى":"Payables & Accruals","نقدية وما في حكمها":"Cash & Equivalents","هامش مجمل الربح":"Gross Margin","هامش الربح التشغيلي":"Operating Margin","هامش صافي الربح":"Net Margin","دوران الأصول":"Asset Turnover","تغطية الفوائد":"Interest Coverage",
+"توزيع حالات الخانات الأربعين":"Status of the 40 cells","حسب حالة التحقق":"By verification status","حقيقة":"Fact","حقيقة — رقم محسوب":"Fact — computed number","استنتاج":"Inference","آلي":"Auto","بشري":"Human","آلي عبر-طبقتين":"Auto — two-layer","آلي — تصديق عبر-طبقتين":"Auto — two-layer attested","آلي — اقتراض":"Auto — borrowed","آلي — متوسطات":"Auto — averages","آلي — مطابق للأصول":"Auto — assets-matched","أحادي الطبقة":"Single layer","أحادي الطبقة (رؤية فقط)":"Single layer (vision only)","أحادي الطبقة → مراجعة":"Single layer → review","بشري (تصحيح صف)":"Human (row fix)","بشري — بند الحسم":"Human — decisive cell","بشري — عبر سلسلة المراجعة":"Human — via review chain","معتمد بشريًا":"Human-attested","معتمد بشريًا (تصحيح صف)":"Human-attested (row fix)","تعارض — محجوب":"Conflict — blocked","يحتاج مراجعة (أحادي الطبقة)":"Needs review (single layer)","اتفاقية إشارة":"Sign convention","اتفاقية إشارة — المطبوع سالب":"Sign convention — printed negative","اتفاقية: مخزنة موجبة":"Convention: stored positive","اتفاقية: مطبوع":"Convention: printed","مطابقة المقدار — الإشارة باتفاقية":"Magnitude match — sign by convention","غير قابل للحساب — مرفوض العرض":"Not computable — refused","— غير قابل للحساب":"— not computable","يُعرض فقط عند اكتمال مدخلاته":"Shown only when inputs are complete","محسوبة من القيم المعتمدة فقط":"Computed from attested values only","من نفس النتائج المعتمدة — اتساق مثبت بين الصيغ":"From the same attested results — cross-format consistency proven","درجة كلية — السياسة معلنة أدناه":"Overall score — policy disclosed below","من 100":"/100","السيولة (25%)":"Liquidity (25%)","المديونية (25%)":"Leverage (25%)","الربحية (30%)":"Profitability (30%)","التدفق النقدي (20%)":"Cash Flow (20%)","السيولة والمديونية والكفاءة":"Liquidity, leverage & efficiency","الضرائب (ائتمان)":"Tax (credit)","الضريبة (ائتمان)":"Tax (credit)","السياسة: تغطية البيانات 100% · الركائز المحسوبة: سيولة، مديونية، ربحية، نقدية · لا شيء محجوب.":"Policy: 100% data coverage · computed pillars: liquidity, leverage, profitability, cash · nothing blocked.","الحارس: الدرجة الكاملة تُحسب فقط بعد حسم البنود الحرجة (السياسة ترفض الحسم عند ركيزة حرجة ناقصة — مثبت باختبار التغطية 0.25 → رفض). علم التقرير الحالي:":"Guard: the full score is computed only after critical fields are resolved (the policy refuses when a critical pillar is missing — proven by the 0.25 coverage test). Current report flag:",
+"آخر عمليات النظام":"Latest system activity","انقر أي رقم لفتح مصدره من المستند":"Click any figure to open its source in the document","قائمة المركز المالي — كما قُرئت من الصفحة 5":"Statement of Financial Position — as read from page 5","قائمة الدخل — الصفحة 6":"Income Statement — page 6","سنة 2024 مقابل 2023":"FY2024 vs 2023","المصدر":"Source","البند":"Item","المؤشر":"Metric","الحالة":"Status","الإيضاح":"Note","المفقود:":"Missing:",
+"طابور المراجعة":"Review queue","اعتماد":"Approve","تصحيح":"Correct","رفض":"Reject","حزم أدلة حقيقية":"Real evidence packs","البنود المعلقة":"Pending items","حالة التحقق:":"Verification status:","القصاصة المقروءة (بكسل حقيقي)":"The read crop (real pixels)","موضعها في صفحة المستند (bbox حفظ وقت الاستخراج)":"Its place on the document page (bbox saved at extraction)","هاش القصاصة:":"Crop hash:","حزمة مطابقة:":"Matching pack:",
+"تقرير PDF":"PDF report","تقرير HTML":"HTML report","تقرير Excel تفاعلي":"Interactive Excel report","تنزيل PDF":"Download PDF","تنزيل XLSX":"Download XLSX","فتح HTML":"Open HTML","نفس الأرقام والتعليقات — يتضمن علم أولي/نهائي وأثر المراجعة — 15.5KB":"Same numbers and comments — includes the preliminary/final flag and the review trail — 15.5KB","الملخص · المؤشرات · الجداول · أثر المراجعة البشرية — 16.7KB":"Summary · Metrics · Tables · Human-review trail — 16.7KB","كل رقم داخلها متتبع لأصل محسوب — المدقق يسقط غير المتتبع":"Every number traces to a computed origin — the auditor drops untraceable ones",
+"التوصيات":"Recommendations","توصية 1 — السيولة":"Recommendation 1 — Liquidity","توصية 2 — التكاليف":"Recommendation 2 — Costs","توصية 3 — الرفع المالي":"Recommendation 3 — Leverage","تحسين إدارة السيولة قصيرة الأجل وإعادة هيكلة الالتزامات لتفادي مخاطر الإعسار.":"Improve short-term liquidity management and restructure liabilities to avert insolvency risk.","السيطرة على تكاليف المبيعات المباشرة لحماية الهوامش الربحية التنافسية.":"Control direct cost of sales to protect competitive margins.","حد موثق: خلط السنوات داخل نص حر غير مكشوف عدديًا — يبقى على عرض جدول المؤشرات المرجعي.":"Documented limit: mixing years inside free text is not numerically disclosed — it stays on the reference metrics table view.",
+"ما صافي الربح للفترة؟":"What is the net profit for the period?","ما ربحية السهم للفترة؟":"What is the EPS for the period?","ما السياسات المحاسبية؟":"What are the accounting policies?","ما مخاطر الائتمان التي تواجه الشركة؟":"What credit risks does the company face?","مصروفات البنود غير النقدية؟":"Non-cash item expenses?","إيضاح الضرائب المؤجلة؟":"Deferred-tax note?","إرسال":"Send",
+"هامش 15.93%":"Margin 15.93%","دوران 0.183":"Turnover 0.183","رافعة 4.796":"Leverage 4.796","✓ مطابق للـROE المباشر (reconciles)":"✓ matches direct ROE (reconciles)","الآلة: 15,928,525":"Machine: 15,928,525","الآلة: 5,040,128":"Machine: 5,040,128","الآلة: 3,143,601":"Machine: 3,143,601","الآلة: 18,799,203":"Machine: 18,799,203","اعتماد الصحيح 142,292,178":"Approve correct 142,292,178","اعتماد بالاتفاقية":"Approve by convention","صف خطأ — قسم غير المتداولة":"Wrong row — non-current section","مفكك ومتحقق منه":"Parsed and verified","مليار ج.م":"EGP billion","صافي الربح: مسار 2024":"Net income: 2024 path","▲ 26.6% عن 2023":"▲ 26.6% vs 2023","▼ 22.8% عن 2023":"▼ 22.8% vs 2023","▲ من 0.583 — رافعة مرتفعة":"▲ from 0.583 — high leverage","⚠ تقرير أولي — 12 بندًا حرجًا بانتظار المراجعة":"⚠ Preliminary report — 12 critical items awaiting review","أولي — 12 بندًا معلقًا":"Preliminary — 12 pending","بيانات عرض تجريبية من تشغيل موثق — التقارير الفعلية المنتجة في review_package/reports (v3)":"Demo display data from a verified run — the actual produced reports are in review_package/reports (v3)","⚠ الائتمان الضريبي (+1.27M) يفسّر ارتفاع الصافي عن قبل الضريبة — معلن في التقرير":"⚠ The tax credit (+1.27M) explains net exceeding pretax — disclosed in the report","⚠ رافعة مرتفعة (D/E 2.97) وسيولة ضعيفة (0.43×) — مخاطر ظاهرة في الدرجة ولا تختفي بتجميعها.":"⚠ High leverage (D/E 2.97) and weak liquidity (0.43×) — visible in the score, not hidden by aggregation.","✦ تفسير Gemini — بناءً على الأرقام الموثقة فقط":"✦ Gemini commentary — based on attested numbers only","🧪 بيانات تجريبية من تشغيل TE الموثق (40 خانة بشري-معتمدة) — لأغراض مراجعة التصميم فقط":"🧪 Demo data from the verified TE run (40 human-attested cells) — for design review only","معاينة تصميم مستقلة — لا تستبدل الواجهة الحالية ولا تغير مسارات الإنتاج · البيانات من تشغيل TE الموثق · 313 اختبارًا تمر على الكود":"Standalone design preview — does not replace the current UI nor touch production paths · data from the verified TE run · 313 tests passing","نسخة معاينة التصميم — Preview":"Design preview edition — Preview",
+"كل رقم يظهر بحالته الفعلية":"Every figure appears in its actual state","40/40 ملتقطة · Signed Exact للآلي = 38/40 (95%) · FA = 0":"40/40 captured · Signed Exact for auto = 38/40 (95%) · FA = 0","SGAI (مصروفات البيع والإدارة) غير موجود ضمن الخانات الموثقة لهذا المستند.":"SGAI (selling & admin expenses) is not among this document's attested cells.","المكونات الستة المتاحة معروضة في تبويب المؤشرات.":"The six available components are shown in the Metrics tab.","(مصروفات البيع والإدارة) — الخانات الموثقة لهذا المستند لا تشملها. الموديل يرفض إصدار M-Score جزئي (لا اختلاق).":"(selling & admin expenses) — this document's attested cells do not include them. The model refuses a partial M-Score (no fabrication).","📄 te_standalone_h1_2024.pdf · Telecom Egypt · 30 صفحة · فترة المقارنة 2023 → 2024":"📄 te_standalone_h1_2024.pdf · Telecom Egypt · 30 pages · comparison period 2023 → 2024","✓ استخراج: 40/40 خانة ملتقطة (رؤية + محلي عبر-طبقتين) · ✓ سلسلة المراجعة: 40 إقرارًا موثقًا (HMAC سليم) · ✓ Gemini: 44 تعليقًا + 4 توصيات (صفر أرقام مختلقة بعد المدقق) · ✓ RAG: 55/55 صفحة إيضاحات مفهرسة · ✓ PDF: 6 صفحات (257KB)":"✓ Extraction: 40/40 cells captured (vision + local, two layers) · ✓ Review chain: 40 attested records (HMAC intact) · ✓ Gemini: 44 comments + 4 recommendations (zero fabricated numbers after the auditor) · ✓ RAG: 55/55 note pages indexed · ✓ PDF: 6 pages (257KB)"};
+function applyLang(){
+  const roots=[document.querySelector(".main"), document.getElementById("srcmodal")]
+    .filter(Boolean);
+  for(const root of roots){
+    const walker=document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const nodes=[]; let n;
+    while((n=walker.nextNode())) nodes.push(n);
+    for(const node of nodes){
+      const raw=node.textContent;
+      const t=raw.trim();
+      if(!t) continue;
+      if(!NODE_ORIG.has(node)) NODE_ORIG.set(node, raw);
+      const orig=NODE_ORIG.get(node).trim();
+      node.textContent = (isEN && TEXTMAP[orig]) ? TEXTMAP[orig] : NODE_ORIG.get(node);
+    }
+  }
+}
+const NODE_ORIG=new Map();
 function toggleLang(){
   isEN=!isEN;
   document.documentElement.setAttribute("dir", isEN?"ltr":"rtl");
@@ -426,6 +465,7 @@ function toggleLang(){
   });
   document.getElementById("vtitle").textContent =
     isEN ? TITLES_EN[currentView()] : TITLES[currentView()];
+  applyLang();
 }
 function currentView(){
   const on=document.querySelector(".nav a.on");
@@ -452,32 +492,49 @@ function openSrc(field,year,val,pageLabel,pageNo){
   document.getElementById("srcmodal").classList.add("on");
 }
 /* حزم الأدلة الحقيقية (evidence_bundle.js): قصاصة البكسل + bbox + القراءات
-   + الهاشات من سجل المراجعة — لا عنصر نائب */
+   + الهاشات من سجل المراجعة.
+   v3 (عيب 5 من مراجعة v2): مطابقة صارمة (البند، السنة) — لا تُعرض أبدًا
+   صور مستند آخر داخل نافذة مصدر قيم هذا التقرير؛ عند عدم وجود حزمة
+   مطابقة تُعرض رسالة عدم توفر فقط. الأدلة الحقيقية المتاحة (مستند
+   اختباري 2022) لها قسم مستقل في «مراجعة البيانات».
+   الحروف العليا/السفلى غير مهمة هنا: الخريطة من التسمية العربية إلى
+   الحقل القانوني، والسنة يجب أن تطابق حزمة موجودة. */
+const FIELD_MAP={"ممتلكات ومعدات":"fixed_assets","أصول غير ملموسة":"intangible_assets","إجمالي الأصول غير المتداولة":"total_noncurrent_assets","المخزون":"inventory","نقدية وما في حكمها":"cash","إجمالي الأصول المتداولة":"total_current_assets","إجمالي الأصول":"total_assets","دائنون — قسم المتداولة":"accounts_payable","ضريبة الدخل المتداولة":"income_tax_expense","إجمالي الالتزامات المتداولة":"total_current_liabilities","إجمالي الالتزامات":"total_liabilities","الربح التشغيلي":"operating_income","الإيرادات":"revenue","صافي الربح":"net_income","التدفق النقدي التشغيلي":"operating_cash_flow","التزامات الإيجار غير المتداولة":"non_current_lease_liabilities","الجزء المتداول من القروض":"current_portion_lt_debt","قروض طويلة الأجل":"long_term_debt"};
 function renderEvidence(field, year){
   const box=document.getElementById("m-ev");
+  const evKey = FIELD_MAP[field] ? FIELD_MAP[field]+"|"+String(year) : null;
+  if(!evKey || !EVIDENCE[evKey]){
+    box.innerHTML=`<div class="mthumb">لا يوجد دليل مطابق لهذا (البند، السنة) في سجل المراجعة المحمّل — لن تُعرض صور من مستندات أخرى بديلًا عنه.<br><small>حزم الأدلة الحقيقية المتاحة (مستند اختباري 2022) معروضة في قسم «مراجعة البيانات» ← «حزم أدلة حقيقية».</small></div>`;
+    return;
+  }
+  const e=EVIDENCE[evKey];
+  box.innerHTML=`
+    <div style="font-size:11.5px;color:var(--ink2);margin:6px 0">حزمة مطابقة: <b dir="ltr">${e.field}</b> · ${e.year} · ص${e.page}</div>
+    <div id="ev-view"></div>`;
+  drawEvidence(evKey);
+}
+/* لوحة الأدلة الحقيقية المستقلة (قسم المراجعة): الحزم الحقيقية كما هي،
+   موسومة بصدق بمستندها — لا تُخلط بنوافذ مصدر قيم TE 2024 */
+function realEvidencePanel(){
   const keys=Object.keys(EVIDENCE);
-  const sameField=keys.filter(k=>EVIDENCE[k].field && field &&
-      (field.includes(EVIDENCE[k].field.replace(/_/g," ")) ||
-       EVIDENCE[k].field.replace(/_/g," ").includes(field)));
-  let selKey = sameField[0] || keys[0];
-  if(!keys.length){ box.innerHTML="<div class='mthumb'>لا توجد حزم أدلة محمّلة</div>"; return; }
+  if(!keys.length) return;
   const opts=keys.map(k=>{
     const e=EVIDENCE[k];
-    const lab=(e.field||k)+" — "+e.year;
-    return `<option value="${k}" ${k===selKey?"selected":""}>${lab} · ص${e.page}</option>`;
+    return `<option value="${k}">${e.field} — ${e.year} · ص${e.page}</option>`;
   }).join("");
-  box.innerHTML=`
-    <div style="display:flex;gap:8px;align-items:center;margin:6px 0">
-      <label style="font-size:12px;color:var(--ink2)">حزمة الدليل:</label>
-      <select id="ev-sel" onchange="drawEvidence(this.value)" dir="ltr"
+  document.getElementById("real-ev").innerHTML=`
+    <div style="display:flex;gap:8px;align-items:center;margin:8px 0">
+      <label style="font-size:12px;color:var(--ink2)">الحزمة:</label>
+      <select id="rev-ev-sel" onchange="drawEvidence(this.value,'ev-view-review')" dir="ltr"
         style="font-size:12px;padding:4px 8px;border:1px solid #d5dbe3;border-radius:7px;flex:1">${opts}</select>
     </div>
-    <div id="ev-view"></div>`;
-  drawEvidence(selKey);
+    <div id="ev-view-review"></div>`;
+  drawEvidence(keys[0], "ev-view-review");
 }
-function drawEvidence(key){
+function drawEvidence(key, viewId){
   const e=EVIDENCE[key];
-  const view=document.getElementById("ev-view");
+  const view=document.getElementById(viewId||"ev-view");
+  if(e) drawEvidence._last=[key, viewId||"ev-view"];
   if(!e){ view.innerHTML=""; return; }
   const b=e.bbox_rel;
   const [x0,y0,x1,y1]=b||[0,0,0,0];
@@ -504,6 +561,8 @@ function drawEvidence(key){
       هاش القصاصة: <span dir="ltr">${e.crop_sha256||"—"}</span> · قراءات الطبقات: ${readings||"—"}
     </div>`;
 }
+/* تهيئة لوحة الأدلة الحقيقية في قسم المراجعة عند التحميل */
+realEvidencePanel();
 </script>
 </body>
 </html>

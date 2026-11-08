@@ -1,39 +1,55 @@
 {
- "run_at": "2026-11-08T17:33:22",
+ "run_at": "2026-11-08T18:48:44",
  "code_version": {
-  "head": "088d49c",
+  "head": "e7bcff5",
   "dirty_files": [
-   "src/analysis/calculator.py\"",
    "src/analysis/financial_gate.py\"",
-   "src/dashboard/charts.py\"",
    "src/dashboard/excel_report.py\"",
    "src/dashboard/report.py\"",
-   "src/extraction/file_parsers.py\"",
-   "src/extraction/normalizer.py\"",
-   "src/pipeline.py\"",
-   "tests/test_pipeline.py\"",
    "tools/produce_real_reports.py\"",
-   "tests/test_unit_scale_display.py\"",
-   "tools/build_evidence_bundle.py\"",
-   "tools/build_review_package_v2.py\"",
-   "tools/preview_shots_v2.py\""
+   "tools/final_cell_acceptance.py\"",
+   "tools/preview_shots_v3.py\""
   ]
  },
- "purpose": "v2 review package — real reports after the fix round",
- "audit_conflict_resolution": "te_final_audit_post_fix.json (FA=2) is an INTERMEDIATE run before the two-layer exemption rule; the FINAL ledger for this round is THIS file — one binding per report.",
+ "round": "v3 review package — defects 1-6 of the v2 review",
+ "honest_replay": "v3: كل قيمة GT تُعاد بإحالة واحدة (بلا تصديق مُصطنع) — اللافتة الأولية وعمود حالة التحقق والدرجة الصحية المتروكة كلها متسقة: القيم تحتاج مراجعة. سجل القبول النهائي على مستوى الخلايا: cell_evidence/v3_final_cell_acceptance.json.",
+ "audit_conflict_resolution": "te_final_audit_post_fix.json (FA=2) محفوظ كما هو — تشغيل وسيط قبل قاعدة التصديق عبر-طبقتين. النتيجة النهائية الفعلى على مستوى الخلايا في v3_final_cell_acceptance.json المربوط بإصدار الكود وبصمة التشغيل.",
  "reports": [
   {
    "company": "Telecom Egypt (TE — verified subset)",
    "stem": "TE_Financial_Report_2024",
-   "xlsx_sha256_16": "3c8ce082b437bf07",
+   "xlsx_sha256_16": "47b0fb2d624d8f81",
    "pdf_ok": true,
-   "pdf_sha256_16": "a66bcd1848e1810e",
-   "health": 54.5,
-   "coverage": 1.0,
+   "pdf_sha256_16": "947c88e7526a5a11",
+   "health": null,
+   "coverage": 0.0,
+   "health_policy": "تغطية البيانات 0% | الركائز المحسوبة: [] | المحجوبة/الناقصة: ['cash', 'leverage', 'liquidity', 'profitability'] | رُفضت الدرجة: ركيزة سيولة/مديونية ناقصة",
+   "blocked_fields_count": 20,
    "preliminary": true,
-   "pending_critical": 1,
+   "pending_critical": 22,
    "pending_fields": [
-    "pretax_income"
+    "accounts_payable",
+    "accounts_payable",
+    "cost_of_revenue",
+    "cost_of_revenue",
+    "current_assets",
+    "current_assets",
+    "current_liabilities",
+    "current_liabilities",
+    "equity",
+    "equity",
+    "net_income",
+    "net_income",
+    "operating_cash_flow",
+    "operating_cash_flow",
+    "pretax_income",
+    "pretax_income",
+    "revenue",
+    "revenue",
+    "total_assets",
+    "total_assets",
+    "total_liabilities",
+    "total_liabilities"
    ],
    "na_metrics": [
     "التدفق النقدي الحر",
@@ -50,20 +66,110 @@
     "التكاليف التمويلية الصافية إلى الإيرادات",
     "الإهلاك إلى الإيرادات"
    ],
+   "cells": {
+    "fixed_assets": {
+     "2024": 89842411.0,
+     "2023": 76244954.0
+    },
+    "inventory": {
+     "2024": 5732698.0,
+     "2023": 3623500.0
+    },
+    "accounts_receivable": {
+     "2024": 12985847.0,
+     "2023": 7752132.0
+    },
+    "cash": {
+     "2024": 6000305.0,
+     "2023": 10272954.0
+    },
+    "current_assets": {
+     "2024": 39472216.0,
+     "2023": 28631278.0
+    },
+    "total_assets": {
+     "2024": 169497056.0,
+     "2023": 134358541.0
+    },
+    "equity": {
+     "2024": 27204878.0,
+     "2023": 36152951.0
+    },
+    "accounts_payable": {
+     "2024": 33524304.0,
+     "2023": 25538574.0
+    },
+    "current_liabilities": {
+     "2024": 91625404.0,
+     "2023": 64166416.0
+    },
+    "total_liabilities": {
+     "2024": 142292178.0,
+     "2023": 98205590.0
+    },
+    "revenue": {
+     "2024": 27727014.0,
+     "2023": 21899104.0
+    },
+    "cost_of_revenue": {
+     "2024": -18799203.0,
+     "2023": -13227521.0
+    },
+    "gross_profit": {
+     "2024": 8927811.0,
+     "2023": 8671583.0
+    },
+    "operating_income": {
+     "2024": 5040128.0,
+     "2023": 5451938.0
+    },
+    "pretax_income": {
+     "2024": 3143601.0,
+     "2023": 6098328.0
+    },
+    "income_tax_expense": {
+     "2024": 1272749.0,
+     "2023": -373645.0
+    },
+    "net_income": {
+     "2024": 4416350.0,
+     "2023": 5724683.0
+    },
+    "operating_cash_flow": {
+     "2024": 11329526.0,
+     "2023": 8543713.0
+    },
+    "investing_cash_flow": {
+     "2024": -26010844.0,
+     "2023": -11935977.0
+    },
+    "financing_cash_flow": {
+     "2024": 10246257.0,
+     "2023": 6112704.0
+    }
+   },
    "verification_counts": {
     "human": 0,
-    "auto_two_layer": 40,
+    "auto_two_layer": 0,
     "derived": 0,
-    "gated": 0
+    "needs_review": 40
    },
    "gemini": {
     "wired": true,
     "freshness": "fresh_live_run",
-    "model": "gemini-3.6-flash",
+    "model": "gemini-3.5-flash",
     "comments": 40,
     "recommendations": 4,
     "notation": "actual units (مليار/مليون)",
-    "dataset": "TE frozen GT 40-cell set, same periods"
+    "dataset": "TE frozen GT 40-cell set — 6 أشهر 2024/2023",
+    "dataset_identity": {
+     "company": "Telecom Egypt (TE — verified subset)",
+     "periods": "2023–2024",
+     "gt_file": "gt_te_frozen.json",
+     "gt_sha256_16": "a549d9d8470f0efc",
+     "identity_basis": "التحليل وُلّد من نفس قاموس النتائج الذي يُعيد إنتاج التقرير (نفس الشركة والفترات والقيم) — تطابق بالبناء وليس ادعاءً نصيًا",
+     "values_state": "GT replay — يحتاج مراجعة (بلا تصديق في إعادة الإنتاج)"
+    }
    },
    "unit_chain": {
     "stored": "printed values (EGP thousands)",
@@ -72,7 +178,7 @@
     "display_example": "27,730,150 ألف → ج.م27.73 مليار"
    },
    "period_type": "قوائم منفصلة مرحلية (كونسلسيدد لا) — ستة أشهر منتهية 30/06/2024 مقابل ستة أشهر 30/06/2023 (وليست سنوية)",
-   "reviewer_label": "مراجعة اختبارية موثقة (test-reviewer عبر سلسلة HMAC في جولة القبول) — ليست مراجعة بشرية إنتاجية",
+   "reviewer_label": "لا تصديق في إعادة الإنتاج — القيم وُثّقت اختباريًا (test-reviewer) في جولة القبول، ليست مراجعة بشرية إنتاجية",
    "libreoffice_rc": 0,
    "files": {
     "xlsx": "TE_Financial_Report_2024.xlsx",
@@ -84,16 +190,36 @@
   {
    "company": "EFG Holding (EFG — verified subset)",
    "stem": "EFG_Financial_Report_2024",
-   "xlsx_sha256_16": "64528ff0f5327d89",
+   "xlsx_sha256_16": "9cc7dd2b3468294a",
    "pdf_ok": true,
-   "pdf_sha256_16": "558b33b6f2c66749",
-   "health": 35.6,
-   "coverage": 1.0,
+   "pdf_sha256_16": "3e92923e0999cb1c",
+   "health": null,
+   "coverage": 0.0,
+   "health_policy": "تغطية البيانات 0% | الركائز المحسوبة: [] | المحجوبة/الناقصة: ['cash', 'leverage', 'liquidity', 'profitability'] | رُفضت الدرجة: ركيزة سيولة/مديونية ناقصة",
+   "blocked_fields_count": 14,
    "preliminary": true,
-   "pending_critical": 2,
+   "pending_critical": 20,
    "pending_fields": [
+    "accounts_payable",
+    "accounts_payable",
+    "current_assets",
+    "current_assets",
+    "current_liabilities",
+    "current_liabilities",
+    "equity",
+    "equity",
+    "net_income",
+    "net_income",
+    "operating_cash_flow",
+    "operating_cash_flow",
+    "pretax_income",
+    "pretax_income",
     "revenue",
-    "revenue"
+    "revenue",
+    "total_assets",
+    "total_assets",
+    "total_liabilities",
+    "total_liabilities"
    ],
    "na_metrics": [
     "مجمل الربح",
@@ -124,22 +250,89 @@
     "مصاريف البيع إلى الإيرادات",
     "البحث والتطوير إلى الإيرادات",
     "التكاليف التمويلية الصافية إلى الإيرادات",
-    "الإهلاك إلى الإيرادات"
+    "الإهلاك إلى الإيرادات",
+    "نسبة الضريبة الفعلية"
    ],
+   "cells": {
+    "total_assets": {
+     "2024": 25284931.0,
+     "2023": 19041842.0
+    },
+    "total_liabilities": {
+     "2024": 14541406.0,
+     "2023": 7835622.0
+    },
+    "equity": {
+     "2024": 10743525.0,
+     "2023": 11206220.0
+    },
+    "current_assets": {
+     "2024": 15164132.0,
+     "2023": 10929877.0
+    },
+    "current_liabilities": {
+     "2024": 12670105.0,
+     "2023": 7040571.0
+    },
+    "cash": {
+     "2024": 1725533.0,
+     "2023": 1351067.0
+    },
+    "accounts_payable": {
+     "2024": 1718752.0,
+     "2023": 1042716.0
+    },
+    "fixed_assets": {
+     "2024": 239596.0,
+     "2023": 225807.0
+    },
+    "revenue": {
+     "2024": 4242232.0,
+     "2023": 2432823.0
+    },
+    "pretax_income": {
+     "2024": 413031.0,
+     "2023": 674335.0
+    },
+    "net_income": {
+     "2024": -345735.0,
+     "2023": 426886.0
+    },
+    "operating_cash_flow": {
+     "2024": -633867.0,
+     "2023": 2903.0
+    },
+    "investing_cash_flow": {
+     "2024": -205906.0,
+     "2023": -1237.0
+    },
+    "financing_cash_flow": {
+     "2024": -1941524.0,
+     "2023": -842367.0
+    }
+   },
    "verification_counts": {
     "human": 0,
-    "auto_two_layer": 28,
+    "auto_two_layer": 0,
     "derived": 0,
-    "gated": 2
+    "needs_review": 28
    },
    "gemini": {
     "wired": true,
     "freshness": "fresh_live_run",
-    "model": "gemini-3.5-flash",
-    "comments": 24,
+    "model": "gemini-3.6-flash",
+    "comments": 23,
     "recommendations": 4,
     "notation": "actual units (مليار/مليون)",
-    "dataset": "TE frozen GT 40-cell set, same periods"
+    "dataset": "EFG frozen GT 14-cell set ×سنتان — FY2024/FY2023",
+    "dataset_identity": {
+     "company": "EFG Holding (EFG — verified subset)",
+     "periods": "2023–2024",
+     "gt_file": "gt_efg_frozen.json",
+     "gt_sha256_16": "f406d9e053cd1def",
+     "identity_basis": "التحليل وُلّد من نفس قاموس النتائج الذي يُعيد إنتاج التقرير (نفس الشركة والفترات والقيم) — تطابق بالبناء وليس ادعاءً نصيًا",
+     "values_state": "GT replay — يحتاج مراجعة (بلا تصديق في إعادة الإنتاج)"
+    }
    },
    "unit_chain": {
     "stored": "printed values (EGP thousands)",

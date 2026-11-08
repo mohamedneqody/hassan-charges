@@ -57,12 +57,40 @@ body.printsafe .pillars { display: block; }
 body.printsafe .pillar { display: block; margin: 6px 0; }
 body.printsafe .page { max-width: 100%; padding: 18px 22px; }
 body.printsafe h1 { font-size: 1.35rem; white-space: normal; }
-/* أرقام لا تُكسر بين سطرين — 256.23 مليون لا تنقسم 256.2 / 3 */
-body.printsafe td.num, body.printsafe th { white-space: nowrap; }
+/* أرقام لا تُكسر بين سطرين — 256.23 مليون لا تنقسم 256.2 / 3.
+   th بلا nowrap: 9 أعمدة برؤوس غير قابلة للكسر قصّت عمود التحقق عند
+   الحافة (عيب 4 من مراجعة v2) */
+body.printsafe td.num { white-space: nowrap; }
+body.printsafe .vstat { white-space: normal; }
 body.printsafe table { width: 100%; table-layout: auto; }
 body.printsafe tr { page-break-inside: avoid; }
 body.printsafe table { font-size: .8rem; }
 body.printsafe .meta { font-size: .82rem; }
+/* v3 (عيب 4): غلاف يعيش في صفحة واحدة — ضغط الكتل العلوية بدل ترك
+   LibreOffice يوزعها على صفحتين، وصفحات أخيرة غير شبه فارغة */
+body.printsafe { padding: 0; }
+body.printsafe .page { padding: 14px 18px; border-radius: 0; }
+body.printsafe h1 { font-size: 1.18rem; margin: 0 0 2px; }
+body.printsafe h2 { font-size: .98rem; margin: 14px 0 8px;
+                    page-break-after: avoid; }
+body.printsafe .score { padding: 8px 12px; margin: 8px 0; }
+body.printsafe .score .num { font-size: 1.7rem; padding-left: 10px; }
+body.printsafe .pillars { display: block; }
+body.printsafe .pillar { display: inline-block; padding: 4px 10px;
+                         font-size: .78rem; margin: 3px 4px 3px 0; }
+body.printsafe .meta { font-size: .78rem; margin: 2px 0; }
+body.printsafe table { font-size: .76rem; }
+body.printsafe th { padding: 5px 7px; }
+body.printsafe td { padding: 4px 7px; }
+body.printsafe .vstat { font-size: .72rem; color: #475569;
+                        white-space: normal; }
+/* سطور الميتا كجدول بلا حدود — التغليف الوحيد الذي يُتقنه LibreOffice */
+body.printsafe table.metaln { width: 100%; margin: 2px 0; }
+body.printsafe table.metaln td { border: none; padding: 2px 4px;
+                                 font-size: .78rem; color: #64748b;
+                                 vertical-align: top; }
+body.printsafe table.metaln td.mlab { white-space: nowrap; font-weight: 600;
+                                      color: #475569; width: 1%; }
 """
 
 
@@ -78,9 +106,15 @@ def _nb(text: str) -> str:
 
 
 def _metrics_table(rows: list[MetricRow], prev_year: int, curr_year: int,
-                   currency: str, scale: int = 1) -> str:
+                   currency: str, scale: int = 1,
+                   verif: dict | None = None) -> str:
+    verif = verif or {}
     trs = []
     for r in rows:
+        # نفس حالة Excel (عيب 6): كل مؤشر يحمل أسوأ حالة لمدخلاته —
+        # غير القابل للحساب «غير متوفر» ولا يوصف أبدًا بأنه موثق
+        vlabel = verif.get(r.key) or ("غير متوفر"
+                                      if r.status == "N/A" else "—")
         trs.append(
             "<tr>"
             f"<td>{ESC(r.category)}</td><td>{ESC(r.label)}</td>"
@@ -90,12 +124,13 @@ def _metrics_table(rows: list[MetricRow], prev_year: int, curr_year: int,
             f'<td class="num">{ESC(fmt_signed_pct(r.change_pct))}</td>'
             f"<td>{_badge(r.status)}</td>"
             f"<td>{ESC(r.trend_symbol + ' ' + r.trend) if r.trend != 'N/A' else '–'}</td>"
+            f'<td class="vstat">{ESC(vlabel)}</td>'
             "</tr>"
         )
     return (
         "<table><thead><tr><th>Category</th><th>Metric</th><th>"
         f"{prev_year}</th><th>{curr_year}</th><th>Change</th><th>Change %</th>"
-        "<th>Status</th><th>Trend</th></tr></thead>"
+        "<th>Status</th><th>Trend</th><th>Verification</th></tr></thead>"
         f"<tbody>{''.join(trs)}</tbody></table>"
     )
 
@@ -124,6 +159,23 @@ def build_html_report(
             f'<div><b>{ESC(score.label)}</b><div class="pillars">{pillar_chips}</div></div>'
             "</div>"
         )
+    else:
+        # v3 (عيب 6): الدرجة المحجوبة تُعرض كحالة صادقة في HTML/PDF —
+        # نفس ما يقوله Excel («غير محسوبة»)، لا اختفاء صامت
+        # سطر مضغوط: الأركان المحجوبة بالاسم — تفصيل السياسة الطويل
+        # كان يدفع الغلاف لصفحة ثانية (عيب 4 من مراجعة v2)
+        blocked_names = "، ".join(p.name for p in score.pillars
+                                  if p.score is None) or "—"
+        reason = ("السياسة ترفض الحسم عند ركيزة حرجة ناقصة — قيم تحتاج "
+                  f"مراجعة. محجوبة: {blocked_names}")
+        score_html = (
+            '<div class="score">'
+            '<div class="num">—</div>'
+            f'<div><b>الدرجة الصحية: غير محسوبة</b>'
+            f'<div class="meta">{ESC(reason)}</div>'
+            "</div>"
+            "</div>"
+        )
 
     comments = "".join(
         f'<div class="comment" dir="auto"><b>{ESC(m)}:</b> {ESC(c)}</div>'
@@ -143,11 +195,22 @@ def build_html_report(
         else '<p class="muted">No recommendations.</p>'
     )
 
+    # النواقص بصدق (عيب 4 من مراجعة v2): «None» لا يُعرض أبداً بينما
+    # توجد مؤشرات N/A — الفرق موثق: حقول لم تُستخرج مقابل مؤشرات لا
+    # تُحسب لعدم توفر مدخلاتها
+    na_metrics = results.get("na_metrics") or []
     missing = (
         "<ul>" + "".join(f"<li>{ESC(m)}</li>" for m in results["missing"]) + "</ul>"
         if results["missing"]
-        else '<p class="muted">None — all available metrics were computed.</p>'
-    )
+        else "")
+    if not results["missing"] and na_metrics:
+        missing = (f'<p class="muted">لا حقول مفقودة من الاستخراج — لكن '
+                   f'{len(na_metrics)} مؤشرًا غير قابلة للحساب لعدم توفر '
+                   f'مدخلاتها الموثقة (القائمة أعلاه): '
+                   f'{ESC("، ".join(str(x) for x in na_metrics))}.</p>')
+    elif not results["missing"]:
+        missing = ('<p class="muted">None — all available metrics were '
+                   'computed, and every metric found its inputs.</p>')
 
     # MVP safety guard (المهمة 3): the report is PRELIMINARY while any
     # critical field still needs review — a verified-final report is only
@@ -166,7 +229,11 @@ def build_html_report(
                 results["curr_metrics"].notes.get("tax_rate") else "")
     if preliminary:
         pend = results["pending_critical_review"]
-        pend_names = "، ".join(sorted({p["field"] for p in pend}))
+        pend_all = sorted({p["field"] for p in pend})
+        # v3 (عيب 4): لافتة مضغوطة — العدد + أول ستة بنود، لا قائمة تطول
+        # وتدفع الغلاف لصفحة ثانية
+        pend_names = "، ".join(pend_all[:6]) + ("، …" if len(pend_all) > 6
+                                                else "")
         report_status = (
             '<div style="background:#fff3cd;border:1px solid #f0d9a8;'
             'border-radius:9px;padding:11px 16px;margin:10px 0;font-size:.92rem">'
@@ -180,14 +247,23 @@ def build_html_report(
             'border-radius:9px;padding:11px 16px;margin:10px 0;font-size:.92rem">'
             '✓ <b>تقرير نهائي موثق</b> — كل البنود الحرجة تم التحقق منها '
             "(آليًا بتصديق عبر-طبقتين أو بشريًا)</div>")
-    unit_html = (f'<div class="meta">وحدة القوائم: {unit_note}</div>'
-                 if unit_note else "")
-    period_html = (f'<div class="meta">نوع الفترة: {period_type}</div>'
-                   if period_type else "")
-    na_html = (f'<div class="meta">مؤشرات غير قابلة للحساب (N/A): '
-               f'{"، ".join(str(x) for x in na_metrics)}</div>'
-               if na_metrics else "")
-    tax_html = (f'<div class="meta">{tax_note}</div>' if tax_note else "")
+    # v3 (عيب 4): LibreOffice لا يغلف سطور .meta الطويلة المختلطة الاتجاه
+    # (قصّ عند الحافة وكسر داخل الكلمات) — الجداول وحدها تعمل بإتقان عنده،
+    # فوضع الطباعة يجعلها صفوف جدول بلا حدود؛ الشاشة تبقى div عادية
+    def _meta(label: str, value: str) -> str:
+        if not value:
+            return ""
+        if print_safe:
+            return (f'<table class="metaln"><tr>'
+                    f'<td class="mlab">{ESC(label)}</td>'
+                    f'<td>{ESC(value)}</td></tr></table>')
+        return f'<div class="meta">{ESC(label)}: {ESC(value)}</div>'
+
+    unit_html = _meta("وحدة القوائم", unit_note)
+    period_html = _meta("نوع الفترة", period_type)
+    na_html = _meta("مؤشرات غير قابلة للحساب (N/A)",
+                    "، ".join(str(x) for x in na_metrics))
+    tax_html = _meta("ملاحظة الضريبة", tax_note)
 
     # Human-review trail (أثر المراجعة البشرية): every value a human attested
     # carries the reviewer, the machine value before, and the final verdict —
@@ -202,8 +278,10 @@ def build_html_report(
     )
 
     interpreter = "Gemini AI" if analysis.ok else "deterministic rule-based engine"
+    # dir=rtl (v3): التقرير عربي أساسًا — غياب اتجاه القاعدة جعل LibreOffice
+    # يكسر الأسطر العربية عند الحواف وحتى داخل الكلمات
     return f"""<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8">
+<html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <title>Financial Analysis — {company}</title><style>{_CSS}</style></head>
 <body class="{'printsafe' if print_safe else ''}">
 <div class="page">
@@ -211,10 +289,10 @@ def build_html_report(
 <div class="meta">Period: {prev_y} → {cur_y} · Generated: {generated} ·
 Interpreted by: {ESC(interpreter)} ({ESC(analysis.model)}) · All numbers computed in Python</div>
 {report_status}
-{unit_html}{period_html}{tax_html}{na_html}
 {score_html}
+{unit_html}{period_html}{tax_html}{na_html}
 <h2>Metrics — {prev_y} vs {cur_y}</h2>
-{_metrics_table(results['rows'], prev_y, cur_y, currency, scale)}
+{_metrics_table(results['rows'], prev_y, cur_y, currency, scale, results.get('verification_status'))}
 <h2>Ratio Commentary</h2>
 {comments}
 <h2>Recommendations</h2>

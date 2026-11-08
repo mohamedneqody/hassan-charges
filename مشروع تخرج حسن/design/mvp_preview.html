@@ -39,7 +39,9 @@ body{font-family:"Segoe UI",Tahoma,"Noto Kufi Arabic",sans-serif;background:var(
 .pill.prelim{background:var(--warnbg);color:var(--warn);border:1px solid #f0d9a8}
 .pill.final{background:var(--okbg);color:var(--ok)}
 .view{display:none}.view.on{display:block;animation:fade .25s}
-@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1}}
+/* slide-only: content is NEVER hidden by the entrance animation
+   (headless screenshots and slow GPUs otherwise render a blank view) */
+@keyframes fade{from{transform:translateY(4px)}to{transform:translateY(0)}}
 /* cards & grids */
 .grid{display:grid;gap:14px}
 .g4{grid-template-columns:repeat(4,1fr)}
@@ -120,6 +122,11 @@ tr:hover td{background:#f7fafd}
 .mclose{float:left;background:none;border:0;font-size:19px;cursor:pointer;color:var(--ink2)}
 .foot{margin-top:26px;font-size:11px;color:var(--ink2);text-align:center}
 .dir-ltr{direction:ltr;text-align:left}
+body.en{direction:ltr}
+body.en .side{right:auto;left:0;border-left:1px solid rgba(255,255,255,.08)}
+body.en .main{margin-right:0;margin-left:232px}
+body.en .nav a{border-right:0;border-left:3px solid transparent;padding:11px 20px}
+body.en .nav a.on{border-left-color:var(--brand2);border-right:0}
 </style>
 </head>
 <body>
@@ -138,7 +145,7 @@ tr:hover td{background:#f7fafd}
       <a data-v="reports"><span class="ico">⇩</span> التقارير</a>
     </nav>
     <div class="lang">
-      <button onclick="alert('Preview: EN layout mirrors this RTL shell')">English (معاينة)</button>
+      <button onclick="toggleLang()">English / عربي</button>
     </div>
   </aside>
   <main class="main">
@@ -398,6 +405,31 @@ tr:hover td{background:#f7fafd}
 
 <script>
 const TITLES={dash:"لوحة القيادة",stmts:"القوائم المالية",kpi:"المؤشرات المالية",health:"Health Score",gemini:"تفسير Gemini",chat:"محادثة المستند",review:"مراجعة البيانات",reports:"التقارير"};
+const TITLES_EN={dash:"Dashboard",stmts:"Financial Statements",kpi:"Financial Metrics",health:"Health Score",gemini:"Gemini Analysis",chat:"Document Chat",review:"Data Review",reports:"Reports"};
+let isEN=false;
+function toggleLang(){
+  isEN=!isEN;
+  document.documentElement.setAttribute("dir", isEN?"ltr":"rtl");
+  document.documentElement.setAttribute("lang", isEN?"en":"ar");
+  document.body.classList.toggle("en", isEN);
+  const side=document.querySelector(".side");
+  side.style.right=isEN?"auto":"0";
+  side.style.left=isEN?"0":"auto";
+  side.style.borderRight=isEN?"1px solid rgba(255,255,255,.08)":"none";
+  document.querySelector(".main").style.marginRight=isEN?"0":"232px";
+  document.querySelector(".main").style.marginLeft=isEN?"232px":"0";
+  document.querySelectorAll(".nav a").forEach(a=>{
+    const t=a.childNodes[1];
+    const v=a.dataset.v;
+    t.textContent = isEN ? TITLES_EN[v] : TITLES[v];
+  });
+  document.getElementById("vtitle").textContent =
+    isEN ? TITLES_EN[currentView()] : TITLES[currentView()];
+}
+function currentView(){
+  const on=document.querySelector(".nav a.on");
+  return on ? on.dataset.v : "dash";
+}
 document.querySelectorAll(".nav a").forEach(a=>{
   a.addEventListener("click",()=>{
     document.querySelectorAll(".nav a").forEach(x=>x.classList.remove("on"));

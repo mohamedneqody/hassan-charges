@@ -1,0 +1,43 @@
+{
+ "reports": [
+  {
+   "company": "Telecom Egypt (TE — verified subset)",
+   "stem": "TE_Financial_Report_2024",
+   "xlsx": "D:\\hassan_charges\\مشروع تخرج حسن\\review_package\\reports\\TE_Financial_Report_2024.xlsx",
+   "xlsx_bytes": 14666,
+   "html": "D:\\hassan_charges\\مشروع تخرج حسن\\review_package\\reports\\TE_Financial_Report_2024.html",
+   "html_chars": 15561,
+   "pdf": "D:\\hassan_charges\\مشروع تخرج حسن\\review_package\\reports\\TE_Financial_Report_2024.pdf",
+   "pdf_ok": true,
+   "pdf_bytes": 259241,
+   "health": 54.5,
+   "coverage": 1.0,
+   "preliminary": true,
+   "pending_critical": 1,
+   "pending_fields": [
+    "pretax_income"
+   ],
+   "libreoffice_rc": 0
+  },
+  {
+   "company": "EFG Holding (EFG — verified subset)",
+   "stem": "EFG_Financial_Report_2024",
+   "xlsx": "D:\\hassan_charges\\مشروع تخرج حسن\\review_package\\reports\\EFG_Financial_Report_2024.xlsx",
+   "xlsx_bytes": 13651,
+   "html": "D:\\hassan_charges\\مشروع تخرج حسن\\review_package\\reports\\EFG_Financial_Report_2024.html",
+   "html_chars": 15072,
+   "pdf": "D:\\hassan_charges\\مشروع تخرج حسن\\review_package\\reports\\EFG_Financial_Report_2024.pdf",
+   "pdf_ok": true,
+   "pdf_bytes": 255986,
+   "health": 35.6,
+   "coverage": 1.0,
+   "preliminary": true,
+   "pending_critical": 2,
+   "pending_fields": [
+    "revenue",
+    "revenue"
+   ],
+   "libreoffice_rc": 0
+  }
+ ]
+}

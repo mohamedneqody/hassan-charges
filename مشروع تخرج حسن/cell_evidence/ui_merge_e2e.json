@@ -1,0 +1,37 @@
+{
+ "steps": {
+  "01_upload": "captured",
+  "extraction_started": "22:00:29",
+  "extraction_done": "22:00:30",
+  "02_classic_dashboard": "captured",
+  "classic_intact": true,
+  "03_new_ui_dashboard": "captured",
+  "new_ui_reached": true,
+  "04_statements_cells": "captured",
+  "evidence_buttons": 53,
+  "05_source_evidence": "captured",
+  "tab_06_metrics": true,
+  "06_metrics": "captured",
+  "tab_07_health": true,
+  "07_health": "captured",
+  "tab_08_gemini": true,
+  "08_gemini": "captured",
+  "tab_09_rag": true,
+  "09_rag": "captured",
+  "tab_10_review_panel": true,
+  "10_review_panel": "captured",
+  "review_empty_honest": true,
+  "pin_input_present": 0,
+  "tab_12_reports": true,
+  "12_reports": "captured",
+  "xlsx_download": {
+   "ok": true,
+   "size": 14601
+  },
+  "13_en_ltr": "captured",
+  "14_back_to_classic": "captured",
+  "back_to_classic": true
+ },
+ "started": "22:00:25",
+ "finished": "22:01:03"
+}

@@ -1,6 +1,8 @@
 """End-to-end pipeline orchestration (no UI code — testable headlessly)."""
 from __future__ import annotations
 
+import hashlib
+
 from src.ai.gemini_agent import build_payload
 from src.analysis.calculator import compute_year_metrics
 from src.analysis.comparison import (
@@ -72,7 +74,22 @@ def run_pipeline(file_name: str, raw: bytes, company: str, progress_cb=None, pag
         store_extraction,
     )
 
+    def _flatten(nested: dict) -> dict:
+        """field→year→v (متداخل) أو (field, year)→v — إلى "f|y" نصيًا."""
+        out = {}
+        for k, v in (nested or {}).items():
+            if isinstance(k, tuple) and len(k) == 2:
+                out[f"{k[0]}|{k[1]}"] = v
+            elif isinstance(v, dict):
+                for y, vv in v.items():
+                    out[f"{k}|{y}"] = vv
+        return out
+
     key = extraction_key(file_name, raw, page_range, fast_mode)
+    # v5: قرار البوابة المخزون (كاش) — None في المسار الحي
+    _cached_log = None
+    _cached_bbox = {}
+    _cached_labels = {}
     cached = load_cached_extraction(key)
     if cached is not None:
         from src.extraction.normalizer import FinancialData
@@ -88,6 +105,13 @@ def run_pipeline(file_name: str, raw: bytes, company: str, progress_cb=None, pag
             notes_text={int(k): v for k, v in (cached.get("notes_text") or {}).items()},
         )
         data.field_sources = cached.get("field_sources") or {}
+        # v5: استعادة وحدة الطباعة المخزنة — الكاش يحفظها لكن إعادة البناء
+        # كانت تتركها 1 فتعرض TE «مليون» بدل «مليار» (كشفه اختبار الرحلة)
+        data.unit_scale = int(cached.get("unit_scale") or 1)
+        data.unit_note = cached.get("unit_note") or ""
+        _cached_log = cached.get("decision_log") or []
+        _cached_bbox = cached.get("candidate_bbox") or {}
+        _cached_labels = cached.get("candidate_labels") or {}
         data.notes.append(
             "⚡ Loaded from the local cache — no API calls were spent. "
             "(Use «مسح الكاش المحلي» in the sidebar to re-extract fresh.)"
@@ -98,6 +122,8 @@ def run_pipeline(file_name: str, raw: bytes, company: str, progress_cb=None, pag
         data = load_financial_data(file_name, raw, progress_cb=progress_cb,
                                    page_range=page_range, fast_mode=fast_mode)
         try:
+            from src.extraction.normalizer import build_decision_log as _bdl
+
             store_extraction(key, {
                 "values": data.values,
                 "notes": data.notes,
@@ -112,6 +138,14 @@ def run_pipeline(file_name: str, raw: bytes, company: str, progress_cb=None, pag
                 "human_reviews": {
                     f"{k[0]}|{k[1]}": v for k, v
                     in (getattr(data, "human_reviews", {}) or {}).items()},
+                # v5: قرار البوابة ومواضع الخانات كما حُسبت أول مرة —
+                # الكاش لا يحفظ المرشحين فإعادة بناء السجل منه كانت ستعيد
+                # سجلًا فارغًا (عيب كشفه اختبار الدمج الحي)
+                "decision_log": _bdl(data),
+                "candidate_bbox": _flatten(
+                    getattr(data, "candidate_bbox", {})),
+                "candidate_labels": _flatten(
+                    getattr(data, "candidate_labels", {})),
             })
         except Exception as exc:
             # caching must never break the pipeline — but the failure is no
@@ -157,6 +191,17 @@ def run_pipeline(file_name: str, raw: bytes, company: str, progress_cb=None, pag
     rows = build_comparison(prev_metrics, curr_metrics)
     growth_rows = growth_metrics(prev_metrics, curr_metrics)
 
+    # v5 (دمج الواجهة الجديدة): مفاتيح قراءة فقط لواجهة Streamlit الجديدة —
+    # سجل القرار (أساس عمود حالة التحقق وقرار البوابة) + مواضع الخانات
+    # (bbox) + تسميات المرشحين + هاش المستند. لا تغيير في أي قرار مالي:
+    # كل هذه القيم مشتقة من نفس data التي بُنيت منها النتائج أعلاه.
+    from src.extraction.normalizer import build_decision_log
+
+    decision_log = _cached_log if _cached_log else build_decision_log(data)
+
+    bbox = _cached_bbox or _flatten(getattr(data, "candidate_bbox", {}))
+    labels = _cached_labels or _flatten(getattr(data, "candidate_labels", {}))
+
     return {
         "company": company,
         "file_name": file_name,
@@ -181,6 +226,10 @@ def run_pipeline(file_name: str, raw: bytes, company: str, progress_cb=None, pag
         "human_reviews": {
             f"{k[0]}|{k[1]}": v for k, v
             in (getattr(data, "human_reviews", {}) or {}).items()},
+        "decision_log": decision_log,
+        "candidate_bbox": bbox,
+        "candidate_labels": labels,
+        "document_sha256_16": hashlib.sha256(raw).hexdigest()[:16],
     }
 
 

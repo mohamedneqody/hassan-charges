@@ -1,0 +1,19 @@
+{
+ "steps": {
+  "b01_upload_te": "captured",
+  "extraction_started": "19:05:07",
+  "extraction_done": "19:05:37",
+  "b02_new_ui": "captured",
+  "b03_statements": "captured",
+  "evidence_buttons": 56,
+  "b04_evidence_bbox": "captured",
+  "b05_review": "captured",
+  "has_pin_input": true,
+  "confirmations_checked": 4,
+  "b06_review_recorded": "captured",
+  "reject_recorded": false,
+  "reject_error": []
+ },
+ "started": "19:04:48",
+ "finished": "19:06:02"
+}

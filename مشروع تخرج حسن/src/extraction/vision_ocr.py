@@ -1395,6 +1395,23 @@ def extract_via_vision(
     from src.extraction.provenance import SOURCE_VISION_MODEL
 
     data.extraction_source = SOURCE_VISION_MODEL
+    # v5: وحدة الطباعة على مسار الرؤية أيضًا — الترويسة المطبوعة تُقرأ من
+    # نصوص صفحات Indra نفسها (كان مسار النص وحده يكشفها فعرضت TE الممسوحة
+    # «مليون» بدل «مليار» — كشفه اختبار الدمج الحي)
+    try:
+        from src.extraction.file_parsers import detect_printed_unit
+
+        # notes_text تُلتقط أعلى مباشرة (Indra محليًا على كل الصفحات) —
+        # نصوص القوائم نفسها ضمنها فترويسة الوحدة مقروءة
+        texts = [t for t in (getattr(data, "notes_text", {}) or {}).values()]
+        scale, unit_note = detect_printed_unit(texts)
+        data.unit_scale = scale
+        data.unit_note = unit_note
+        if scale != 1 and notes is not None:
+            notes.append(
+                f"وحدة الطباعة: {unit_note} — العرض يضرب في {scale}.")
+    except Exception:
+        pass  # كشف الوحدة تحسين عرض — لا يكسر الاستخراج أبدًا
     return data
 
 # ── Focused local cell verification (المهمة 3/4) ──

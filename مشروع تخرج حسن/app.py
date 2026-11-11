@@ -426,6 +426,9 @@ def process_upload(uploaded) -> None:
     results, analysis = oks[-1][1], oks[-1][2]
     st.session_state["results"] = results
     st.session_state["analysis"] = analysis
+    # v5: بايتات الملف الأصلي للجلسة — دليل المصدر الحي (صفحة + bbox) في
+    # الواجهة الجديدة يُبنى منها؛ الكلاسيكية لا تستخدمها
+    st.session_state["raw_bytes"] = jobs[0][1] if len(jobs) == 1 else         next((r for n, r in jobs if n == results.get("file_name")), None)
     # Currency: detected from the document, unless the user already chose one
     hint = results.get("currency_hint")
     if hint and "currency" not in st.session_state:
@@ -1505,6 +1508,17 @@ def comparison_screen() -> None:
 # ---------------------------------------------------------------------------
 
 def dashboard_screen() -> None:
+    # v5: وضع الواجهة الجديدة (تجريبي) — الكلاسيكية كاملة وبلا أي تعديل،
+    # والتبديل متاح من شريط الواجهتين
+    if st.session_state.get("ui_mode") == "new":
+        from src.dashboard.new_ui import render as render_new_ui
+
+        render_new_ui(
+            st.session_state["results"],
+            st.session_state.get("analysis"),
+            st.session_state.get("raw_bytes"),
+        )
+        return
     r: dict = st.session_state["results"]
     analysis: AIAnalysis = st.session_state.get("analysis") or AIAnalysis(ok=False, error="")
 
@@ -1569,6 +1583,17 @@ def dashboard_screen() -> None:
             for key in ("results", "analysis"):
                 st.session_state.pop(key, None)
             st.rerun()
+
+        # v5: مفتاح الواجهة الجديدة — يكتب ui_mode لحظة التبديل فقط
+        # (حالة الويدجت تضيع حين يختفي من شجرة الواجهة الجديدة)
+        if st.toggle("🧪 الواجهة الجديدة (تجريبي)",
+                     key="ui_mode_new_toggle",
+                     help="واجهة Streamlit جديدة متصلة بالـPipeline الحي — "
+                          "قابلة للتبديل في أي لحظة دون فقدان النتائج."):
+            st.session_state["ui_mode"] = "new"
+            st.rerun()
+        else:
+            st.session_state["ui_mode"] = "classic"
 
         if st.button("🧹 مسح الكاش المحلي", use_container_width=True,
                      help="يمسح نتائج الملفات المحلولة سابقًا — التحليل القادم سيقرأ من الصفر ويتحمل النداءات من جديد."):
@@ -1684,17 +1709,6 @@ def notes_screen(r) -> None:
             st.markdown(c.text)
 
 
-def main() -> None:
-    if "results" in st.session_state:
-        dashboard_screen()
-    else:
-        upload_screen()
-
-
-if __name__ == "__main__":
-    main()
-
-
 def _render_review_tab_guarded() -> None:
     """Human-review tab — only active when a reviewers file is configured.
     Ground Truth is never rendered here (review_ui enforces by construction)."""
@@ -1716,3 +1730,16 @@ def _render_review_tab_guarded() -> None:
 
     queue = _json.loads(qpath.read_text(encoding="utf-8"))
     render_review_tab(st, queue, reviewer=os.environ.get("REVIEWER_NAME", ""))
+
+
+def main() -> None:
+    if "results" in st.session_state:
+        dashboard_screen()
+    else:
+        upload_screen()
+
+
+if __name__ == "__main__":
+    main()
+
+

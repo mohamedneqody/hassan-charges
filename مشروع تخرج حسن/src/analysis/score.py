@@ -88,30 +88,30 @@ def compute_health_score(curr: YearMetrics,
 
     # --- Liquidity (25%) ---
     liq_subs = [
-        (_vs_target(curr.current_ratio, 2.0), "Current Ratio", "2.00x"),
+        (_vs_target(curr.current_ratio, 2.0), "نسبة التداول", "2.00x"),
         (_vs_target(curr.quick_ratio, 1.0), "Quick Ratio", "1.00x"),
     ]
     pillars.append(_pillar("liquidity", "Liquidity", "السيولة", 25, liq_subs))
 
     # --- Leverage (25%) — lower is better ---
     lev_subs = [
-        (_lower_better(curr.debt_to_equity, 2.0), "Debt to Equity", "< 1.00x"),
+        (_lower_better(curr.debt_to_equity, 2.0), "الدين إلى حقوق الملكية", "< 1.00x"),
         (_lower_better(curr.debt_ratio, 1.0), "Debt Ratio", "< 0.50x"),
     ]
     pillars.append(_pillar("leverage", "Leverage", "المديونية", 25, lev_subs))
 
     # --- Profitability (30%) ---
     prof_subs = [
-        (_vs_target(curr.net_margin, 15.0), "Net Margin", "15%"),
-        (_vs_target(curr.roe, 15.0), "ROE", "15%"),
-        (_vs_target(curr.roa, 7.5), "ROA", "7.5%"),
+        (_vs_target(curr.net_margin, 15.0), "هامش صافي الربح", "15%"),
+        (_vs_target(curr.roe, 15.0), "العائد على حقوق الملكية", "15%"),
+        (_vs_target(curr.roa, 7.5), "العائد على الأصول", "7.5%"),
     ]
     pillars.append(_pillar("profitability", "Profitability", "الربحية", 30, prof_subs))
 
     # --- Cash generation (20%) ---
     cash_subs = [
-        (_vs_target(curr.cfo_to_net_income, 1.0), "Cash Flow / Net Income", "1.00x"),
-        (_vs_target(curr.cfo_margin, 15.0), "CFO Margin", "15%"),
+        (_vs_target(curr.cfo_to_net_income, 1.0), "التدفق التشغيلي ÷ صافي الربح", "1.00x"),
+        (_vs_target(curr.cfo_margin, 15.0), "هامش التدفق التشغيلي", "15%"),
     ]
     pillars.append(_pillar("cash", "Cash Generation", "التدفق النقدي", 20, cash_subs))
 

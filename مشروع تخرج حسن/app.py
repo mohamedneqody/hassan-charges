@@ -495,7 +495,7 @@ def overview_screen(r: dict) -> None:
         with col_gauge:
             st.plotly_chart(charts.health_gauge(score), use_container_width=True)
         with col_pillars:
-            headers = ["Pillar", "Score", "Weight", "Measured against (general guidelines)"]
+            headers = ["الركيزة", "الدرجة", "الوزن", "مقارنة بالحدود الإرشادية العامة"]
             rows_html = []
             for p in score.pillars:
                 score_txt = "N/A" if p.score is None else f"{p.score:.0f}/100"
@@ -958,20 +958,22 @@ def overview_screen(r: dict) -> None:
             unsafe_allow_html=True,
         )
 
-    with st.expander("ℹ️ Data & assumptions", expanded=False):
+    with st.expander("ℹ️ ملاحظات الاستخراج والافتراضات", expanded=False):
+        from src.dashboard.notes_ar import note_ar
+
         if r["notes"]:
-            st.markdown("**Extraction notes**")
+            st.markdown("**ملاحظات الاستخراج**")
             for note in r["notes"]:
-                st.markdown(f"- {note}")
+                st.markdown(f"- {note_ar(note)}")
         else:
-            st.markdown("- No extraction notes.")
+            st.markdown("- لا توجد ملاحظات استخراج.")
         metric_notes = {}
         for m in (r["prev_metrics"], r["curr_metrics"]):
             metric_notes.update(m.notes)
         if metric_notes:
-            st.markdown("**Calculation assumptions**")
+            st.markdown("**افتراضات الحساب**")
             for note in metric_notes.values():
-                st.markdown(f"- {note}")
+                st.markdown(f"- {note_ar(note)}")
         if r["missing"]:
             st.markdown("**Missing data**")
             for item in r["missing"]:
@@ -988,7 +990,8 @@ def profitability_screen(r: dict) -> None:
     with col1:
         st.plotly_chart(
             charts.currency_chart(
-                f"Revenue — {prev_y} vs {cur_y}", "Revenue", prev_y, cur_y,
+                f"الإيرادات — {prev_y} مقابل {cur_y}", "الإيرادات",
+                prev_y, cur_y,
                 by_key["revenue"].previous, by_key["revenue"].current, currency,
             ),
             use_container_width=True,
@@ -996,7 +999,8 @@ def profitability_screen(r: dict) -> None:
     with col2:
         st.plotly_chart(
             charts.currency_chart(
-                f"Net Income — {prev_y} vs {cur_y}", "Net Income", prev_y, cur_y,
+                f"صافي الربح — {prev_y} مقابل {cur_y}", "صافي الربح",
+                prev_y, cur_y,
                 by_key["net_income"].previous, by_key["net_income"].current, currency,
             ),
             use_container_width=True,
@@ -1034,12 +1038,11 @@ def liquidity_screen(r: dict) -> None:
     st.markdown("**كيف تقرأ هذه النسب**")
     st.markdown(
         "- **النسبة الجارية** فوق 1.0x تعني تغطية الأصول المتداولة للالتزامات قصيرة الأجل؛ "
-        "closer to 2.0x is generally comfortable (a general guideline, not sector data).\n"
-        "- **Quick Ratio** excludes inventory — a stricter view of liquidity; around 1.0x "
-        "is a common guideline.\n"
-        "- **Cash Ratio** counts only cash against short-term obligations.\n"
-        "- **Debt to Equity** below 1.0x means the company relies less on debt than on "
-        "owners' funds; higher values mean more leverage risk.\n"
+        "والقرب من 2.0x مريح عمومًا (حد إرشادي عام، لا بيانات قطاع).\n"
+        "- **النسبة السريعة** تستبعد المخزون — نظرة أكثر صرامة على السيولة؛ وقرب 1.0x حد شائع.\n"
+        "- **نسبة النقد** تحسب النقد وحده مقابل الالتزامات قصيرة الأجل.\n"
+        "- **الدين إلى حقوق الملكية** دون 1.0x يعني اعتمادًا أقل على الدين من أموال الملاك؛ "
+        "والقيم الأعلى تعني مخاطر رفع مالي أكبر.\n"
         "- **نسبة الالتزامات إلى الأصول** تُظهر حصة الأصول الممولة بالالتزامات؛ وتحت 0.5x تعتبر متحفظة عموماً."
     )
 
@@ -1627,7 +1630,7 @@ def dashboard_screen() -> None:
                 st.warning("اضغط مرة ثانية لتأكيد مسح الكاش.")
 
         if r["missing"]:
-            with st.expander(f"⚠️ Missing data ({len(r['missing'])})", expanded=False):
+            with st.expander(f"⚠️ بيانات ناقصة ({len(r['missing'])})", expanded=False):
                 for item in r["missing"]:
                     st.markdown(f"- {item}")
 

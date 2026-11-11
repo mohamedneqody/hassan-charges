@@ -458,7 +458,8 @@ def fin_table(headers: list[str], rows_html: list[str]) -> str:
     """Financial table with sticky header and hover rows.
 
     `rows_html` items are complete `<tr>...</tr>` strings built by the caller.
-    """
+    .fin-table td, .fin-table th { unicode-bidi: plaintext; }
+"""
     th = "".join(f"<th>{ESC(h)}</th>" for h in headers)
     return (
         '<div class="table-wrap"><table class="fin-table">'

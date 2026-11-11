@@ -271,4 +271,5 @@ section[data-testid="stSidebar"] .stButton > button:hover {
   .fs-header { flex-direction: column; align-items: flex-start; }
   .fs-kpi .fs-kpi-value { font-size: 1.4rem; }
 }
+.fin-table td, .fin-table th { unicode-bidi: plaintext; }
 </style>"""

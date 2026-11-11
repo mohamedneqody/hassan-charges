@@ -172,7 +172,8 @@ def sec_overview(vm: dict, results: dict) -> None:
         st.markdown(f"- {fact}")
 
     st.divider()
-    st.subheader("KPI")
+    st.subheader("📌 " + ("مؤشرات رئيسية" if lang == "ar"
+                          else "Key indicators"))
     curr_year = vm["curr_year"]
     rows = {r.key: r for r in results.get("rows", [])}
     sc, cur = vm["unit_scale"], vm["currency"]
@@ -655,6 +656,10 @@ def render(results: dict, analysis, raw: bytes | None) -> None:
         st.caption(f"{vm['file_name']}")
         st.caption(f"{_T['unit'][lang]}: {vm['unit_note'] or '-'}")
         st.caption(f"{_T['doc_sha'][lang]}: `{vm['doc_sha']}`")
+        from src.dashboard.notes_ar import note_ar
+
+        for n in vm["profile"][:2]:
+            st.caption(note_ar(n))
         st.divider()
         if st.button(_T["new_analysis"][lang], use_container_width=True):
             for k in ("results", "analysis", "raw_bytes", "ev_cell",

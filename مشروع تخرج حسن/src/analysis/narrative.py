@@ -286,8 +286,10 @@ def build_fallback_narrative(results: dict, base: AIAnalysis) -> AIAnalysis:
                 row.label_ar or row.label,
                 _comment_for_row(
                     row,
-                    fmt_value(row.previous, row.kind, "$"),
-                    fmt_value(row.current, row.kind, "$"),
+                    fmt_value(row.previous, row.kind,
+                              ("ج.م" if _is_ar() else "$")),
+                    fmt_value(row.current, row.kind,
+                              ("ج.م" if _is_ar() else "$")),
                 ),
             )
         )

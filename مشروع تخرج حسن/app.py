@@ -238,7 +238,7 @@ def upload_screen() -> None:
         "<span>📊 <b>53</b> مؤشراً مالياً</span>"
         "<span>📄 <b>PDF</b> مسحوب ضوئياً يُقرأ بالذكاء الاصطناعي</span>"
         "<span>🌍 <b>عربي</b> بالكامل</span>"
-        "<span>✅ <b>61</b> اختباراً ناجحاً</span>"
+        "<span>✅ <b>313</b> اختباراً ناجحاً</span>"
         "</div>",
         unsafe_allow_html=True,
     )

@@ -347,7 +347,13 @@ div[data-testid="stButton"] > button[kind="secondary"]:hover { border-color: var
 
 def inject_theme() -> None:
     import streamlit as st
+
     st.markdown(THEME_CSS, unsafe_allow_html=True)
+    # v5: طبقة التلميع التفاعلية (RTL حقيقي + hero داكن + widgets حية) —
+    # تضاف فوق الثيم بلا مساس، وتُصحح تعارض hero المتضارب
+    from src.dashboard.polish_css import POLISH_CSS
+
+    st.markdown(POLISH_CSS, unsafe_allow_html=True)
 
 
 

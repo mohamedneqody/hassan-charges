@@ -128,3 +128,105 @@ def cell_value_display(value: float | None, unit_scale: int,
     from src.dashboard.charts import fmt_value_ar
 
     return fmt_value_ar(value, "currency", currency, unit_scale)
+
+
+def executive_summary(results: dict, vm: dict) -> list[str]:
+    """الملخص التنفيذي — حقائق محسوبة فقط من نتائج التشغيل الحي.
+    لا استنتاج ولا قيمة مفقودة تُختلق؛ غير المتاح يُعلن."""
+    from src.analysis.score import compute_health_score
+
+    facts: list[str] = []
+    curr_year = vm["curr_year"]
+    prev_year = vm["prev_year"]
+    sc = vm["unit_scale"]
+    curr = results["curr_metrics"]
+
+    # 1) تغطية البوابة
+    total = vm["cell_count"]
+    dec = vm["decisive_count"]
+    if total:
+        facts.append(
+            f"تغطية التوثيق: {dec} من {total} خانة حاسمة "
+            f"({round(dec / total * 100)}%) — الباقي يحتاج مراجعة بشرية "
+            "قبل الاعتماد النهائي.")
+
+    # 2) الإيراد والربح (إن توفرا)
+    rows = {r.key: r for r in results.get("rows", [])}
+    rev = rows.get("revenue")
+    if rev and rev.current is not None:
+        direction = "ارتفاع" if (rev.change or 0) > 0 else "انخفاض"
+        pct = f" ({rev.change_pct:+.1f}%)" if rev.change_pct is not None else ""
+        facts.append(
+            f"الإيرادات {curr_year}: "
+            f"{cell_value_display(rev.current, sc, vm['currency'])} — "
+            f"{direction} عن {prev_year}{pct}.")
+    ni = rows.get("net_income")
+    if ni and ni.current is not None:
+        direction = "ارتفاع" if (ni.change or 0) > 0 else "انخفاض"
+        pct = f" ({ni.change_pct:+.1f}%)" if ni.change_pct is not None else ""
+        facts.append(
+            f"صافي الربح {curr_year}: "
+            f"{cell_value_display(ni.current, sc, vm['currency'])} — "
+            f"{direction}{pct}.")
+
+    # 3) السيولة والمديونية مقابل المعايير العامة
+    if curr.current_ratio is not None:
+        state = ("أعلى من" if curr.current_ratio >= 2.0 else
+                 "أدنى من" if curr.current_ratio < 1.0 else "قريبة من")
+        facts.append(
+            f"نسبة التداول {curr.current_ratio:.2f}x — {state} الحد "
+            "الإرشادي العام (2.00x).")
+    if curr.debt_ratio is not None:
+        state = ("داخل" if curr.debt_ratio < 0.5 else "أعلى من")
+        facts.append(
+            f"نسبة الدين {curr.debt_ratio:.2f} — {state} الحد الإرشادي "
+            "العام (< 0.50).")
+
+    # 4) الدرجة الصحية أو سبب الحجب
+    blocked = {e["field"] for e in vm["pending"]}
+    hs = compute_health_score(curr, blocked_fields=blocked)
+    if hs.total is not None:
+        facts.append(f"الدرجة الصحية: {hs.total:.0f}/100 ({hs.label}).")
+    else:
+        blocked_names = "، ".join(p.name for p in hs.pillars
+                                  if p.score is None) or "—"
+        facts.append(
+            "الدرجة الصحية محجوبة وفق سياسة تغطية البيانات — أركان ناقصة: "
+            f"{blocked_names}.")
+
+    # 5) المؤشرات غير القابلة للحساب — معلنة
+    na = [r.label_ar or r.label for r in rows.values()
+          if r.previous is None and r.current is None]
+    if na:
+        facts.append(
+            f"مؤشرات غير قابلة للحساب لعدم توفر مدخلاتها ({len(na)}): "
+            + "، ".join(na[:8]) + ("، …" if len(na) > 8 else "") + ".")
+    return facts
+
+
+def categorized_insights(results: dict, analysis) -> dict:
+    """تصنيف تعليقات Gemini من اتجاه المؤشر المحسوب — تصنيف من البيانات
+    لا من نبرة النص: تحسّن → نقاط قوة، تراجع → نقاط ضعف، والتوصيات
+    قائمة بذاتها. الذكاء الاصطناعي يُميَّز عن المحسوب دائمًا."""
+    out = {"strengths": [], "weaknesses": [], "neutral": [],
+           "recommendations": []}
+    if not (analysis is not None and getattr(analysis, "ok", False)):
+        return out
+    trend_by_metric = {}
+    for r in results.get("rows", []):
+        name = r.label_ar or r.label
+        trend_by_metric[name] = r.status
+        trend_by_metric[r.label] = r.status
+    for metric, text in analysis.ratio_comments:
+        status = trend_by_metric.get(metric)
+        item = {"metric": metric, "text": text,
+                "status": status or "Neutral"}
+        if status == "Positive":
+            out["strengths"].append(item)
+        elif status == "Negative":
+            out["weaknesses"].append(item)
+        else:
+            out["neutral"].append(item)
+    for action, text in analysis.recommendations:
+        out["recommendations"].append({"metric": action, "text": text})
+    return out

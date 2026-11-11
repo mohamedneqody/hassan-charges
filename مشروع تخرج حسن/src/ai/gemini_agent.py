@@ -460,13 +460,18 @@ def analyze_financials(
     started = time.time()
     # Two sweeps: if every pair failed with a TRANSIENT error (e.g. 503 high
     # demand), wait briefly and try each pair once more. Quota/auth/model
-    # failures are marked immediately and not retried. Total time is bounded:
-    # when the budget runs out mid-sweep the loop stops at the next check.
+    # failures are marked immediately and not retried.
+    # v6 (تسريع بلا مساس بالدقة): الميزانية تحكم الجولتين معًا — سابقًا
+    # الجولة الأولى كانت تمشي 14 محاولة × مهلة شبكة 45 ثانية = ~10.5 دقيقة
+    # قبل الاستسلام حين تكون كل الحصص مستنفدة. النداء الجاري يكتمل دائمًا
+    # (الفحص بين المحاولات)، والفشل السريع يسلم للسرد الاحتمالي الموجود.
     for sweep in range(2):
-        if sweep > 0 and time.time() - started > COMMENTARY_BUDGET:
+        if time.time() - started > COMMENTARY_BUDGET:
             break
         transient_only = True
         for _ in range(max_attempts):
+            if time.time() - started > COMMENTARY_BUDGET:
+                break
             picked = pool.pick()
             if picked is None:
                 break

@@ -9,6 +9,7 @@ import hashlib
 import json
 import sys
 import threading
+import time
 from pathlib import Path
 
 import pandas as pd
@@ -142,15 +143,18 @@ def _parse_page_range(txt: str | None):
 
 def upload_screen() -> None:
     """Landing: centered hero + upload card + features + how-it-works + stats."""
+    # v6: هيدر منتج مضغوط بدل الـhero الضخم (توجيه إعادة التصميم)
+    from src.dashboard.components.chrome import render_header
+
+    render_header()
     st.markdown(
-        theme.hero(
-            "📊 <span class='grad-text'>محلل القوائم المالية</span>",
-            "ارفع القوائم المالية — استخراج تلقائي، حساب النسب لسنتين، وتقرير تحليلي بالذكاء الاصطناعي.",
-            ["PDF", "CSV", "XLSX", "XLS", f'<span class="live-dot"></span>&nbsp;مدعوم بـ {GEMINI_MODEL}'],
-        ),
+        '<div style="text-align:center;margin:2px 0 14px;">'
+        '<div style="font-size:1.05rem;font-weight:700;">'
+        "حوّل القوائم المالية إلى رؤى منظمة وقرارات مدعومة بالبيانات</div>"
+        '<div class="fs-meta">استخراج تلقائي · 53 مؤشرًا حتميًا بـ Python · '
+        f"تفسير بالذكاء الاصطناعي · مدعوم بـ {GEMINI_MODEL}</div></div>",
         unsafe_allow_html=True,
     )
-    st.write("")
 
     # بطاقة الرفع في المنتصف
     _l, mid, _r = st.columns([1, 2.4, 1])
@@ -391,9 +395,18 @@ def process_upload(uploaded) -> None:
     ) as status:
         progress_box = st.empty()
 
+        t0 = time.time()
+
+        def _clock() -> str:
+            """العدّاد الحي: دقائق:ثوانٍ منذ بدء التحليل (طلب المستخدم)."""
+            secs = int(time.time() - t0)
+            return f"⏱ {secs // 60:02d}:{secs % 60:02d}"
+
         def progress_cb(i: int, total: int, name: str, msg: str) -> None:
             prefix = f"[{i}/{total}] {name}: " if batch else ""
-            progress_box.write(f"{prefix}{msg}")
+            # حلقة الاستطلاع في _pipeline_with_progress تستدعي هذا كل 0.4ث
+            # فيتحدث العداد حيًا في كل مرحلة (استخراج/تحليل) بلا خيوط إضافية
+            progress_box.write(f"⏱ {_clock()} — {prefix}{msg}")
 
         oks, failed = run_batch_jobs(jobs, page_range, currency, progress_cb, fast_mode)
         if failed and not oks:
@@ -401,7 +414,9 @@ def process_upload(uploaded) -> None:
         elif failed:
             status.update(label=f"اكتمل: {len(oks)} ناجح · {len(failed)} فاشل", state="complete", expanded=False)
         else:
-            status.update(label="اكتمل التحليل ✔", state="complete", expanded=False)
+            status.update(
+                label=f"اكتمل التحليل ✔ — {_clock()}",
+                state="complete", expanded=False)
     progress_box.empty()
 
     for name, err in failed:
@@ -1508,9 +1523,12 @@ def comparison_screen() -> None:
 # ---------------------------------------------------------------------------
 
 def dashboard_screen() -> None:
-    # v5: وضع الواجهة الجديدة (تجريبي) — الكلاسيكية كاملة وبلا أي تعديل،
-    # والتبديل متاح من شريط الواجهتين
-    if st.session_state.get("ui_mode") == "new":
+    # v6: الواجهة الجديدة هي الافتراضية بعد التحليل (توجيه إعادة
+    # التصميم) — الكلاسيكية كاملة خلف مفتاح "الواجهة الكلاسيكية" في
+    # سايدبار الجديدة. ui_mode مفتاح جلسة مستمر: الـtoggle الكلاسيكي
+    # يكتب "classic" لحظة التبديل، وزر العودة في الجديدة يكتب "new" ويطفئ
+    # حالة الويدجت المخزنة (فخ دورة الحياة الموثق في اختبار v5).
+    if st.session_state.get("ui_mode", "new") == "new":
         from src.dashboard.new_ui import render as render_new_ui
 
         render_new_ui(
@@ -1584,16 +1602,16 @@ def dashboard_screen() -> None:
                 st.session_state.pop(key, None)
             st.rerun()
 
-        # v5: مفتاح الواجهة الجديدة — يكتب ui_mode لحظة التبديل فقط
-        # (حالة الويدجت تضيع حين يختفي من شجرة الواجهة الجديدة)
-        if st.toggle("🧪 الواجهة الجديدة (تجريبي)",
-                     key="ui_mode_new_toggle",
-                     help="واجهة Streamlit جديدة متصلة بالـPipeline الحي — "
-                          "قابلة للتبديل في أي لحظة دون فقدان النتائج."):
+        # v6: المفتاح معكوس الدلالة — الكلاسيكية هي الاستثناء الآن.
+        # زر العودة في الجديدة يكتب ui_mode="new" ويطفئ هذه الويدجت
+        # المخزنة (فخ دورة الحياة الموثق في اختبار v5).
+        if st.toggle("📜 الواجهة الكلاسيكية",
+                     key="ui_mode_classic_toggle",
+                     help="الواجهة الأصلية كاملة — التبديل لا يفقد النتائج."):
+            st.session_state["ui_mode"] = "classic"
+        else:
             st.session_state["ui_mode"] = "new"
             st.rerun()
-        else:
-            st.session_state["ui_mode"] = "classic"
 
         if st.button("🧹 مسح الكاش المحلي", use_container_width=True,
                      help="يمسح نتائج الملفات المحلولة سابقًا — التحليل القادم سيقرأ من الصفر ويتحمل النداءات من جديد."):

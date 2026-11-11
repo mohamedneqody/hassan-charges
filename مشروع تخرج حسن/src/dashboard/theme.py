@@ -349,11 +349,12 @@ def inject_theme() -> None:
     import streamlit as st
 
     st.markdown(THEME_CSS, unsafe_allow_html=True)
-    # v5: طبقة التلميع التفاعلية (RTL حقيقي + hero داكن + widgets حية) —
-    # تضاف فوق الثيم بلا مساس، وتُصحح تعارض hero المتضارب
-    from src.dashboard.polish_css import POLISH_CSS
+    # v6: نظام التصميم FinSight AI — لوحة فاتحة احترافية (#5145CD/#22D3EE)
+    # بخطوط Cairo/Inter وأرقام جدولية. يحل محل طبقة polish اللامعة عمodel
+    # توجيه إعادة التصميم: minimal FinTech، بلا hero ضخم ولا تدرجات زائدة.
+    from src.dashboard.design_system import DESIGN_CSS
 
-    st.markdown(POLISH_CSS, unsafe_allow_html=True)
+    st.markdown(DESIGN_CSS, unsafe_allow_html=True)
 
 
 

@@ -1240,9 +1240,13 @@ def test_benchmarks_sector_presets():
     assert gen.source == "general" and "current_ratio" in gen.rows
 
 
-def test_result_cache_roundtrip_and_pipeline_hit():
+def test_result_cache_roundtrip_and_pipeline_hit(tmp_path, monkeypatch):
+    # v6: عزل الكاش — كانت هذه الاختبارات تمسح كاش التشغيل الحقيقي
+    # (مسحت كاش رحلة واجهة حية أثناء الحزمة)؛ CACHE_DIR يوجه لـtmp
     from src.extraction.result_cache import clear_all_caches
+    from src.extraction import result_cache as rc
 
+    monkeypatch.setattr(rc, "CACHE_DIR", tmp_path)
     clear_all_caches()
     try:
         raw = (PROJECT_ROOT / "sample_data" / "sample_financials.csv").read_bytes()
@@ -1342,9 +1346,11 @@ def test_verify_third_opinion_resolves_dispute():
     assert any("all three reads disagree" in n for n in notes3)
 
 
-def test_run_batch_jobs_mixed():
+def test_run_batch_jobs_mixed(tmp_path, monkeypatch):
     from src.extraction.result_cache import clear_all_caches
+    from src.extraction import result_cache as rc
 
+    monkeypatch.setattr(rc, "CACHE_DIR", tmp_path)
     clear_all_caches()
     try:
         import app as app_mod

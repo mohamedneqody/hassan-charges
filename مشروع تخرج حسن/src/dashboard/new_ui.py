@@ -1,18 +1,16 @@
 # -*- coding: utf-8 -*-
-"""الواجهة الجديدة (v5) — دمج تدريجي لتصميم mvp_preview.html في Streamlit.
+"""FinSight AI — واجهة Streamlit النهائية (v6): تصميم FinTech فاتح
+احترافي متصل بالـPipeline الحي.
 
-قواعد صارمة من التفويض:
-- مكونات Streamlit حقيقية متصلة بنتائج الـPipeline الحي — لا HTML مضمّن
-  ولا أرقام مجمدة في الكود (الديمو في وضعه الموسوم الخاص به فقط).
-- كل قيمة تُعرض بحالتها من قرار بوابة الاعتماد النهائي (decide) لا من
-  حالة المرشحين — عبر src/dashboard/view_model.py (قراءة فقط).
-- محركات OCR/المحلل/الحاسبة/البوابة/RAG/Gemini تُستهلك بواجهاتها الحالية —
-  لا إعادة بناء ولا Adapter يغيّر قرارًا ماليًا.
-- المصدر: صفحة المستند الأصلية + bbox حقيقي + فحص هاش المستند قبل العرض،
-  ولا يُعرض أبدًا دليل من مستند آخر.
-- المراجعة البشرية عبر سلسلة HMAC الموجودة (apply_review) — حساب
-  test-reviewer ليس مراجعة إنتاجية، والسياق الناقص = رفض فقط (قاعدة
-  السلسلة نفسها، بلا تجاوز).
+المبادئ (من تفويض إعادة التصميم):
+- مكونات Streamlit أصلية + HTML/CSS محدود المدى لنظام التصميم فقط.
+- كل قيمة من نتائج التشغيل الحي: القيمة، السنة، الوحدة، قرار البوابة،
+  المصدر، المستند. لا أرقام مجمدة ولا نتائج مختراعة.
+- المحركات (OCR/المحلل/الحاسبة/البوابة/RAG/Gemini) تُستهلك بواجهاتها —
+  الـAdapter (view_model.py) قراءة فقط ولا يغيّر قرارًا ماليًا.
+- كل الحالات مصممة: فارغ/خطأ/معالجة/بيانات جزئية/نجاح.
+- تعليقات Gemini موسومة «تحليل تجريبي غير معتمد» حين تكون المدخلات
+  تحتاج مراجعة، ومصنفة من اتجاه المؤشر المحسوب (قوة/ضعف) لا من النبرة.
 """
 from __future__ import annotations
 
@@ -30,58 +28,37 @@ if str(PROJ) not in sys.path:
     sys.path.insert(0, str(PROJ))
 
 from src.dashboard.view_model import (  # noqa: E402
-    build_view_model, cell_value_display,
+    build_view_model, cell_value_display, executive_summary,
 )
 
 _T = {
-    "title": {"ar": "📊 محلل القوائم المالية", "en": "📊 Financial Statement Analyzer"},
-    "new_ui": {"ar": "الواجهة الجديدة — تجريبية", "en": "New UI — experimental"},
-    "classic": {"ar": "عودة للواجهة الكلاسيكية", "en": "Back to classic UI"},
-    "lang_btn": {"ar": "English / عربي", "en": "عربي / English"},
-    "dash": {"ar": "🏠 لوحة القيادة", "en": "🏠 Dashboard"},
-    "stmts": {"ar": "📋 القوائم والخانات", "en": "📋 Statements & Cells"},
-    "kpi": {"ar": "📈 المؤشرات المالية", "en": "📈 Financial Metrics"},
-    "health": {"ar": "❤️ الدرجة الصحية", "en": "❤️ Health Score"},
-    "gemini": {"ar": "✦ تفسير Gemini", "en": "✦ Gemini Analysis"},
-    "chat": {"ar": "💬 محادثة المستند (RAG)", "en": "💬 Document Chat (RAG)"},
-    "review": {"ar": "✍️ مراجعة بشرية", "en": "✍️ Human Review"},
-    "reports": {"ar": "📄 التقارير", "en": "📄 Reports"},
-    "evidence": {"ar": "🔍 دليل المصدر", "en": "🔍 Source Evidence"},
+    "overview": {"ar": "نظرة عامة", "en": "Overview"},
+    "statements": {"ar": "القوائم والخانات", "en": "Statements & Cells"},
+    "metrics": {"ar": "المؤشرات المالية", "en": "Financial Metrics"},
+    "health": {"ar": "الدرجة الصحية", "en": "Health Score"},
+    "insights": {"ar": "رؤى Gemini", "en": "AI Insights"},
+    "chat": {"ar": "محادثة المستند", "en": "Document Chat"},
+    "review": {"ar": "مراجعة بشرية", "en": "Human Review"},
+    "reports": {"ar": "التقارير", "en": "Reports"},
+    "new_analysis": {"ar": "تحليل جديد", "en": "New Analysis"},
+    "classic": {"ar": "الواجهة الكلاسيكية", "en": "Classic UI"},
+    "summary": {"ar": "الملخص التنفيذي", "en": "Executive Summary"},
+    "gate_title": {"ar": "حالة التوثيق", "en": "Verification status"},
+    "provisional": {
+        "ar": "تحليل تجريبي غير معتمد — مولد من قيم حالتها «يحتاج "
+              "مراجعة»؛ يقرأ كمؤشرات استكشافية وليس حكمًا نهائيًا.",
+        "en": "Provisional, non-authoritative analysis — generated from "
+              "needs-review values; exploratory, not a final verdict."},
+    "evidence": {"ar": "دليل المصدر", "en": "Source evidence"},
+    "open_evidence": {"ar": "الدليل", "en": "Evidence"},
     "unit": {"ar": "وحدة القوائم", "en": "Statement unit"},
     "doc_sha": {"ar": "بصمة المستند", "en": "Document hash"},
-    "gate": {"ar": "قرار البوابة", "en": "Gate decision"},
-    "source": {"ar": "المصدر", "en": "Source"},
-    "page": {"ar": "الصفحة", "en": "Page"},
-    "value": {"ar": "القيمة", "en": "Value"},
-    "year": {"ar": "السنة", "en": "Year"},
-    "field": {"ar": "البند", "en": "Field"},
-    "decisive": {"ar": "خانات حاسمة", "en": "Decisive cells"},
-    "pending": {"ar": "بانتظار مراجعة", "en": "Awaiting review"},
-    "provisional": {
-        "ar": "⚠ تحليل تجريبي غير معتمد — مولد من قيم حالتها «يحتاج مراجعة»؛"
-              " تُقرأ كمؤشرات استكشافية، ليست حكمًا نهائيًا.",
-        "en": "⚠ Provisional, non-authoritative analysis — generated from"
-              " values whose gate status is needs-review; exploratory"
-              " indicators, not a final verdict."},
-    "health_refused": {"ar": "الدرجة الصحية محجوبة", "en": "Health Score refused"},
-    "no_analysis": {"ar": "لا يوجد تحليل Gemini — السبب:", "en": "No Gemini analysis — reason:"},
-    "review_disabled": {
-        "ar": "المراجعة البشرية معطلة — تتطلب REVIEWERS_FILE وREVIEW_HMAC_KEY في .env "
-              "(حساب test-reviewer ليس مراجعة إنتاجية).",
-        "en": "Human review disabled — requires REVIEWERS_FILE and "
-              "REVIEW_HMAC_KEY in .env (test-reviewer is NOT production review)."},
-    "reject_only": {
-        "ar": "سياق الخانة غير مكتمل (ترويسة سنة مطبوعة غير متاحة في التشغيل الحي) "
-              "— سلسلة المراجعة تسمح بالرفض فقط هنا؛ الاعتماد/التصحيح يتطلب سياقًا كاملًا.",
-        "en": "Cell context incomplete (no printed year header available in a"
-              " live run) — the chain allows reject-only here; attest/correct"
-              " require full context."},
-    "open_evidence": {"ar": "🔍 فتح الدليل", "en": "🔍 Open evidence"},
-    "reports_pdf_missing": {
-        "ar": "إنتاج PDF غير متاح — LibreOffice غير مثبت على هذا الجهاز "
-              "(المسار المتوقع: C:/Program Files/LibreOffice). إصدار Excel وHTML يعملان.",
-        "en": "PDF production unavailable — LibreOffice not installed. "
-              "Excel and HTML still work."},
+    "strengths": {"ar": "نقاط القوة", "en": "Strengths"},
+    "weaknesses": {"ar": "نقاط الضعف والمخاطر", "en": "Weaknesses & risks"},
+    "neutral": {"ar": "مؤشرات مستقرة", "en": "Stable metrics"},
+    "recommendations": {"ar": "التوصيات", "en": "Recommendations"},
+    "health_refused": {"ar": "الدرجة الصحية محجوبة",
+                       "en": "Health Score refused"},
 }
 
 
@@ -90,24 +67,11 @@ def _t(key: str) -> str:
     return _T.get(key, {}).get(lang, key)
 
 
-def inject_direction() -> None:
-    lang = st.session_state.get("ui_lang", "ar")
-    d = "rtl" if lang == "ar" else "ltr"
-    st.markdown(
-        f"""
-        <style>
-          div.stApp {{ direction: {d}; }}
-          section[data-testid="stSidebar"] {{ direction: {d}; }}
-          .stTabs [data-baseweb="tab-list"] {{ gap: 4px; flex-wrap: wrap; }}
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+def _lang() -> str:
+    return st.session_state.get("ui_lang", "ar")
 
 
-# ── Source evidence (المهمة 5) ──────────────────────────────────────────
 def _render_page_with_bbox(raw: bytes, page_no: int, bbox):
-    """صفحة المستند الأصلية + رسم مستطيل bbox الحقيقي إن وُجد وتوافق أبعاده."""
     import pypdfium2 as pdfium
     from PIL import Image, ImageDraw
 
@@ -118,8 +82,6 @@ def _render_page_with_bbox(raw: bytes, page_no: int, bbox):
     if bbox:
         try:
             x0, y0, x1, y1 = [float(v) for v in bbox[:4]]
-            # bbox بإحداثيات بكسل مسح Indra — نقيسها على أبعاد الصفحة المعروضة:
-            # إن تجاوزت الأبعاد نقيس proportionally على أكبر إحداثية
             sx = sy = 1.0
             if max(x1, y1) > 1.5 and (max(x1, y1) > img.width or
                                        max(y1, y1) > img.height):
@@ -127,16 +89,15 @@ def _render_page_with_bbox(raw: bytes, page_no: int, bbox):
                 sy = img.height / max(y1, y1, 1)
             d = ImageDraw.Draw(img)
             d.rectangle([x0 * sx, y0 * sy, x1 * sx, y1 * sy],
-                        outline="#e11d48", width=4)
+                        outline="#DC2626", width=4)
         except Exception:
-            pass  # bbox غير صالح هندسيًا — تعرض الصفحة بلا مستطيل (بصدق)
+            pass
     buf = io.BytesIO()
     img.save(buf, "PNG")
     return buf.getvalue()
 
 
 def _render_crop(raw: bytes, page_no: int, bbox):
-    """قصاصة الخانة (بكسل حقيقي) من الصفحة الأصلية."""
     import pypdfium2 as pdfium
     from PIL import Image
 
@@ -165,267 +126,353 @@ def _render_crop(raw: bytes, page_no: int, bbox):
 
 
 def evidence_block(cell: dict, raw: bytes | None, doc_sha: str) -> None:
-    """دليل المصدر لخانة واحدة — بفحص الهاش ومنع المستندات الأجنبية."""
-    lang = st.session_state.get("ui_lang", "ar")
-    st.markdown(f"#### {_t('evidence')} — {cell['label']} · "
-                f"{cell['year']}")
+    """دليل المصدر: فحص هاش المستند + الصفحة الأصلية + bbox + القصاصة.
+    لا يعرض دليل من مستند آخر أبدًا."""
+    lang = _lang()
+    st.markdown(f"**{_t('evidence')} — {cell['label']} · {cell['year']}**")
     if raw is None:
-        st.info("بايتات المستند الأصلي غير محفوظة في هذه الجلسة — أعد رفع "
-                "الملف لعرض الدليل." if lang == "ar" else
-                "Original bytes not in this session — re-upload to view.")
+        st.info("بايتات المستند غير محفوظة في الجلسة — أعد رفع الملف."
+                if lang == "ar" else "Original bytes not in session.")
         return
-    # فحص هاش المستند: الدليل يُعرض فقط لبايتات نفس المستند الذي استُخرجت منه
     current_sha = hashlib.sha256(raw).hexdigest()[:16]
     if doc_sha and current_sha != doc_sha:
-        st.error("بصمة المستند الحالي لا تطابق بصمة الاستخراج — منع عرض "
-                 "دليل من مستند آخر." if lang == "ar" else
-                 "Document hash mismatch — cross-document evidence blocked.")
+        st.error("بصمة المستند لا تطابق بصمة الاستخراج — الدليل محجوب."
+                 if lang == "ar" else "Document hash mismatch — blocked.")
         return
     st.caption(f"{_t('doc_sha')}: `{current_sha}` ✓")
     pages = cell.get("pages") or []
     if not pages:
-        st.info("لا توجد صفحة مصدر مسجلة لهذه الخانة في سجل القرار."
-                if lang == "ar" else "No source page recorded for this cell.")
+        st.info("لا صفحة مصدر مسجلة لهذه الخانة (استخراج نصي بلا إسناد "
+                "صفحات)." if lang == "ar" else
+                "No source page recorded for this cell.")
         return
     page_no = int(pages[0])
-    st.markdown(f"{_t('page')}: **{page_no}** · {_t('source')}: "
-                f"`{cell.get('source', '—')}`")
     bbox = cell.get("bbox")
     bbox = bbox[0] if isinstance(bbox, list) and bbox and \
         isinstance(bbox[0], list) else bbox
     col_page, col_crop = st.columns([3, 2])
-    page_img = _render_page_with_bbox(raw, page_no, bbox)
     with col_page:
-        if page_img:
-            st.image(page_img, caption=f"صفحة {page_no} + bbox" if lang == "ar"
-                     else f"page {page_no} + bbox")
-        else:
-            st.info("تعذر عرض الصفحة.")
+        img = _render_page_with_bbox(raw, page_no, bbox)
+        if img:
+            st.image(img, caption=f"{_t('evidence')} — p{page_no}")
     with col_crop:
         crop = _render_crop(raw, page_no, bbox) if bbox else None
         if crop:
-            st.image(crop, caption="القصاصة (بكسل حقيقي)" if lang == "ar"
-                     else "Crop (real pixels)")
-        else:
-            st.info("لا إحداثيات bbox لهذه الخانة (مستند نصي رقمي) — القصاصة "
-                    "غير متاحة والصفحة معروضة."
-                    if lang == "ar" else
-                    "No bbox for this cell (digital text PDF) — crop "
-                    "unavailable, page shown.")
+            st.image(crop, caption="crop")
+        elif bbox is None:
+            st.info("بلا إحداثيات bbox (مستند نصي رقمي)." if lang == "ar"
+                    else "No bbox (digital text PDF).")
 
 
-# ── Sections ────────────────────────────────────────────────────────────
-def _kpi_cards(vm: dict) -> None:
-    lang = st.session_state.get("ui_lang", "ar")
-    curr = vm["currency"]
-    sc = vm["unit_scale"]
-    rows = {r["key"]: r for r in vm["metrics"]}
-    cards = [
-        ("revenue", "الإيرادات" if lang == "ar" else "Revenue"),
-        ("net_income", "صافي الربح" if lang == "ar" else "Net income"),
-        ("total_assets", "إجمالي الأصول" if lang == "ar" else "Total assets"),
-        ("debt_ratio", "نسبة الدين" if lang == "ar" else "Debt ratio"),
-    ]
-    cols = st.columns(4)
-    for col, (key, label) in zip(cols, cards):
+def sec_overview(vm: dict, results: dict) -> None:
+    """اللوحة الرئيسية: الملخص التنفيذي (حقائق فقط) + KPI + حالة البوابة."""
+    lang = _lang()
+    st.subheader(_T["summary"][lang])
+    for fact in executive_summary(results, vm):
+        st.markdown(f"- {fact}")
+
+    st.divider()
+    st.subheader("KPI")
+    curr_year = vm["curr_year"]
+    rows = {r.key: r for r in results.get("rows", [])}
+    sc, cur = vm["unit_scale"], vm["currency"]
+
+    def fmt(v, kind):
+        if v is None:
+            return "N/A"
+        return (cell_value_display(v, sc, cur) if kind == "currency" else
+                f"{v:.1f}%" if kind == "percent" else
+                f"{v:.2f}x" if kind == "ratio" else f"{v:,.2f}")
+
+    def delta_of(key):
         r = rows.get(key)
-        with col:
-            if r is None or (r["curr"] is None and r["prev"] is None):
-                st.metric(label, "N/A",
-                          help="مؤشر غير قابل للحساب — مدخلاته غير كافية"
-                          if lang == "ar" else "Not computable — inputs missing")
+        if r is None or r.change_pct is None:
+            return "", "flat"
+        mood = ("up" if (r.change or 0) > 0 and r.status != "Negative"
+                else "down" if ((r.change or 0) < 0 or
+                                r.status == "Negative") else "flat")
+        return f"{r.change_pct:+.1f}%", mood
+
+    cards = [
+        ("الإيرادات" if lang == "ar" else "Revenue", "revenue", "currency"),
+        ("صافي الربح" if lang == "ar" else "Net profit", "net_income",
+         "currency"),
+        ("إجمالي الأصول" if lang == "ar" else "Total assets",
+         "total_assets", "currency"),
+        ("نسبة التداول" if lang == "ar" else "Current ratio",
+         "current_ratio", "ratio"),
+        ("نسبة الدين" if lang == "ar" else "Debt ratio", "debt_ratio",
+         "ratio"),
+        ("هامش صافي الربح" if lang == "ar" else "Net margin",
+         "net_margin", "percent"),
+    ]
+    cols = st.columns(3)
+    for i, (label, key, kind) in enumerate(cards):
+        r = rows.get(key)
+        with cols[i % 3]:
+            if r is None or (r.previous is None and r.current is None):
+                na = "مؤشر غير قابل للحساب" if lang == "ar" else \
+                    "not computable"
+                st.markdown(
+                    '<div class="fs-kpi"><div class="fs-kpi-label">'
+                    f"{label}</div><div class=\"fs-kpi-value\">N/A</div>"
+                    f'<div class="fs-kpi-delta flat">{na}</div></div>',
+                    unsafe_allow_html=True)
                 continue
-            val = cell_value_display(r["curr"], sc, curr) \
-                if r["kind"] == "currency" else (
-                f"{r['curr']:.1f}%" if r["kind"] == "percent"
-                else f"{r['curr']:.2f}x" if r["kind"] == "ratio"
-                else f"{r['curr']:,.2f}")
-            st.metric(label, val)
-            if r["verif"] and r["verif"] != "—":
-                st.caption(r["verif"])
+            val = fmt(r.current, kind)
+            d_txt, mood = delta_of(key)
+            verif = vm["verification"].get(key, "")
+            st.markdown(
+                f'<div class="fs-kpi" title="{verif}">'
+                f'<div class="fs-kpi-label">{label} · {curr_year}</div>'
+                f'<div class="fs-kpi-value">{val}</div>'
+                f'<div class="fs-kpi-delta {mood}">{d_txt or "—"}</div>'
+                f"</div>", unsafe_allow_html=True)
+            if verif and verif != "—":
+                st.caption(verif)
 
-
-def sec_dashboard(vm: dict) -> None:
-    lang = st.session_state.get("ui_lang", "ar")
-    st.subheader(_T["dash"][lang])
-    _kpi_cards(vm)
+    st.divider()
     c1, c2, c3 = st.columns(3)
-    c1.metric(_t("decisive"), vm["decisive_count"])
-    c2.metric(_t("pending"), vm["pending_count"],
-              delta=None if vm["pending_count"] == 0 else "⚠",
-              delta_color="off")
-    c3.metric(_t("field"), vm["cell_count"])
-    with st.expander(_t("unit") + " · " + _t("doc_sha"), expanded=False):
-        st.write(f"{_t('unit')}: {vm['unit_note'] or '—'}")
-        st.write(f"{_t('doc_sha')}: `{vm['doc_sha']}`")
-        for n in vm["profile"]:
-            st.caption(n)
+    c1.metric(_T["gate_title"][lang] +
+              (" — خانات حاسمة" if lang == "ar" else " — decisive"),
+              f"{vm['decisive_count']}/{vm['cell_count']}")
+    c2.metric(_T["pending"][lang] if lang == "ar" else "Awaiting review",
+              vm["pending_count"])
+    c3.metric(_T["unit"][lang] if lang == "ar" else "Unit",
+              f"x{vm['unit_scale']}")
     if vm["pending_count"]:
-        st.warning(f"{_t('pending')}: {vm['pending_count']} — "
-                   + (", ".join(sorted({e['field'] for e in vm['pending']}))[:90]))
+        names = ", ".join(sorted({e["field"] for e in vm["pending"]})[:8])
+        st.warning(f"{_T['pending'][lang] if lang == 'ar' else 'Awaiting'}: "
+                   f"{vm['pending_count']} — {names}"
+                   + (", ..." if vm["pending_count"] > 8 else ""))
 
 
 def sec_statements(vm: dict, raw: bytes | None) -> None:
-    lang = st.session_state.get("ui_lang", "ar")
-    st.subheader(_T["stmts"][lang])
-    st.caption("كل خانة بحالتها من قرار بوابة الاعتماد النهائي — لا من حالة "
-               "المرشحين." if lang == "ar" else
-               "Each cell shows its FINAL gate decision — not the raw "
-               "candidate state.")
+    lang = _lang()
+    st.subheader(_T["statements"][lang])
+    st.caption("كل خانة بقرار بوابة الاعتماد النهائي — لا حالة المرشحين."
+               if lang == "ar" else
+               "Each cell shows its FINAL gate decision.")
     for c in vm["cells"]:
         with st.container(border=True):
-            col1, col2, col3, col4 = st.columns([2.2, 1.6, 1.4, 1.2])
+            col1, col2, col3, col4 = st.columns([2.2, 1.6, 1.5, 1.1])
             with col1:
                 st.markdown(f"**{c['label']}** · {c['year']}")
                 if c["raw_label"] and c["raw_label"] != c["label"]:
-                    st.caption(f"كما قُرئت: {c['raw_label']}" if lang == "ar"
-                               else f"as read: {c['raw_label']}")
+                    st.caption(("كما قريت: " if lang == "ar" else "as read: ")
+                               + str(c["raw_label"]))
             with col2:
-                st.markdown(f"**{cell_value_display(c['value'], vm['unit_scale'], vm['currency'])}**")
+                st.markdown(
+                    '<span class="fs-num">'
+                    + cell_value_display(c["value"], vm["unit_scale"],
+                                         vm["currency"]) + "</span>",
+                    unsafe_allow_html=True)
             with col3:
-                kind = c["gate_kind"]
-                icon = {"ok": "🟢", "pend": "🟡", "miss": "⚪"}.get(kind, "⚪")
-                st.markdown(f"{icon} {c['gate_label']}"
-                            + (" ✓ بشري" if lang == "ar" else " ✓ human")
-                            if c["reviewed"] else f"{icon} {c['gate_label']}")
+                if c["reviewed"]:
+                    st.markdown("✓ " + ("موثق بشريًا" if lang == "ar"
+                                        else "human-attested"))
+                kind = {"use": "ok", "use_disclosed": "ok",
+                        "not_decisive": "pend", "missing": "miss"}[c["gate"]]
+                icon = {"ok": "●", "pend": "◐", "miss": "○"}.get(kind, "○")
+                st.markdown(
+                    f'<span class="fs-gate {kind}">{icon} '
+                    f'{c["gate_label"]}</span>', unsafe_allow_html=True)
             with col4:
-                if st.button(_t("open_evidence"), key=f"ev-{c['field']}-{c['year']}",
+                if st.button(_T["open_evidence"][lang],
+                             key=f"ev-{c['field']}-{c['year']}",
                              use_container_width=True):
                     st.session_state["ev_cell"] = c
             if c["reason"] and c["gate"] != "use":
-                st.caption(f"السبب: {c['reason']}" if lang == "ar"
-                           else f"reason: {c['reason']}")
+                st.caption(("السبب: " if lang == "ar" else "reason: ")
+                           + c["reason"])
     ev = st.session_state.get("ev_cell")
     if ev:
-        with st.expander(_t("evidence"), expanded=True):
+        with st.expander(_T["evidence"][lang], expanded=True):
             evidence_block(ev, raw, vm["doc_sha"])
 
 
 def sec_metrics(vm: dict) -> None:
-    lang = st.session_state.get("ui_lang", "ar")
-    st.subheader(_T["kpi"][lang])
     import pandas as pd
 
+    lang = _lang()
+    st.subheader(_T["metrics"][lang])
+    sc, cur = vm["unit_scale"], vm["currency"]
     rows = []
     for r in vm["metrics"]:
-        sc = vm["unit_scale"]
-        fmt = (lambda v: cell_value_display(v, sc, vm["currency"])
-               if r["kind"] == "currency" else
-               (f"{v:.1f}%" if r["kind"] == "percent" else
-                (f"{v:.2f}x" if r["kind"] == "ratio" else f"{v:,.2f}")))
+        def fmt(v):
+            if v is None:
+                return "N/A"
+            return (cell_value_display(v, sc, cur)
+                    if r["kind"] == "currency" else
+                    f"{v:.1f}%" if r["kind"] == "percent" else
+                    f"{v:.2f}x" if r["kind"] == "ratio" else f"{v:,.2f}")
         rows.append({
             "المؤشر" if lang == "ar" else "Metric": r["label"],
-            "السنة السابقة" if lang == "ar" else "Prev": fmt(r["prev"])
-            if r["prev"] is not None else "N/A",
-            "السنة الحالية" if lang == "ar" else "Curr": fmt(r["curr"])
-            if r["curr"] is not None else "N/A",
-            "التغير %" if lang == "ar" else "Change %": f"{r['change_pct']:+.1f}%"
-            if r["change_pct"] is not None else "—",
-            "حالة التحقق" if lang == "ar" else "Verification": r["verif"] or "—",
+            "السنة السابقة" if lang == "ar" else "Prev": fmt(r["prev"]),
+            "السنة الحالية" if lang == "ar" else "Curr": fmt(r["curr"]),
+            "التغير %" if lang == "ar" else "Change %":
+                f"{r['change_pct']:+.1f}%" if r["change_pct"] is not None
+                else "—",
+            "التقييم" if lang == "ar" else "Assessment": r["status"] or "—",
+            "حالة التحقق" if lang == "ar" else "Verification":
+                r["verif"] or "—",
         })
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(rows), use_container_width=True,
+                 hide_index=True)
 
 
 def sec_health(vm: dict, results: dict) -> None:
-    lang = st.session_state.get("ui_lang", "ar")
-    st.subheader(_T["health"][lang])
     from src.analysis.score import compute_health_score
 
+    lang = _lang()
+    st.subheader(_T["health"][lang])
     blocked = {e["field"] for e in vm["pending"]}
-    hs = compute_health_score(results["curr_metrics"], blocked_fields=blocked)
+    hs = compute_health_score(results["curr_metrics"],
+                              blocked_fields=blocked)
     if hs.total is not None:
-        st.metric("Health Score", f"{hs.total:.0f}/100",
+        c1, c2 = st.columns([1, 2])
+        c1.metric("Health Score", f"{hs.total:.0f}/100",
                   delta=hs.label, delta_color="off")
-        chips = " · ".join(f"{p.name}: "
-                           + ("—" if p.score is None else f"{p.score:.0f}")
-                           for p in hs.pillars)
-        st.caption(chips)
+        c2.markdown(" · ".join(
+            f"**{p.name}**: " + ("—" if p.score is None else f"{p.score:.0f}")
+            for p in hs.pillars))
+        if getattr(hs, "policy", ""):
+            st.caption(hs.policy)
     else:
-        st.error(f"**{_T['health_refused'][lang]}** — "
-                 + (getattr(hs, "policy", "") or ""))
-        blocked_names = "، ".join(sorted(blocked)) or "—"
-        st.caption("المدخلات المحجوبة: " + blocked_names if lang == "ar"
-                   else "Blocked inputs: " + blocked_names)
+        blocked_names = "، ".join(p.name for p in hs.pillars
+                                  if p.score is None) or "—"
+        refused = ("السياسة ترفض الحسم عند ركيزة حرجة ناقصة — الأركان "
+                   "المحجوبة: " + blocked_names if lang == "ar" else
+                   "The policy refuses when a critical pillar is missing."
+                   " Blocked: " + blocked_names)
+        st.error(f"**{_T['health_refused'][lang]}** — {refused}")
+        st.caption("قيم هذه الأركان تحمل حالة «يحتاج مراجعة» في تبويب "
+                   "القوائم — لا تحسب درجة من مدخلات غير موثقة."
+                   if lang == "ar" else
+                   "These pillars carry needs-review inputs.")
 
 
-def sec_gemini(vm: dict, analysis) -> None:
-    lang = st.session_state.get("ui_lang", "ar")
-    st.subheader(_T["gemini"][lang])
+def sec_insights(vm: dict, analysis) -> None:
+    """رؤى Gemini مصنفة من اتجاه المؤشر المحسوب — بلا اختلاق."""
+    lang = _lang()
+    st.subheader(_T["insights"][lang])
     if vm["pending_count"]:
         st.warning(_T["provisional"][lang])
-    if analysis is not None and getattr(analysis, "ok", False):
-        st.caption(f"model: {analysis.model} · "
-                   f"{len(analysis.ratio_comments)} "
-                   + ("تعليقًا" if lang == "ar" else "comments"))
-        for metric, text in analysis.ratio_comments:
-            with st.container(border=True):
-                st.markdown(f"**{metric}**")
-                st.write(text)
-        if analysis.recommendations:
-            st.markdown("### " + ("التوصيات" if lang == "ar" else "Recommendations"))
-            for action, text in analysis.recommendations:
-                with st.container(border=True):
-                    st.markdown(f"**{action}**")
-                    st.write(text)
-    else:
+    if not (analysis is not None and getattr(analysis, "ok", False)):
         reason = getattr(analysis, "error", "") or "—"
-        st.info(f"{_T['no_analysis'][lang]} {reason}")
+        st.info(("لا تحليل Gemini — السبب: " if lang == "ar" else
+                 "No Gemini analysis — reason: ") + reason)
+        return
+    st.caption(f"model: {analysis.model} · {len(analysis.ratio_comments)} "
+               + ("تعليقًا — كل رقم متتبع لأصل محسوب في Python"
+                  if lang == "ar" else
+                  "comments — every number traces to a computation"))
+    trend = {r["label"]: r["status"] for r in vm["metrics"]}
+    cats = {"strengths": [], "weaknesses": [], "neutral": [],
+            "recommendations": []}
+    for metric, text in getattr(analysis, "ratio_comments", []):
+        status = trend.get(metric, "Neutral")
+        item = {"metric": metric, "text": text, "status": status}
+        if status == "Positive":
+            cats["strengths"].append(item)
+        elif status == "Negative":
+            cats["weaknesses"].append(item)
+        else:
+            cats["neutral"].append(item)
+    for action, text in getattr(analysis, "recommendations", []):
+        cats["recommendations"].append({"metric": action, "text": text})
+
+    groups = [(_T["strengths"][lang], cats["strengths"]),
+              (_T["weaknesses"][lang], cats["weaknesses"]),
+              (_T["neutral"][lang], cats["neutral"])]
+    for title, items in groups:
+        if not items:
+            continue
+        st.markdown(f"#### {title} ({len(items)})")
+        for item in items:
+            with st.container(border=True):
+                st.markdown(f"**{item['metric']}**")
+                st.write(item["text"])
+    if cats["recommendations"]:
+        st.markdown(f"#### {_T['recommendations'][lang]} "
+                    f"({len(cats['recommendations'])})")
+        for item in cats["recommendations"]:
+            with st.container(border=True):
+                st.markdown(f"**{item['metric']}**")
+                st.write(item["text"])
 
 
 def sec_reports(vm: dict, results: dict, analysis) -> None:
-    lang = st.session_state.get("ui_lang", "ar")
-    st.subheader(_T["reports"][lang])
+    from src.analysis.score import compute_health_score
     from src.dashboard.excel_report import build_excel_report
     from src.dashboard.report import build_html_report
-    from src.analysis.score import compute_health_score
 
+    lang = _lang()
+    st.subheader(_T["reports"][lang])
     blocked = {e["field"] for e in vm["pending"]}
     results["verification_status"] = vm["verification"]
     results["blocked_fields"] = sorted(blocked)
-    hs = compute_health_score(results["curr_metrics"], blocked_fields=blocked)
-    xlsx = build_excel_report(results)
-    st.download_button("⬇️ Excel (.xlsx)", xlsx,
-                       file_name=f"{vm['company'][:24]}_analysis.xlsx",
-                       use_container_width=True)
-    html = build_html_report(results, analysis, hs, currency=vm["currency"])
-    st.download_button("⬇️ HTML", html.encode("utf-8"),
-                       file_name=f"{vm['company'][:24]}_report.html",
-                       mime="text/html", use_container_width=True)
+    hs = compute_health_score(results["curr_metrics"],
+                              blocked_fields=blocked)
+    c1, c2 = st.columns(2)
+    with c1:
+        xlsx = build_excel_report(results)
+        st.download_button(
+            "Excel (.xlsx)", xlsx,
+            file_name=f"FinSight_{results.get('curr_year')}_analysis.xlsx",
+            use_container_width=True)
+        st.caption("الملخص · المؤشرات · الجداول · أثر المراجعة"
+                   if lang == "ar" else
+                   "Summary · metrics · statements · review trail")
+    with c2:
+        html = build_html_report(results, analysis, hs,
+                                 currency=vm["currency"])
+        st.download_button(
+            "HTML", html.encode("utf-8"),
+            file_name=f"FinSight_{results.get('curr_year')}_report.html",
+            mime="text/html", use_container_width=True)
+        st.caption("نفس الأرقام مع علم أولي/نهائي"
+                   if lang == "ar" else
+                   "Same numbers with the preliminary/final flag")
     soffice = Path(r"C:\Program Files\LibreOffice\program\soffice.exe")
     if not soffice.exists():
-        st.info(_T["reports_pdf_missing"][lang])
+        st.info("إنتاج PDF غير متاح — LibreOffice غير مثبت؛ إصدارا "
+                "Excel وHTML متاحان." if lang == "ar" else
+                "PDF unavailable — LibreOffice not installed.")
         return
-    if st.button("⬇️ " + ("إنتاج PDF" if lang == "ar" else "Produce PDF"),
-                 use_container_width=True):
+    if st.button("PDF", use_container_width=True):
         import subprocess
-        import tempfile
 
         with tempfile.TemporaryDirectory() as td:
             print_html = Path(td) / "report_print.html"
             print_html.write_text(
-                build_html_report(results, analysis, hs, currency=vm["currency"],
+                build_html_report(results, analysis, hs,
+                                  currency=vm["currency"],
                                   print_safe=True), encoding="utf-8")
-            with st.spinner("LibreOffice…"):
+            with st.spinner("LibreOffice..."):
                 subprocess.run([str(soffice), "--headless", "--convert-to",
                                 "pdf", "--outdir", td, str(print_html)],
                                capture_output=True, timeout=240)
             pdf = Path(td) / "report_print.pdf"
             if pdf.exists():
-                st.download_button("⬇️ PDF", pdf.read_bytes(),
-                                   file_name=f"{vm['company'][:24]}_report.pdf",
+                st.download_button("PDF",
+                                   pdf.read_bytes(),
+                                   file_name=f"FinSight_"
+                                             f"{results.get('curr_year')}_report.pdf",
                                    mime="application/pdf")
             else:
-                st.error("فشل تحويل PDF — راجع تثبيت LibreOffice."
-                         if lang == "ar" else "PDF conversion failed.")
+                st.error("فشل تحويل PDF." if lang == "ar" else
+                         "PDF conversion failed.")
 
 
 def _build_live_queue(vm: dict, results: dict, raw: bytes,
                       crops_dir: Path) -> list[dict]:
-    """طابور مراجعة حي من سجل القرار — الحزم غير الحاسمة فقط، قصاصات
-    حقيقية من بايتات المستند نفسه، بلا أي GT."""
-    from src.extraction.human_review import EXTRACTION_VERSION, _sha256_file
+    """طابور مراجعة حي من سجل القرار — غير الحاسمة فقط، قصاصات من
+    بايتات المستند نفسه، بلا GT (مع التخزين المؤقت للجلسة)."""
+    from src.extraction.human_review import (  # noqa: E402
+        EXTRACTION_VERSION, _sha256_file,
+    )
     import pypdfium2 as pdfium
-    from PIL import Image
 
     crops_dir.mkdir(parents=True, exist_ok=True)
     pdf = pdfium.PdfDocument(io.BytesIO(raw))
@@ -448,11 +495,13 @@ def _build_live_queue(vm: dict, results: dict, raw: bytes,
         crop_png = None
         if bbox0:
             try:
-                img = pdf[page_no - 1].render(scale=3.0).to_pil().convert("RGB")
+                img = pdf[page_no - 1].render(scale=3.0).to_pil() \
+                    .convert("RGB")
                 x0, y0, x1, y1 = [float(v) for v in bbox0[:4]]
                 if max(x1, y1) > 1.5 and (max(x1, y1) > img.width or
                                            max(y1, y1) > img.height):
-                    sx, sy = img.width / max(x1, y1, 1), img.height / max(y1, y1, 1)
+                    sx, sy = (img.width / max(x1, y1, 1),
+                              img.height / max(y1, y1, 1))
                     x0, x1, y0, y1 = x0 * sx, x1 * sx, y0 * sy, y1 * sy
                 crop = img.crop((max(0, int(x0) - 6), max(0, int(y0) - 6),
                                  min(img.width, int(x1) + 6),
@@ -479,8 +528,6 @@ def _build_live_queue(vm: dict, results: dict, raw: bytes,
             "page_image_sha256": _sha256_file(page_png),
             "crop_sha256": _sha256_file(crop_png) if crop_png else None,
             "extraction_version": EXTRACTION_VERSION,
-            # السياق الحي بلا ترويسة سنة مطبوعة مقصوصة — السلسلة تفرض
-            # الرفض-فقط (قاعدة المنتج نفسها، لا تجاوز)
             "context": {"year_header_available": False,
                          "label_available": True,
                          "context_complete": False},
@@ -493,83 +540,83 @@ def _build_live_queue(vm: dict, results: dict, raw: bytes,
 
 
 def sec_review(vm: dict, results: dict, raw: bytes | None) -> None:
-    lang = st.session_state.get("ui_lang", "ar")
-    st.subheader(_T["review"][lang])
-    if not (os.environ.get("REVIEWERS_FILE") or os.environ.get("REVIEWERS")):
-        st.info(_T["review_disabled"][lang])
-        return
-    if raw is None:
-        st.info("بايتات المستند غير محفوظة في الجلسة — لا يمكن بناء أدلة "
-                "المراجعة." if lang == "ar" else
-                "Document bytes not in session — cannot build evidence.")
-        return
     from src.extraction.human_review import (  # noqa: E402
         CONFIRMATION_LABELS_AR, CONFIRMATION_KEYS, apply_review,
         verify_log_integrity,
     )
 
+    lang = _lang()
+    st.subheader(_T["review"][lang])
+    if not (os.environ.get("REVIEWERS_FILE") or os.environ.get("REVIEWERS")):
+        st.info("المراجعة البشرية معطلة — تتطلب REVIEWERS_FILE و"
+                "REVIEW_HMAC_KEY في .env (حساب test-reviewer ليس مراجعة "
+                "إنتاجية)." if lang == "ar" else
+                "Human review disabled — requires REVIEWERS_FILE and "
+                "REVIEW_HMAC_KEY (test-reviewer is NOT production review).")
+        return
+    if raw is None:
+        st.info("بايتات المستند غير محفوظة في الجلسة." if lang == "ar"
+                else "Document bytes not in session.")
+        return
     ok, bad = verify_log_integrity()
     if not ok:
         st.error(f"سجل المراجعات تالف (seq={bad}) — المراجعة مرفوضة."
                  if lang == "ar" else f"Review log broken (seq={bad}).")
         return
     crops_dir = Path(tempfile.gettempdir()) / "live_review_crops"
-    # بناء الطابور مكلف (رندر صفحات + قصاصات pdfium لكل خانة) — يُخزَّن
-    # في حالة الجلسة keyed ببصمة المستند وعدد المعلقة، ولا يُعاد إلا عند
-    # تغيّرهما (كل إعادة رسم كانت تعيد الرندر — عيب كشفه اختبار الرحلة)
     qkey = f"{vm['doc_sha']}|{vm['pending_count']}"
-    if st.session_state.get("live_queue_key") != qkey             or not st.session_state.get("live_queue"):
+    if st.session_state.get("live_queue_key") != qkey or \
+            not st.session_state.get("live_queue"):
         st.session_state["live_queue"] = _build_live_queue(
             vm, results, raw, crops_dir)
         st.session_state["live_queue_key"] = qkey
     queue = st.session_state["live_queue"]
     if not queue:
-        st.success("لا خانات بانتظار مراجعة — كل الخانات حاسمة أو بلا صفحة "
-                   "مصدر." if lang == "ar" else "No cells awaiting review.")
+        st.success("لا خانات بانتظار مراجعة — كل الخانات إما حاسمة أو بلا "
+                   "صفحة مصدر مسجلة." if lang == "ar" else
+                   "No cells awaiting review.")
         return
-    st.caption(_T["reject_only"][lang])
+    st.caption("سياق الخانة الحي بلا ترويسة سنة مقصوصة — سلسلة المراجعة "
+               "تسمح بالرفض فقط هنا (قاعدة السياق الكامل، بلا تجاوز)."
+               if lang == "ar" else
+               "Live context has no cropped year header — reject-only.")
     pkt = st.selectbox(
-        "الخانة" if lang == "ar" else "Cell",
-        queue,
-        format_func=lambda p: f"{p['field']} · {p['year']} · ص{p['page']}"
-        if lang == "ar" else f"{p['field']} · {p['year']} · p{p['page']}")
+        "الخانة" if lang == "ar" else "Cell", queue,
+        format_func=lambda p: f"{p['field']} · {p['year']} · p{p['page']}")
     col_a, col_b = st.columns(2)
     with col_a:
-        page_img = Path(pkt["page_image"])
-        if page_img.exists():
-            st.image(str(page_img), caption=f"صفحة {pkt['page']}"
-                     if lang == "ar" else f"page {pkt['page']}")
+        if Path(pkt["page_image"]).exists():
+            st.image(pkt["page_image"], caption=f"page {pkt['page']}")
     with col_b:
         if pkt["crop_image"] and Path(pkt["crop_image"]).exists():
-            st.image(pkt["crop_image"], caption="القصاصة" if lang == "ar"
-                     else "crop")
+            st.image(pkt["crop_image"])
         else:
-            st.info("لا قصاصة (بلا bbox) — الرفض متاح فقط."
-                    if lang == "ar" else "No crop (no bbox) — reject only.")
-    st.markdown("**التأكيدات الأربعة للرفض**" if lang == "ar"
-                else "**The four reject confirmations**")
+            st.info("لا قصاصة (بلا bbox) — الرفض فقط." if lang == "ar"
+                    else "No crop — reject only.")
     conf = {}
+    st.markdown("**" + ("التأكيدات الأربعة للرفض" if lang == "ar" else
+                        "The four reject confirmations") + "**")
     for k in CONFIRMATION_KEYS:
         if k == "value":
             continue
         conf[k] = st.checkbox(CONFIRMATION_LABELS_AR.get(k, k),
                               key=f"conf-{pkt['packet_id']}-{k}")
-    reason = st.text_area("سبب الرفض (يُسجل في السلسلة)"
-                          if lang == "ar" else
-                          "Reject reason (recorded in the chain)", "")
+    reason = st.text_area(
+        "سبب الرفض (يسجل في السلسلة الموقعة)" if lang == "ar" else
+        "Reject reason (recorded in the signed chain)", "")
     c1, c2 = st.columns(2)
-    reviewer = c1.text_input("اسم المراجع" if lang == "ar" else "Reviewer", "")
+    reviewer = c1.text_input("اسم المراجع" if lang == "ar" else
+                             "Reviewer", "")
     credential = c2.text_input("PIN", type="password")
-    if st.button("🗑️ تسجيل الرفض في السلسلة"
-                 if lang == "ar" else "Record rejection in the chain",
-                 type="primary", use_container_width=True):
+    if st.button("تسجيل الرفض في السلسلة" if lang == "ar" else
+                 "Record rejection", type="primary",
+                 use_container_width=True):
         if not all(conf[k] for k in conf):
-            st.error("أكّد العناصر الأربعة أولًا (المستند، البند، السنة، "
-                     "الموضع)." if lang == "ar" else
+            st.error("أكد العناصر الأربعة أولًا." if lang == "ar" else
                      "Confirm the four elements first.")
         elif not reason.strip():
             st.error("سبب الرفض مطلوب." if lang == "ar" else
-                     "A reject reason is required.")
+                     "A reason is required.")
         else:
             try:
                 rec = apply_review(
@@ -577,11 +624,10 @@ def sec_review(vm: dict, results: dict, raw: bytes | None) -> None:
                     reviewer=reviewer, credential=credential,
                     decision_note=reason.strip(),
                     confirmations={**conf, "value": False})
-                st.success("سُجل الرفض في سلسلة HMAC الموقعة ✓ — "
-                           "حساب المراجع هنا ليس مراجعة إنتاجية."
+                st.success("سجل الرفض في السلسلة الموقعة — حساب "
+                           "المراجع ليس مراجعة إنتاجية."
                            if lang == "ar" else
-                           "Rejection recorded in the signed chain ✓ — "
-                           "not a production review.")
+                           "Rejection recorded — not a production review.")
                 st.caption(f"seq={rec.get('seq')} · "
                            f"hash={str(rec.get('record_hash'))[:16]}")
             except Exception as exc:
@@ -589,40 +635,39 @@ def sec_review(vm: dict, results: dict, raw: bytes | None) -> None:
                          f"Chain refused: {exc}")
 
 
-# ── Entry ───────────────────────────────────────────────────────────────
 def render(results: dict, analysis, raw: bytes | None) -> None:
-    """نقطة دخول الواجهة الجديدة — تستدعى من app.py عند تفعيل الوضع."""
-    inject_direction()
+    """نقطة دخول الواجهة — تستدعى من app.py."""
+    lang = st.session_state.get("ui_lang", "ar")
     vm = build_view_model(results, st.session_state.get("currency", "$"))
+
     with st.sidebar:
-        st.markdown(f"### {_t('title')}")
-        st.markdown(f"🧪 **{_t('new_ui')}**")
-        st.caption(f"{vm['company']} · {vm['file_name']}")
-        col1, col2 = st.columns(2)
-        if col1.button(_t("lang_btn"), use_container_width=True):
-            st.session_state["ui_lang"] = ("en" if
-                                           st.session_state.get("ui_lang", "ar")
-                                           == "ar" else "ar")
+        st.markdown("### " + ("الواجهة الجديدة — تجريبية" if lang == "ar"
+                              else "New UI — experimental"))
+        if st.button("English / عربي", use_container_width=True):
+            st.session_state["ui_lang"] = "en" if lang == "ar" else "ar"
             st.rerun()
-        if col2.button(_t("classic"), use_container_width=True,
-                       type="primary"):
-            st.session_state["ui_mode"] = "classic"
-            # أطفئ ويدجت الكلاسيكية المخزنة — وإلا استعاد حالته القديمة
-            # (True) عند ظهوره وسحب الجلسة عائدة فورًا (فخ دورة الحياة)
-            st.session_state["ui_mode_new_toggle"] = False
+        if st.button(_T["classic"][lang], use_container_width=True,
+                     type="primary"):
+            st.session_state["ui_mode"] = "new"
+            st.session_state["ui_mode_classic_toggle"] = False
             st.rerun()
-        st.caption(f"{_t('unit')}: {vm['unit_note'] or '—'}\n\n"
-                   f"{_t('doc_sha')}: `{vm['doc_sha']}`")
-        if st.button("🔄 " + ("تحليل جديد" if st.session_state.get("ui_lang", "ar")
-                              == "ar" else "New analysis"),
-                     use_container_width=True):
-            for k in ("results", "analysis", "raw_bytes", "ev_cell"):
+        st.divider()
+        st.caption(f"{vm['file_name']}")
+        st.caption(f"{_T['unit'][lang]}: {vm['unit_note'] or '-'}")
+        st.caption(f"{_T['doc_sha'][lang]}: `{vm['doc_sha']}`")
+        st.divider()
+        if st.button(_T["new_analysis"][lang], use_container_width=True):
+            for k in ("results", "analysis", "raw_bytes", "ev_cell",
+                      "live_queue", "live_queue_key"):
                 st.session_state.pop(k, None)
             st.rerun()
-    tabs = st.tabs([_t("dash"), _t("stmts"), _t("kpi"), _t("health"),
-                    _t("gemini"), _t("chat"), _t("review"), _t("reports")])
+
+    tabs = st.tabs([_T["overview"][lang], _T["statements"][lang],
+                    _T["metrics"][lang], _T["health"][lang],
+                    _T["insights"][lang], _T["chat"][lang],
+                    _T["review"][lang], _T["reports"][lang]])
     with tabs[0]:
-        sec_dashboard(vm)
+        sec_overview(vm, results)
     with tabs[1]:
         sec_statements(vm, raw)
     with tabs[2]:
@@ -630,9 +675,8 @@ def render(results: dict, analysis, raw: bytes | None) -> None:
     with tabs[3]:
         sec_health(vm, results)
     with tabs[4]:
-        sec_gemini(vm, analysis)
+        sec_insights(vm, analysis)
     with tabs[5]:
-        # إعادة استخدام واجهة RAG الكلاسيكية كما هي — لا إعادة بناء
         from app import notes_screen
 
         notes_screen(results)

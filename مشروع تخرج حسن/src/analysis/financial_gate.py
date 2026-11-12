@@ -38,6 +38,9 @@ def decide(status: str) -> str:
         "UNVERIFIED": "not_decisive",
         "CONFLICT": "not_decisive",
         "MULTI_ROW": "not_decisive",
+        # v6 إصلاح حديد عز (إصلاح 4): تعارض جدول إيضاح فرعي مشوه والهوية
+        # الكبرى مثبتة (الأصول = الالتزامات + الملكية) — اعتماد بالإفصاح
+        "CONFLICT_UPGRADED_IDENTITY": "use_disclosed",
         "UNREADABLE": "missing",
         "MISSING": "missing",
     }.get(status, "not_decisive")
@@ -102,6 +105,8 @@ def pending_critical_review(decision_log: list[dict]) -> list[dict]:
             continue
         if e.get("status") == "VERIFIED_HUMAN":
             continue          # RESOLVED by the documented human review
+        if e.get("identity_anchored"):
+            continue          # v6 إصلاح 4: معتمد بالإفصاح — الهوية الكبرى مثبتة
         reason = e.get("reason") or ""
         # المهمة 3 (حارس الـMVP): a CRITICAL field is exempt from review
         # ONLY by TWO-LAYER attestation — a VERIFIED_EXACT/DERIVED backed by
@@ -164,6 +169,8 @@ def verification_labels(decision_log: list[dict]) -> dict[str, str]:
             return "موثق (بشري)"
         if st == "VERIFIED_SOURCE_EXACT":
             return "موثق (نقل رقمي)"
+        if st == "CONFLICT_UPGRADED_IDENTITY":
+            return "موثق (معلن — مثبت بالهوية المحاسبية)"
         if st == "VERIFIED_EXACT":
             return "موثق (آلي)"
         if st == "VERIFIED_DERIVED":

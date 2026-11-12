@@ -21,8 +21,15 @@ from src.extraction.spatial_cells import (  # noqa: E402
 # ── Negative field matching (الفصل بين البنود المتشابهة) ────────────────────
 
 def test_activity_profit_is_not_net_income_and_vice_versa():
-    assert match_field("صافي أرباح النشاط") == "net_activity_profit"
-    assert match_field("صافى ارباح النشاط") == "net_activity_profit"
+    # v7 (تدقيق حديد عز — إصلاح 2): «صافي أرباح (خسائر) النشاط» هو سطر
+    # الربح التشغيلي المطبوع (875,232,929 ج.م في 2021) — يُطابق
+    # operating_income ولا يغذي net_income أو pretax أبدًا.
+    # «أرباح النشاط» المجردة (بدون «صافي») يظل net_activity_profit.
+    assert match_field("صافي أرباح النشاط") == "operating_income"
+    assert match_field("صافى ارباح النشاط") == "operating_income"
+    assert match_field("صافي أرباح (خسائر) النشاط") == "operating_income"
+    assert match_field("مجمل أرباح النشاط") == "operating_income"
+    assert match_field("أرباح النشاط") == "net_activity_profit"
     # the pre-bridge subtotal must NEVER feed net income or pretax
     assert match_field("صافي أرباح النشاط") != "net_income"
     assert match_field("صافي أرباح العام") == "net_income"
@@ -45,10 +52,15 @@ def test_installments_row_never_long_term_debt():
 
 
 def test_overdraft_row_never_bank_facilities():
-    # «بنوك - سحب على المكشوف» is its own line, outside the printed
-    # borrowings definition (facilities + installments + loans).
-    assert match_field("بنوك - سحب على المكشوف") is None
-    assert match_field("بنوك تسهيلات إنتمانية") == "short_term_debt"
+    # v7 (تدقيق حديد عز — إصلاح 1): «بنوك - سحب على المكشوف» صار حقلاً
+    # كانسيًا مستقلاً (bank_overdraft) يغذي إجمالي الدين — لكنه لا يُمتص
+    # أبدًا في short_term_debt ولا في التسهيلات الائتمانية.
+    # «بنوك تسهيلات (ائتمانية/إنتمانية)» = short_term_credit_facilities.
+    assert match_field("بنوك - سحب على المكشوف") == "bank_overdraft"
+    assert match_field("بنوك - سحب على المكشوف") != "short_term_debt"
+    assert match_field("بنوك - سحب على المكشوف") != "short_term_credit_facilities"
+    assert match_field("بنوك تسهيلات إنتمانية") == "short_term_credit_facilities"
+    assert match_field("بنوك تسهيلات ائتمانية") == "short_term_credit_facilities"
 
 
 def test_deferred_tax_never_income_tax_and_other_revenue_never_sales():

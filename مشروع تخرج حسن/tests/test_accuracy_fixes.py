@@ -168,7 +168,7 @@ def test_cash_beginning_of_year_row_rejected():
 def test_bank_facilities_row_maps_to_short_term_debt():
     """The BS prints «بنوك تسهيلات إنتمانية ٤,٠٦٣,٤٠٠,١٦٧» — missing this alias
     shipped Debt/Equity ≈ 0.03 (nonsense) because ST debt captured as None."""
-    assert match_field("بنوك تسهيلات إنتمانية") == "short_term_debt"
+    assert match_field("بنوك تسهيلات إنتمانية") ==         "short_term_credit_facilities"  # v6: حقل كانسي مستقل
     assert match_field("تسهيلات بنكية") == "short_term_debt"
 
 

@@ -149,20 +149,37 @@ def upload_screen() -> None:
 
     render_header()
 
-    # ── الـHero: عمودان (نص يمين / معاينة يسار في RTL) ──
-    h_left, h_right = st.columns([0.95, 1.05])
+    # ── الـHero: عمودان (نسخ يمين / معاينة توضيحية يسار) — متوازن ولا يحتل الشاشة ──
+    # ملاحظة RTL المؤكدة بصرياً: العمود الأول يظهر يميناً → النسخة أولاً، المعاينة ثانياً
+    h_left, h_right = st.columns([1.05, 0.95])
     with h_left:
-        # في RTL هذا العمود يظهر يسار الشاشة = معاينة المنتج
+        st.markdown(
+            '''
+            <div class="fs-hero-copy">
+              <span class="fs-hero-eyebrow">FINANCIAL INTELLIGENCE</span>
+              <h1 class="fs-hero-title">حوّل قوائمك المالية<br>إلى <em>قرارات ذكية.</em></h1>
+              <p class="fs-hero-desc">حلّل بياناتك المالية، اكتشف المؤشرات والمخاطر،
+              واحصل على رؤى مالية مدعومة بالذكاء الاصطناعي.</p>
+              <div class="fs-hero-actions">
+                <a class="fs-cta-link" href="#upload-zone">ابدأ التحليل المالي ↓</a>
+                <a class="fs-cta-link ghost" href="#how-steps">كيف يعمل؟</a>
+              </div>
+            </div>
+            ''',
+            unsafe_allow_html=True,
+        )
+    with h_right:
+        # معاينة توضيحية موسومة — لا أرقام وهمية تُعرض كنتائج (اتجاهات رمزية فقط)
         st.markdown(
             '''
             <div class="fs-preview">
-              <span class="fs-preview-tag">معاينة بصرية للمنتج — بيانات توضيحية</span>
+              <span class="fs-preview-tag">معاينة توضيحية — بيانات تجريبية</span>
               <div class="fs-preview-title">لوحة التحليل المالي</div>
               <div class="fs-preview-sub">هكذا تظهر نتائج تحليلك بعد المعالجة</div>
               <div class="fs-preview-kpis">
-                <div class="fs-mini-kpi"><b>53</b><span>مؤشرًا محسوبًا</span></div>
-                <div class="fs-mini-kpi up"><b>+26.6%</b><span>نمو نموذجي</span></div>
-                <div class="fs-mini-kpi"><b>2 سنتان</b><span>للمقارنة</span></div>
+                <div class="fs-mini-kpi up"><b>▲ تحسّن</b><span>اتجاه توضيحي</span></div>
+                <div class="fs-mini-kpi down"><b>▼ تراجع</b><span>اتجاه توضيحي</span></div>
+                <div class="fs-mini-kpi"><b>◆ مستقر</b><span>اتجاه توضيحي</span></div>
               </div>
               <div class="fs-preview-chart">
                 <div class="fs-bar">&nbsp;</div><div class="fs-bar alt">&nbsp;</div>
@@ -174,57 +191,67 @@ def upload_screen() -> None:
             ''',
             unsafe_allow_html=True,
         )
-    with h_right:
-        st.markdown(
-            '''
-            <div class="fs-hero-copy">
-              <span class="fs-hero-eyebrow">FINANCIAL INTELLIGENCE PLATFORM</span>
-              <h1 class="fs-hero-title">حوّل قوائمك المالية<br>إلى <em>قرارات ذكية.</em></h1>
-              <p class="fs-hero-desc">حلّل بياناتك المالية، اكتشف المؤشرات والمخاطر،
-              واحصل على رؤى عملية مدعومة بالذكاء الاصطناعي — باستخراج موثق
-              وتحقيق محاسبي لكل قيمة.</p>
-            </div>
-            ''',
-            unsafe_allow_html=True,
-        )
 
-    # ── مساحة رفع العمل — عرض كامل ──
-    uploaded = st.file_uploader(
-        "ارفع القوائم المالية (يمكن اختيار عدة ملفات)",
-        type=sorted(ext.lstrip(".") for ext in SUPPORTED_EXTENSIONS),
-        accept_multiple_files=True,
-        help=f"الحد الأقصى: {MAX_UPLOAD_MB} م.ب لكل ملف — عدة ملفات تُحلَّل واحدًا وراء الآخر.",
-        label_visibility="collapsed",
-    )
+    # ── مساحة تحليل المستندات: البطاقة البارزة (الأولوية القصوى) ──
+    # مرساة التمرير لزر الـ Hero — سلوك حقيقي: ينقل المستخدم لمساحة الرفع
+    st.markdown('<div id="upload-zone"></div>', unsafe_allow_html=True)
     with st.container(border=True):
-        st.markdown('<div class="fs-card-title">مساحة تحليل المستندات</div>',
+        st.markdown('<div class="fs-card-title">مساحة تحليل المستندات</div>'
+                    '<div class="fs-card-sub">ارفع القوائم المالية وابدأ استخراج المؤشرات والرؤى.</div>',
                     unsafe_allow_html=True)
+        # الأبلود الأصلي الوحيد داخل البطاقة — السحب والإفلات يعمل كما هو
+        uploaded = st.file_uploader(
+            "ارفع القوائم المالية (يمكن اختيار عدة ملفات)",
+            type=sorted(ext.lstrip(".") for ext in SUPPORTED_EXTENSIONS),
+            accept_multiple_files=True,
+            help=f"الحد الأقصى: {MAX_UPLOAD_MB} م.ب لكل ملف — عدة ملفات تُحلَّل واحدًا وراء الآخر.",
+            label_visibility="collapsed",
+            key="uploader_main",
+        )
+        # قائمة الملفات المختارة الفعلية (اسم/نوع/حجم/حالة) — بيانات حية من الأبلود الأصلي
+        if uploaded:
+            _file_svg = ('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+                         'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" '
+                         'aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>'
+                         '<polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>'
+                         '<line x1="16" y1="17" x2="8" y2="17"/></svg>')
+            file_rows = "".join(
+                '<div class="fs-file-row">'
+                f'<span class="fs-file-ico">{_file_svg}</span>'
+                f'<div class="fs-file-info"><b>{f.name}</b>'
+                f'<span>{(f.type or "ملف").split(";")[0]} · {max(1, f.size // 1024):,} KB</span></div>'
+                '<span class="fs-gate ok">جاهزة للتحليل</span></div>'
+                for f in uploaded
+            )
+            st.markdown(f'<div class="fs-file-list">{file_rows}</div>', unsafe_allow_html=True)
         w_col1, w_col2 = st.columns([1.1, 1])
+        with w_col2:
+            # يسار الشاشة في RTL = وضع المعالجة
+            st.radio(
+                "وضع القراءة (لملفات PDF الممسوحة)",
+                ["تحليل دقيق — استخراج وفحص البيانات", "معالجة سريعة — أداء أسرع"],
+                index=0,
+                key="read_mode",
+                help="السريع يعمل مسحًا واحدًا (~نصف النداءات وثلث الوقت) لفرز عدد كبير من الملفات؛ "
+                     "أعد التشغيل بالوضع الشامل للأرقام الموثقة التي ستضعها في الرسالة.",
+            )
         with w_col1:
+            # يمين الشاشة في RTL = نطاق الصفحات
             st.text_input(
                 "نطاق صفحات القوائم — للملفات الممسوحة الكبيرة (اختياري)",
                 placeholder="مثال: 1-12",
                 key="page_range",
                 help="اتركه فارغاً لقراءة كل الصفحات. حدد النطاق لتسريع القراءة وتوفير الحصة.",
             )
-        with w_col2:
-            st.radio(
-                "وضع القراءة (لملفات PDF الممسوحة)",
-                ["🔍 شامل (تحقق كامل — للأرقام النهائية)", "⚡ سريع (فرز أولي — بدون طبقات التحقق)"],
-                index=0,
-                key="read_mode",
-                help="السريع يعمل مسحًا واحدًا (~نصف النداءات وثلث الوقت) لفرز عدد كبير من الملفات؛ "
-                     "أعد التشغيل بالوضع الشامل للأرقام الموثقة التي ستضعها في الرسالة.",
-            )
         if st.button(
-            "🔍 ابدأ التحليل المالي",
+            "ابدأ التحليل المالي",
             type="primary",
             use_container_width=True,
             disabled=uploaded is None,
         ):
             process_upload(uploaded)
         st.markdown("<p class='or-line'>أو</p>", unsafe_allow_html=True)
-        if st.button("🧪 جرّب بملف العينة الجاهز", use_container_width=True):
+        if st.button("جرّب بملف العينة الجاهز", use_container_width=True):
             if SAMPLE_FILE.exists():
 
                 class _SampleUpload:
@@ -242,44 +269,59 @@ def upload_screen() -> None:
             else:
                 st.error("ملف العينة غير موجود في sample_data/.")
 
-    # ── المميزات: دخول متدرج ──
-    st.write("")
-    st.markdown('<div class="sec-label">لماذا FinSight AI؟</div>', unsafe_allow_html=True)
+    # ── المميزات: نظام بطاقات متسق بأيقونات SVG مدمجة (بلا إيموجي وبلا خطوط أيقونات خارجية) ──
+    st.markdown('<div class="sec-heading">لماذا وكيل تحليل بيانات مالية ذكي؟</div>', unsafe_allow_html=True)
     feats = st.columns(4)
+    _svg = (
+        lambda body: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+        'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" '
+        'aria-hidden="true">' + body + "</svg>"
+    )
     feat_data = [
-        ("📑", "أي تنسيق", "PDF وCSV وExcel — جداول عريضة أو مقلوبة تُدمج تلقائياً."),
-        ("🧮", "نسب حتمية", "ربحية وسيولة ومديونية وكفاءة — تُحسب دائماً بـ Python."),
-        ("📈", "اتجاهات سنتين", "تحسّن / تراجع / استقرار لكل مؤشر مع نسبة التغير."),
-        ("🤖", "تقرير بالذكاء الاصطناعي", "تعليق لكل مؤشر وتوصيات مسنودة بالأدلة."),
+        (_svg('<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>'),
+         "تحليل مالي بالذكاء الاصطناعي",
+         "تعليق لكل مؤشر وتوصيات مسنودة بالأدلة — النموذج يفسّر النتائج ولا يحسبها."),
+        (_svg('<line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/>'
+              '<circle cx="17.5" cy="17.5" r="2.5"/>'),
+         "نسب مالية حتمية",
+         "ربحية وسيولة ومديونية وكفاءة تُحسب بـ Python من قيمك المطلقة دائماً."),
+        (_svg('<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>'
+              '<polyline points="17 6 23 6 23 12"/>'),
+         "اتجاهات سنتين",
+         "تحسّن / تراجع / استقرار لكل مؤشر مع نسبة التغير بين السنتين الماليتين."),
+        (_svg('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>'
+              '<polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>'),
+         "تصدير Excel وPDF",
+         "تقارير رسمية جاهزة للمشاركة بنفس الأرقام الموثقة المعروضة على الشاشة."),
     ]
     for i, (col, (icon, title, body)) in enumerate(zip(feats, feat_data)):
         col.markdown(
             f'<div class="fs-feature" style="animation-delay:{i * 90}ms">'
-            f'<span class="fs-feature-ico">{icon}</span><br><b>{title}</b><br>'
+            f'<span class="fs-feature-ico">{icon}</span>'
+            f"<b>{title}</b>"
             f"<span>{body}</span></div>",
             unsafe_allow_html=True,
         )
 
     # ── الخطوات ──
-    st.write("")
-    st.markdown('<div class="sec-label">كيف يعمل؟</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sec-heading" id="how-steps">كيف يعمل؟</div>', unsafe_allow_html=True)
     steps = st.columns(4)
     step_data = [
-        ("1", "📤", "ارفع الملف", "PDF أو Excel أو CSV"),
-        ("2", "🔍", "استخراج ذكي", "قراءة الجداول والصور الممسوحة"),
-        ("3", "🧮", "حساب حتمي", "53 مؤشراً بـ Python"),
-        ("4", "📊", "تقرير كامل", "تعليقات وتوصيات بالأدلة"),
+        ("1", "ارفع الملف", "PDF أو Excel أو CSV"),
+        ("2", "استخراج ذكي", "قراءة الجداول والصور الممسوحة"),
+        ("3", "حساب حتمي", "60 مؤشراً بـ Python"),
+        ("4", "تقرير كامل", "تعليقات وتوصيات بالأدلة"),
     ]
-    for col, (num, icon, title, body) in zip(steps, step_data):
+    for col, (num, title, body) in zip(steps, step_data):
         col.markdown(
             '<div class="step-card"><div class="step-num">' + num + "</div>"
-            '<div class="step-ico">' + icon + "</div><b>" + title + "</b><br><span>" + body + "</span></div>",
+            "<b>" + title + "</b><br><span>" + body + "</span></div>",
             unsafe_allow_html=True,
         )
 
     # ── الفوتر ──
     st.markdown(
-        '<div class="fs-footer"><b>FinSight AI</b> — محلل القوائم المالية · '
+        '<div class="fs-footer"><b>وكيل تحليل بيانات مالية ذكي</b> — محلل القوائم المالية · '
         "استخراج موثق بقرار بوابة لكل قيمة · "
         f"<b>313</b> اختبارًا على الكود · يعمل محليًا بالكامل</div>",
         unsafe_allow_html=True,
@@ -421,7 +463,7 @@ def process_upload(uploaded) -> None:
 
     page_range = _parse_page_range(st.session_state.get("page_range"))
     currency = st.session_state.get("currency", "$")
-    fast_mode = st.session_state.get("read_mode") == "⚡ سريع (فرز أولي — بدون طبقات التحقق)"
+    fast_mode = st.session_state.get("read_mode") == "معالجة سريعة — أداء أسرع"
     batch = len(jobs) > 1
 
     oks: list = []

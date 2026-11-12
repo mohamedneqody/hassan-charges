@@ -60,6 +60,9 @@ class YearMetrics:
     short_term_debt: float | None = None
     long_term_debt: float | None = None
     current_portion_lt_debt: float | None = None
+    # إصلاح حديد عز: حقول كانسية مستقلة (التدقيق الجنائي — D/E 0.08x→0.83x)
+    short_term_credit_facilities: float | None = None
+    bank_overdraft: float | None = None
     current_lease_liabilities: float | None = None
     non_current_lease_liabilities: float | None = None
     equity: float | None = None
@@ -181,6 +184,8 @@ def compute_year_metrics(
     m.short_term_debt = get("short_term_debt")
     m.long_term_debt = get("long_term_debt")
     m.current_portion_lt_debt = get("current_portion_lt_debt")
+    m.short_term_credit_facilities = get("short_term_credit_facilities")
+    m.bank_overdraft = get("bank_overdraft")
     m.current_lease_liabilities = get("current_lease_liabilities")
     m.non_current_lease_liabilities = get("non_current_lease_liabilities")
     m.equity = get("equity")
@@ -201,10 +206,29 @@ def compute_year_metrics(
     if m.operating_expenses is None and m.gross_profit is not None and m.operating_income is not None:
         m.operating_expenses = m.gross_profit - m.operating_income
         m.notes["operating_expenses"] = "Derived as Gross Profit - Operating Income."
-    if m.total_debt is None and any(x is not None for x in (m.short_term_debt, m.current_portion_lt_debt, m.long_term_debt)):
-        parts = [abs(x) for x in (m.short_term_debt, m.current_portion_lt_debt, m.long_term_debt) if x is not None]
+    if m.total_debt is None and any(
+        x is not None for x in (m.short_term_debt, m.current_portion_lt_debt,
+                                m.long_term_debt,
+                                m.short_term_credit_facilities,
+                                m.bank_overdraft,
+                                m.current_lease_liabilities,
+                                m.non_current_lease_liabilities)
+    ):
+        # إصلاح حديد عز (التدقيق الجنائي): إجمالي الدين = القروض طويلة الأجل
+        # + الأقساط الجارية + التسهيلات الائتمانية البنكية + السحب على
+        # المكشوف + التزامات التأجير التمويلي (طويلة وقصيرة).
+        # حديد عز 2021: 3,915,952,409 (تسهيلات) + 2,655,419 (مكشوف) + الباقي
+        # = 5,252,833,283 ج.م بالإيضاح 32-2 — النظام كان يخرج 0.08x بدل 0.83x.
+        parts = [abs(x) for x in (
+            m.short_term_debt, m.current_portion_lt_debt, m.long_term_debt,
+            m.short_term_credit_facilities, m.bank_overdraft,
+            m.current_lease_liabilities, m.non_current_lease_liabilities,
+        ) if x is not None]
         m.total_debt = sum(parts)
-        m.notes["total_debt"] = "Derived as short-term borrowings + current portion of LT loans + long-term borrowings."
+        m.notes["total_debt"] = (
+            "إجمالي الدين (المديونية الفعلية) = القروض طويلة الأجل + الأقساط "
+            "الجارية + التسهيلات الائتمانية البنكية + السحب على المكشوف + "
+            "التزامات التأجير التمويلي (طويلة وقصيرة).")
     if m.ebitda is None and m.operating_income is not None and m.depreciation_amortization is not None:
         m.ebitda = m.operating_income + abs(m.depreciation_amortization)
         m.notes["ebitda"] = "Derived as Operating Income + D&A."

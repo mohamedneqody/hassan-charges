@@ -249,6 +249,122 @@ def _is_allowed(value: float, allowed: set[float]) -> bool:
     return False
 
 
+# ═══ v6 إصلاح حديد عز (إصلاح 5-ب): حاجز ما بعد التوليد ═══
+# الموديل: حوّل المضاعف (x) إلى نسبة %، وأسقط إشارة السالب من خسائر 2020،
+# وأقحم أرقامًا زائفة. هذا الحاجز يعمل بعد التوليد وقبل العرض:
+# 1) يصلح % المُقحمة مكان x للمؤشرات ذات النوع x.
+# 2) يعيد إشارة السالب للقيم السالبة الممررة لفظيًا.
+# 3) يُسقط التعليق إن بقي رقم غير متتبع بعد الإصلاح (المدقق القائم يكمل).
+def _extract_numbers(text: str) -> list[tuple[float, str]]:
+    """كل الأرقام في النص مع وحدتها الظاهرة (% أو x أو مجرد رقم)."""
+    out = []
+    for m in re.finditer(r"-?\d+(?:[.,]\d+)?\s*(?:%|x|مرة)?", text):
+        tok = m.group(0)
+        num_s = re.sub(r"[^\d.,\-]", "", tok).replace(",", "")
+        try:
+            num = float(num_s)
+        except ValueError:
+            continue
+        unit = "%" if "%" in tok else ("x" if ("x" in tok or "مرة" in tok)
+                                        else "")
+        out.append((num, unit))
+    return out
+
+
+def repair_generated_text(text: str, expected: dict) -> str:
+    """يصحح وحدات وإشارات النص المولد مقابل القيم الممررة من Python.
+
+    expected: {"kind": "ratio|currency|percent", "prev": str, "curr": str,
+               "prev_num": float|None, "curr_num": float|None}
+    يعيد النص مصححًا — أو كما هو إن لم يخالف.
+    """
+    kind = expected.get("kind", "")
+    fixed = text
+
+    # 1) % مقحمة مكان x للمؤشرات متعددة المرات (D/E, Interest Coverage...)
+    if kind == "ratio":
+        for num, unit in _extract_numbers(fixed):
+            if unit == "%" and abs(num) < 1000:
+                # 25% مكان 1.25x؟ الفرق النمطي: % متعدد عن قيمة النسبة —
+                # التصحيح: استبدال رمز % بـ x لنفس الرقم
+                fixed = fixed.replace(f"{num:g}%", f"{num:g}x")
+                fixed = fixed.replace(f"{num:.2f}%", f"{num:.2f}x")
+
+    # 2) إشارة السالب الساقطة: القيمة الممررة سالبة لفظيًا والنص يذكرها
+    #    موجبة → أعد السالب (فقط للمطابقة العددية للمقدار)
+    for key in ("prev", "curr"):
+        num = expected.get(f"{key}_num")
+        if num is None or num >= 0:
+            continue
+        mag = abs(num)
+        for tok_num, _unit in _extract_numbers(fixed):
+            if tok_num > 0 and abs(tok_num - mag) <= max(0.5, 1e-4 * mag):
+                fixed = fixed.replace(f"{tok_num:g}", f"-{tok_num:g}", 1)
+                break
+
+    # 3) الأرقام الزائفة: أي رقم في النص لا يطابق رقمًا ممررًا (بنسبة
+    #    تسامح) يُعلَّم — المتصل يقرر الإسقاط (المدقق الحتمي يكمل)
+    return fixed
+
+
+def guardrail_comment(comment_text: str, expected: dict) -> str | None:
+    """يصحح ثم يدقق: يعيد النص المصحح، أو None إن بقي رقم غير متتبع."""
+    repaired = repair_generated_text(comment_text, expected)
+    nums = [(n, u) for n, u in _extract_numbers(repaired) if abs(n) > 1e-9]
+    allowed = [v for v in (expected.get("prev_num"), expected.get("curr_num"))
+               if v is not None]
+    # أرقام النسب مسموحة (نسب مئوية من قيم أخرى) — الفحص على قيم المؤشر
+    stray = [n for n, u in nums
+             if not any(abs(abs(n) - abs(a)) <= max(1.0, 1e-4 * abs(a))
+                        or abs(n - a) <= max(1.0, 1e-4 * abs(a))
+                        for a in allowed)]
+    # أسماء سنوات وأرقام مرجعية صغيرة مسموحة؛ الزائفة الكبيرة تُسقط
+    big_stray = [n for n in stray if abs(n) >= 1000]
+    if big_stray:
+        return None
+    return repaired
+
+
+def _apply_post_generation_guardrail(
+    analysis: AIAnalysis, payload: dict,
+) -> AIAnalysis:
+    """v6 إصلاح حديد عز (إصلاح 5): حاجز ما بعد التوليد على كل تعليق —
+    يصحح % المُقحمة مكان x (للنسب) ويستعيد إشارة السالب من القيم المنسقة
+    الممررة، ثم يترك المدقق الحتمي (_audit_comments) يفحص الأرقام."""
+    # خريطة الاسم → القيم المنسقة من الحمولة
+    by_name = {}
+    for m in payload.get("metrics", []):
+        by_name[m.get("metric", "")] = m
+    ratio_names = {m.get("metric") for m in payload.get("metrics", [])
+                   if "x" in str(m.get("current", ""))}
+    neg_names = {}
+    for m in payload.get("metrics", []):
+        name = m.get("metric", "")
+        for v in (m.get("previous", ""), m.get("current", "")):
+            nums = [float(x.replace(",", "")) for x in
+                    __import__("re").findall(
+                        r"-\d+(?:\.\d+)?", str(v))]
+            if nums:
+                neg_names[name] = min(nums)  # الأكثر سلبية
+    fixed: list[tuple[str, str]] = []
+    for metric, text in analysis.ratio_comments:
+        t = text
+        if metric in ratio_names:
+            # % مقحمة مكان x للمؤشرات متعددة المرات
+            t = __import__("re").sub(
+                r"(-?\d+(?:\.\d+)?)\s*%", r"x", t)
+        if metric in neg_names:
+            neg = neg_names[metric]
+            mag = abs(neg)
+            # أعد إشارة السالب للقيمة المذكورة موجبة
+            for tok in __import__("re").findall(
+                    f"(?<![-.\d]){mag:g}(?![\d])", t):
+                t = t.replace(tok, f"-{tok}", 1)
+        fixed.append((metric, t))
+    analysis.ratio_comments = fixed
+    return analysis
+
+
 def _audit_comments(
     analysis: AIAnalysis, payload: dict
 ) -> tuple[list[str], list[tuple[str, str]]]:
@@ -509,6 +625,9 @@ def analyze_financials(
                           "All deterministic results below are still valid.",
                     model=model,
                 )
+            # v6 إصلاح حديد عز (إصلاح 5): حاجز ما بعد التوليد قبل المدقق —
+            # يصلح % المُقحمة مكان x ويستعيد إشارة السالب من القيم الممررة
+            analysis = _apply_post_generation_guardrail(analysis, payload)
             pool.mark_success(state.key)
             analysis.model = model
             try:

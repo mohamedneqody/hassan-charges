@@ -61,6 +61,9 @@ body.printsafe h1 { font-size: 1.35rem; white-space: normal; }
    th بلا nowrap: 9 أعمدة برؤوس غير قابلة للكسر قصّت عمود التحقق عند
    الحافة (عيب 4 من مراجعة v2) */
 body.printsafe td.num { white-space: nowrap; }
+/* v7 (تدقيق حديد عز — إصلاح 8): أسماء المؤشرات الإنجليزية كانت تُقصّ
+   (Reve / Gross F) — عمود الاسم يأخذ حصة أوسع ولا يُكسر داخل الكلمة */
+body.printsafe td.mname { white-space: nowrap; min-width: 15em; }
 body.printsafe .vstat { white-space: normal; }
 body.printsafe table { width: 100%; table-layout: auto; }
 body.printsafe tr { page-break-inside: avoid; }
@@ -112,6 +115,21 @@ def _metrics_table(rows: list[MetricRow], prev_year: int, curr_year: int,
                    currency: str, scale: int = 1,
                    verif: dict | None = None) -> str:
     verif = verif or {}
+    # v7 (تدقيق حديد عز — إصلاح 8): أسهم ▲▼→ تتحول إلى «؟» في خط الطباعة
+    # العربي (LibreOffice) — الكلمة العربية القياسية (TREND_AR) مضمونة
+    # العرض في كل الخطوط ولا تنكسر الاتجاهيًا داخل <bdi>.
+    from src.analysis.comparison import TREND_AR
+
+    trend_text = {
+        "Improving": TREND_AR["Improving"], "Declining": TREND_AR["Declining"],
+        "Stable": TREND_AR["Stable"], "N/A": "–",
+    }
+
+    def _num(v: str) -> str:
+        # كل قيمة رقمية داخل <bdi> — bidi-isolation يمنع تشتت الرقم
+        # والوحدة في سياق RTL (كانت $N/A$ والانشطار ظاهرين بالتقرير).
+        return f"<bdi>{ESC(v)}</bdi>"
+
     trs = []
     for r in rows:
         # نفس حالة Excel (عيب 6): كل مؤشر يحمل أسوأ حالة لمدخلاته —
@@ -120,13 +138,14 @@ def _metrics_table(rows: list[MetricRow], prev_year: int, curr_year: int,
                                       if r.status == "N/A" else "—")
         trs.append(
             "<tr>"
-            f"<td>{ESC(r.category)}</td><td>{ESC(r.label)}</td>"
-            f'<td class="num">{ESC(_nb(fmt_value_ar(r.previous, r.kind, currency, scale)))}</td>'
-            f'<td class="num">{ESC(_nb(fmt_value_ar(r.current, r.kind, currency, scale)))}</td>'
-            f'<td class="num">{ESC(_nb(fmt_signed_ar(r.change, r.kind, currency, scale)))}</td>'
-            f'<td class="num">{ESC(fmt_signed_pct(r.change_pct))}</td>'
+            f"<td>{ESC(r.category)}</td>"
+            f'<td class="mname">{ESC(r.label)}</td>'
+            f'<td class="num">{_num(_nb(fmt_value_ar(r.previous, r.kind, currency, scale)))}</td>'
+            f'<td class="num">{_num(_nb(fmt_value_ar(r.current, r.kind, currency, scale)))}</td>'
+            f'<td class="num">{_num(_nb(fmt_signed_ar(r.change, r.kind, currency, scale)))}</td>'
+            f'<td class="num">{_num(fmt_signed_pct(r.change_pct))}</td>'
             f"<td>{_badge(r.status)}</td>"
-            f"<td>{ESC(r.trend_symbol + ' ' + r.trend) if r.trend != 'N/A' else '–'}</td>"
+            f"<td>{ESC(trend_text.get(r.trend, r.trend))}</td>"
             f'<td class="vstat">{ESC(vlabel)}</td>'
             "</tr>"
         )
@@ -218,7 +237,18 @@ def build_html_report(
     # MVP safety guard (المهمة 3): the report is PRELIMINARY while any
     # critical field still needs review — a verified-final report is only
     # produced once the pending list is empty
-    preliminary = bool(results.get("pending_critical_review"))
+    # v6 إصلاح حديد عز (إصلاح 6): الغلاف مربوط بحالة التوثيق الفعلية —
+    # تغطية = الحاسمة من سجل القرار ÷ الخانات ذات القيمة. النص الثابت
+    # «تقرير نهائي موثق» بلا تحقق كان يطبع على 4/56 (7%).
+    from src.analysis.financial_gate import decide
+
+    dl = results.get("decision_log") or []
+    _valued = [e for e in dl if e.get("final") is not None]
+    _decisive = [e for e in _valued
+                 if decide(e.get("status", "MISSING"))
+                 in ("use", "use_disclosed")]
+    _coverage = (len(_decisive) / len(_valued)) if _valued else 0.0
+    preliminary = bool(results.get("pending_critical_review")) or _coverage < 1.0
     # المهمة 6: honest labeling — test-reviewer attestations are NOT
     # production human review; the unit and period type come from the
     # document, never invented
@@ -231,8 +261,16 @@ def build_html_report(
                 if results.get("curr_metrics") and
                 results["curr_metrics"].notes.get("tax_rate") else "")
     if preliminary:
-        pend = results["pending_critical_review"]
-        pend_all = sorted({p["field"] for p in pend})
+        # v7 إصلاح عيب البنية: كان `[{"field": e["field"] for e in ...}]`
+        # — dict-comprehension داخل list literal — ينتج [{}] دائمًا فيتكسر
+        # p["field"] (KeyError) حين لا يوجد pending صريح. المطلوب كان
+        # list comprehension ينتج عنصرًا لكل حقل غير حاسم.
+        pend = results.get("pending_critical_review") or [
+            {"field": e.get("field", "?")}
+            for e in _valued
+            if decide(e.get("status", "MISSING")) == "not_decisive"
+        ]
+        pend_all = sorted({str(p.get("field", "?")) for p in pend})
         # v3 (عيب 4): لافتة مضغوطة — العدد + أول ستة بنود، لا قائمة تطول
         # وتدفع الغلاف لصفحة ثانية
         pend_names = "، ".join(pend_all[:6]) + ("، …" if len(pend_all) > 6
@@ -240,8 +278,10 @@ def build_html_report(
         report_status = (
             '<div style="background:#fff3cd;border:1px solid #f0d9a8;'
             'border-radius:9px;padding:11px 16px;margin:10px 0;font-size:.92rem">'
-            '⚠ <b>تقرير أولي قابل للمراجعة</b> — بنود حرجة بانتظار حسم '
-            f'المراجعة: {len(pend)} ({pend_names})'
+            f'⚠ <b>تقرير أولي غير معتمد نهائياً — تغطية التوثيق '
+            f'({len(_decisive)}/{len(_valued)}) وتوجد بنود بانتظار '
+            f'المراجعة البشرية</b><br>'
+            f'البنود المعلقة: {pend_names}'
             + (f'<br>المراجع: {reviewer_label}' if reviewer_label else "")
             + "</div>")
     else:

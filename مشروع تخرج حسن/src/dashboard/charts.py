@@ -59,6 +59,8 @@ def fmt_value_ar(value: float | None, kind: str, currency: str = "$",
     the report tables and the Gemini payload share this so a number can
     never read as millions in one place and billions in another."""
     if value is None:
+        # المواصفة (تدقيق حديد عز — إصلاح 3/8): القيمة الناقصة تظهر "N/A"
+        # الكنسي مع سببها في قسم Missing Data — لا صياغة عربية بديلة.
         return "N/A"
     if kind == CURRENCY:
         return f"{currency}{_ar_words(humanize(value, scale))}"
@@ -68,7 +70,7 @@ def fmt_value_ar(value: float | None, kind: str, currency: str = "$",
 def fmt_signed_ar(value: float | None, kind: str, currency: str = "$",
                   scale: int = 1) -> str:
     if value is None:
-        return "N/A"
+        return "غير متوفر"
     if kind == CURRENCY:
         sign = "+" if value > 0 else ""
         return f"{currency}{sign}{_ar_words(humanize(value, scale))}"
@@ -77,7 +79,7 @@ def fmt_signed_ar(value: float | None, kind: str, currency: str = "$",
 
 def fmt_value(value: float | None, kind: str, currency: str = "$") -> str:
     if value is None:
-        return "N/A"
+        return "غير متوفر"
     if kind == CURRENCY:
         return f"{currency}{humanize(value)}"
     if kind == PERCENT:
@@ -91,7 +93,7 @@ def fmt_value(value: float | None, kind: str, currency: str = "$") -> str:
 
 def fmt_signed(value: float | None, kind: str, currency: str = "$") -> str:
     if value is None:
-        return "N/A"
+        return "غير متوفر"
     sign = "+" if value > 0 else ""
     if kind == CURRENCY:
         return f"{sign}{currency}{humanize(value)}"
@@ -105,7 +107,7 @@ def fmt_signed(value: float | None, kind: str, currency: str = "$") -> str:
 
 
 def fmt_signed_pct(value: float | None) -> str:
-    return "N/A" if value is None else f"{'+' if value > 0 else ''}{value:.1f}%"
+    return "غير متوفر" if value is None else f"{'+' if value > 0 else ''}{value:.1f}%"
 
 
 # ---------------------------------------------------------------------------

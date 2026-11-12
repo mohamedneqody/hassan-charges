@@ -98,6 +98,7 @@ def test_two_way_registry_vs_engine_coverage(metrics):
         "fixed_assets", "accounts_payable", "current_liabilities",
         "total_liabilities", "total_debt", "short_term_debt",
         "long_term_debt", "current_portion_lt_debt",
+        "short_term_credit_facilities", "bank_overdraft",
         "current_lease_liabilities", "non_current_lease_liabilities",
         "equity", "retained_earnings", "operating_cash_flow",
         "investing_cash_flow", "financing_cash_flow", "capex", "ebitda",

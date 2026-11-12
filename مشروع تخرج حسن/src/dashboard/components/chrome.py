@@ -19,7 +19,7 @@ def esc(v) -> str:
     return html.escape(str(v))
 
 
-def render_header(product: str = "FinSight AI",
+def render_header(product: str = "وكيل تحليل بيانات مالية ذكي",
                   subtitle: str = "Financial Intelligence") -> None:
     """هيدر مضغوط واحد: الهوية + حالة الموديل + معلومات الملف الحالي.
     لا hero ضخم — صف واحد يحمل هوية المنتج."""
@@ -50,7 +50,7 @@ def render_header(product: str = "FinSight AI",
     st.markdown(
         f'<div class="fs-header">'
         f'<div class="fs-brand">'
-        f'<div class="fs-logo">FS</div>'
+        f'<div class="fs-logo">🤖</div>'
         f'<div><div class="fs-brand-name">{esc(product)}</div>'
         f'<div class="fs-brand-sub">{esc(subtitle)}</div></div>'
         f'</div>'

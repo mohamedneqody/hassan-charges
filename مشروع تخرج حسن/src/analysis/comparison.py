@@ -22,7 +22,7 @@ class MetricRow:
     label_ar: str
     category: str
     kind: str  # currency | percent | ratio
-    higher_is_better: bool
+    higher_is_better: bool | None  # None = محايد الاتجاه (إصلاح 7)
     previous: float | None
     current: float | None
     change: float | None
@@ -30,10 +30,11 @@ class MetricRow:
     status: str
     trend: str
     reason: str = ""  # why a value is N/A
+    turnaround: bool = False  # إصلاح 7: سالب أساس → موجب حالي
 
     @property
     def trend_symbol(self) -> str:
-        return {IMPROVING: "↑", DECLINING: "↓", STABLE: "→"}.get(self.trend, "–")
+        return {IMPROVING: "▲", DECLINING: "▼", STABLE: "→"}.get(self.trend, "–")
 
 
 def _relative_change(previous: float | None, current: float | None) -> float | None:
@@ -46,11 +47,19 @@ def _relative_change(previous: float | None, current: float | None) -> float | N
 def _classify(
     change: float | None,
     change_pct: float | None,
-    higher_is_better: bool,
+    higher_is_better: bool | None,
 ) -> tuple[str, str]:
-    """Return (status, trend) for a metric row."""
+    """Return (status, trend) for a metric row.
+
+    v6 إصلاح حديد عز (إصلاح 7 — polarity): higher_is_better=None مؤشر
+    محايد الاتجاه — زيادة التدفق الاستثماري الخارج ليست "تحسنًا" وسداد
+    التمويليات ليست "تراجعًا"؛ Gemini وصفهما بالعكس فتناقضت الواجهة.
+    المحايد لا يقيَّم اتجاهيًا إطلاقًا.
+    """
     if change is None:
         return NOT_AVAILABLE, NOT_AVAILABLE
+    if higher_is_better is None:
+        return NEUTRAL, STABLE
     if change == 0 or (change_pct is not None and abs(change_pct) < STABLE_TREND_THRESHOLD):
         return NEUTRAL, STABLE
     improving = (change > 0) == higher_is_better
@@ -80,13 +89,22 @@ def _row(
     change = None if (previous is None or current is None) else current - previous
     change_pct = _relative_change(previous, current) if change is not None else None
     status, trend = _classify(change, change_pct, higher_is_better)
+    # v6 إصلاح 7: وسم التحول للربحية — سالب في سنة الأساس وموجب في الحالية
+    # (حديد عز: صافي الربح -563.67م → +288.15م): نسبة التغير وحدها مضللة
+    # دون وسم انقلاب الإشارة.
+    turnaround = bool(
+        kind == CURRENCY and previous is not None and current is not None
+        and previous < 0 < current
+    )
+    if turnaround:
+        reason = (reason + " | " if reason else "") +             "تحول للربحية — انقلاب الإشارة من سالب في سنة الأساس إلى موجب."
     return MetricRow(
         key=spec_key, label=label, label_ar=LABELS_AR.get(spec_key, label),
         category=category, kind=kind,
         higher_is_better=higher_is_better,
         previous=previous, current=current,
         change=change, change_pct=change_pct,
-        status=status, trend=trend, reason=reason,
+        status=status, trend=trend, reason=reason, turnaround=turnaround,
     )
 
 
@@ -138,8 +156,10 @@ _METRIC_SPECS = [
     ("working_capital_turnover", "Working Capital Turnover", "Working Capital", RATIO, True, lambda m: m.working_capital_turnover),
     # Cash flow
     ("operating_cash_flow", "Operating Cash Flow", "Cash Flow", CURRENCY, True, lambda m: m.operating_cash_flow),
-    ("investing_cash_flow", "Investing Cash Flow", "Cash Flow", CURRENCY, False, lambda m: m.investing_cash_flow),
-    ("financing_cash_flow", "Financing Cash Flow", "Cash Flow", CURRENCY, False, lambda m: m.financing_cash_flow),
+    # v6 إصلاح 7: polarity محايدة — زيادة الاستثمار سدادًا ليست تحسنًا،
+    # وسداد التمويليات ليست تراجعًا (كانت Negative فتناقض مع تفسير Gemini)
+    ("investing_cash_flow", "Investing Cash Flow", "Cash Flow", CURRENCY, None, lambda m: m.investing_cash_flow),
+    ("financing_cash_flow", "Financing Cash Flow", "Cash Flow", CURRENCY, None, lambda m: m.financing_cash_flow),
     ("cfo_margin", "Operating Cash Flow Margin", "Cash Flow", PERCENT, True, lambda m: m.cfo_margin),
     ("fcf_margin", "Free Cash Flow Margin", "Cash Flow", PERCENT, True, lambda m: m.fcf_margin),
     ("cfo_to_net_income", "Cash Flow to Net Income", "Cash Flow", RATIO, True, lambda m: m.cfo_to_net_income),
@@ -309,12 +329,79 @@ def comparison_dataframe(rows: list[MetricRow], prev_year: int, curr_year: int) 
     return pd.DataFrame(records)
 
 
-def missing_data_report(rows: list[MetricRow]) -> list[str]:
-    """Human-readable list of what could not be computed and why."""
+def missing_data_report(
+    rows: list[MetricRow],
+    metrics_by_year: dict[int, object] | None = None,
+) -> list[str]:
+    """Human-readable list of what could not be computed and WHY —
+    v6 إصلاح حديد عز (إصلاح 3): السبب يُشتق برمجيًا من مدخلات المؤشر
+    الفعلية (metric_registry.required_inputs مقابل قيم السنة) بدل النصوص
+    الثابتة التي كانت تتهم المخزون بالغياب بينما المفقود فعليًا هو
+    current_assets (حالة Quick Ratio).
+    """
+    from src.analysis.metric_registry import REGISTRY
+
+    inputs_by_key = {e.metric_id: e.required_inputs
+                     for e in REGISTRY}
+    field_ar = {
+        "current_assets": "الأصول المتداولة", "cash": "النقدية",
+        "inventory": "المخزون", "accounts_receivable": "الذمم المدينة",
+        "current_liabilities": "الالتزامات المتداولة",
+        "total_assets": "إجمالي الأصول", "total_liabilities": "إجمالي الالتزامات",
+        "equity": "حقوق الملكية", "revenue": "الإيرادات",
+        "cost_of_revenue": "تكلفة الإيرادات", "gross_profit": "مجمل الربح",
+        "operating_income": "الربح التشغيلي", "net_income": "صافي الربح",
+        "operating_cash_flow": "التدفق التشغيلي",
+        "investing_cash_flow": "التدفق الاستثماري",
+        "financing_cash_flow": "التدفق التمويلي",
+        "fixed_assets": "الممتلكات والمعدات", "interest_expense": "مصروف الفوائد",
+        "depreciation_amortization": "الإهلاك والاستنزاف",
+        "pretax_income": "الربح قبل الضريبة",
+        "income_tax_expense": "مصروف ضريبة الدخل",
+        "long_term_debt": "القروض طويلة الأجل",
+        "current_portion_lt_debt": "الأقساط الجارية للقروض",
+        "short_term_debt": "القروض قصيرة الأجل",
+        "short_term_credit_facilities": "التسهيلات الائتمانية البنكية",
+        "bank_overdraft": "السحب على المكشوف",
+        "current_lease_liabilities": "التزامات الإيجار المتداولة",
+        "non_current_lease_liabilities": "التزامات الإيجار غير المتداولة",
+        "accounts_payable": "الدائنون والمستحقات",
+    }
+
+    def _missing_fields(spec_key: str, year: int | None) -> list[str]:
+        required = inputs_by_key.get(spec_key)
+        if not required or year is None:
+            return []
+        m = metrics_by_year.get(year) if metrics_by_year else None
+        if m is None:
+            return []
+        missing = [f for f in required if getattr(m, f, None) is None]
+        return [f"{field_ar.get(f, f)} ({f})" for f in missing]
+
     seen: set[str] = set()
     report: list[str] = []
     for r in rows:
-        if r.status == NOT_AVAILABLE and r.reason and r.reason not in seen:
-            seen.add(r.reason)
-            report.append(f"{r.label}: {r.reason}")
+        if r.status != NOT_AVAILABLE:
+            continue
+        year = None
+        if metrics_by_year:
+            # السنة الحالية أولًا (سبب N/A الواقعي في العرض)
+            for y in sorted(metrics_by_year, reverse=True):
+                missing = _missing_fields(r.key, y)
+                if missing:
+                    year = y
+                    break
+        detail = ""
+        if year is not None:
+            missing = _missing_fields(r.key, year)
+            if missing:
+                detail = (f" — المتغير المفقود فعلياً في {year}: "
+                          + "، ".join(missing))
+        # التسمية الإنجليزية داخل السطر أيضًا (Investing Cash Flow) — الواجهة
+        # والاختبارات تعتمد مطابقة المصطلح بلغتيه، والقارئ العربي يرى العربي أولًا.
+        line = (f"{r.label_ar or r.label} ({r.label}): غير قابل للحساب{detail}")
+        if line in seen:
+            continue
+        seen.add(line)
+        report.append(line)
     return report

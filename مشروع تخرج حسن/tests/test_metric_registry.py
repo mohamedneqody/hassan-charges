@@ -109,13 +109,15 @@ def test_liquidity_hand_computed(m):
     assert m.ocf_ratio == pytest.approx(0.6)
 
 
-# ── المديونية — بالتعريف الصحيح: الدين ذو الفائدة + الأقساط المتداولة ──
+# ── المديونية — بالتعريف المحدَّث (تدقيق حديد عز): الدين ذو الفائدة
+# + الأقساط المتداولة + التزامات التأجير التمويلي (طويلة وقصيرة) ──
 def test_debt_ratios_hand_computed(m):
-    # total_debt = 100,000 + 50,000 + 200,000 = 350,000 (ST + أقساط + LT)
-    assert m.total_debt == pytest.approx(350_000.0)
-    assert m.debt_to_equity == pytest.approx(350_000 / 300_000, rel=1e-4)
+    # total_debt = 100,000 (ST) + 50,000 (أقساط) + 200,000 (LT)
+    #            + 30,000 (إيجار متداول) + 80,000 (إيجار غير متداول) = 460,000
+    assert m.total_debt == pytest.approx(460_000.0)
+    assert m.debt_to_equity == pytest.approx(460_000 / 300_000, rel=1e-4)
     assert m.debt_ratio == pytest.approx(500_000 / 800_000, rel=1e-4)
-    assert m.debt_to_assets == pytest.approx(350_000 / 800_000, rel=1e-4)
+    assert m.debt_to_assets == pytest.approx(460_000 / 800_000, rel=1e-4)
     assert m.liabilities_to_equity == pytest.approx(500_000 / 300_000, rel=1e-4)
     assert m.equity_ratio == pytest.approx(300_000 / 800_000, rel=1e-4)
     assert m.financial_leverage == pytest.approx(800_000 / 300_000, rel=1e-4)
@@ -149,7 +151,7 @@ def test_working_capital_and_cash_flow(m):
     assert m.cfo_margin == pytest.approx(12.0)
     assert m.free_cash_flow == pytest.approx(120_000 - 60_000)
     assert m.cfo_to_net_income == pytest.approx(120_000 / 90_000, rel=1e-4)
-    assert m.cfo_to_debt == pytest.approx(120_000 / 350_000, rel=1e-4)
+    assert m.cfo_to_debt == pytest.approx(120_000 / 460_000, rel=1e-4)
     assert m.capex_coverage == pytest.approx(120_000 / 60_000, rel=1e-4)
 
 

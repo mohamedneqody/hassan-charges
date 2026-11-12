@@ -44,6 +44,7 @@ _T = {
     "classic": {"ar": "الواجهة الكلاسيكية", "en": "Classic UI"},
     "summary": {"ar": "الملخص التنفيذي", "en": "Executive Summary"},
     "gate_title": {"ar": "حالة التوثيق", "en": "Verification status"},
+    "pending": {"ar": "بانتظار المراجعة", "en": "Awaiting review"},
     "provisional": {
         "ar": "تحليل تجريبي غير معتمد — مولد من قيم حالتها «يحتاج "
               "مراجعة»؛ يقرأ كمؤشرات استكشافية وليس حكمًا نهائيًا.",

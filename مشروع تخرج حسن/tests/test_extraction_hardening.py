@@ -413,7 +413,7 @@ def test_shadow_runner_replay_records_without_touching_values(monkeypatch):
     d.values["revenue"] = {2022: 16_665_919_878.0}   # years derive from values
     before = json.dumps(d.values, default=str)
     rec = VO.run_spatial_shadow(d, pages, notes=[],
-                                fields=("short_term_debt",))
+                                fields=("short_term_credit_facilities",))
     assert rec is not None and rec["mode"] == "SHADOW_REPLAY"
     assert rec["affects_results"] is False
     assert json.dumps(d.values, default=str) == before   # values untouched
@@ -813,8 +813,11 @@ def test_agreeing_but_wrong_rows_still_blocked(monkeypatch):
     monkeypatch.setattr(LO, "_page_markdown",
                         lambda conv, png: "1,257,960,603")
     monkeypatch.setattr(SC, "_crop", lambda *a: b"fake")
+    # v7 (تدقيق حديد عز — إصلاح 2): «صافي أرباح النشاط» صار يُطابق
+    # operating_income (كان net_activity_profit) — شك الصف المتنازع
+    # (MULTI_ROW) لازم ينجو من اتفاق القارئين على أي حقل.
     cell = SC.extract_spatial_cell(
-        None, b"", "net_activity_profit", 2022,
+        None, b"", "operating_income", 2022,
         columns={2022: YearColumn(2022, 0.48, 0.60, 0.543)},
         columns_source="test")
     assert cell.status == SC.STATUS_MULTI_ROW            # agreement ≠ row proof

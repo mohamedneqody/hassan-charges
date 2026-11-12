@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 import pandas as pd
 
 from src.config import FIELD_ALIASES, FIELD_EXCLUSIONS
+from src.analysis.financial_gate import decide  # حاكمية الحالات — بوابات القرار الأربع
 
 _YEAR_RE = re.compile(r"(?:19|20)\d{2}")
 
@@ -123,7 +124,12 @@ _FIELD_NEGATIVE_PATTERNS: dict[str, tuple[str, ...]] = {
     "long_term_debt": ("اقساط", "أقساط", "مستحقه السداد خلال عام"),
     # «بنوك - سحب على المكشوف» is its own printed line and is NOT part of
     # the printed borrowings definition (facilities + installments + loans).
-    "short_term_debt": ("مكشوف",),
+    "short_term_debt": ("مكشوف", "تسهيلات ائتمانيه"),
+    # إصلاح حديد عز: الحقلان الجديدان — كل بند مطبوع لحاله، ولا يجوز أن
+    # يمتصه حقل آخر (short_term_debt توقف عن امتصاص التسهيلات والمكشوف)
+    "short_term_credit_facilities": ("مكشوف", "اقساط", "أقساط",
+                                      "قروض طويله"),
+    "bank_overdraft": ("تسهيلات", "اقساط", "أقساط", "قروض"),
     # «ضريبة الدخل المؤجلة» is not the period's income-tax expense.
     # (normalize_label unifies ؤ→و: المؤجلة → الموجله)
     # AbuQir root-cause fix (2026-11-05): the income-tax NOTE carries
@@ -1217,4 +1223,57 @@ def build_decision_log(data: FinancialData) -> list[dict]:
                 "reason": reason,
                 **({"spatial": spatial} if spatial else {}),
             })
+    log = _identity_anchor_upgrade(log, data)
+    return log
+
+
+def _identity_anchor_upgrade(log: list[dict], data) -> list[dict]:
+    """إصلاح حديد عز (إصلاح 4): إذا ثبتت الهوية المحاسبية الكبرى للميزانية
+    (الأصول = الالتزامات + الملكية ضمن سماحية ضيقة) فأرقام القوائم
+    الأساسية الموثقة تطابق الواقع — تعارض جدول إيضاح فرعي مشوه (صفحة 13
+    للأصول الثابتة) لا يبرر حجبها. الترقية معلنة (use_disclosed) ومحدودة
+    بحقول القوائم الأساسية ذات التطابق المثبت — لا تمس المحجوبة لأسباب
+    أخرى (تعارض إشارة، غياب، طبقة واحدة بلا تصديق)."""
+    PRIMARY_FIELDS = {
+        "total_assets", "current_assets", "cash", "inventory",
+        "accounts_receivable", "fixed_assets", "total_liabilities",
+        "current_liabilities", "equity", "revenue", "cost_of_revenue",
+        "gross_profit", "operating_income", "pretax_income",
+        "income_tax_expense", "net_income", "operating_cash_flow",
+        "investing_cash_flow", "financing_cash_flow",
+        "long_term_debt", "current_portion_lt_debt",
+        "short_term_credit_facilities", "bank_overdraft",
+        "current_lease_liabilities", "non_current_lease_liabilities",
+        "accounts_payable",
+    }
+    assets = (data.values.get("total_assets") or {})
+    liabs = (data.values.get("total_liabilities") or {})
+    equity_v = (data.values.get("equity") or {})
+    identity_holds = False
+    for y, a in assets.items():
+        l = liabs.get(y)
+        e = equity_v.get(y)
+        if a and l and e:
+            if abs(a - (l + e)) <= max(1.0, 1e-6 * max(abs(a), abs(l + e))):
+                identity_holds = True
+                break
+    if not identity_holds:
+        return log
+    changed = 0
+    for e in log:
+        if e["field"] not in PRIMARY_FIELDS or e["final"] is None:
+            continue
+        if e["status"] in ("CONFLICT", "MULTI_ROW", "UNVERIFIED") and                 decide(e["status"]) == "not_decisive":
+            reason_l = (e.get("reason") or "")
+            # الحجب سببه تعارض قراءات/تكرار — لا إشارة ولا غياب
+            if ("تعارض الإشارة" not in reason_l
+                    and e.get("identity_ok") is not False
+                    and ("majority" in reason_l or "تعارض قراءات" in reason_l
+                         or "2-of-3" in reason_l or "أغلبية" in reason_l)):
+                e["status"] = "CONFLICT_UPGRADED_IDENTITY"
+                e["identity_anchored"] = True
+                e["reason"] = (reason_l + " | " if reason_l else "") +                     ("اعتماد بالإفصاح: الهوية المحاسبية الكبرى مثبتة "
+                     "(الأصول = الالتزامات + الملكية) وتعارض جدول إيضاح "
+                     "فرعي مشوه لا يبرر الحجب.")
+                changed += 1
     return log

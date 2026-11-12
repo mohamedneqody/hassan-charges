@@ -54,8 +54,20 @@ def _metric_entry(row, prev_year: int, curr_year: int, currency: str,
     else:
         if row.previous is None or row.current is None:
             return None  # a direction needs both years
-        entry["previous"] = fmt_value_ar(row.previous, row.kind, currency, scale)
-        entry["current"] = fmt_value_ar(row.current, row.kind, currency, scale)
+        pv = fmt_value_ar(row.previous, row.kind, currency, scale)
+        cv = fmt_value_ar(row.current, row.kind, currency, scale)
+        # v6 إصلاح حديد عز (إصلاح 5): صياغة لفظية صريحة تمنع انقلاب دلالة
+        # الرقم في نص الموديل: السالب يُمرر بصيغة (خسارة/سالب) — الموديل
+        # أسقط إشارة السالب من خسائر 2020 فتناقض التفسير مع المحرك.
+        if row.kind == "currency" and row.previous is not None and row.previous < 0:
+            pv += " (خسارة/سالب)"
+        if row.kind == "currency" and row.current is not None and row.current < 0:
+            cv += " (خسارة/سالب)"
+        # المضاعفات تبقى بصيغة "0.50x" النظيفة — التكرار اللفظي "(0.50x)"
+        # كان يكسر عقد الحمولة (اختبار الشكل) والحاجز بعد التوليد يقارن
+        # الأرقام المررة بنص Gemini على نفس الصيغة القياسية.
+        entry["previous"] = pv
+        entry["current"] = cv
         entry["direction"] = _numeric_direction(row.change)
     entry["assessment"] = _ASSESSMENT.get(row.trend)
     if row.change_pct is not None:
@@ -213,7 +225,10 @@ def run_pipeline(file_name: str, raw: bytes, company: str, progress_cb=None, pag
         "rows": rows,
         "growth_rows": growth_rows,
         "rows_by_key": {r.key: r for r in rows},
-        "missing": missing_data_report(rows + growth_rows),
+        "missing": missing_data_report(
+            rows + growth_rows,
+            metrics_by_year={y: all_year_metrics[y]
+                             for y in all_year_metrics}),
         "notes": data.notes,
         "metric_years_available": data.years,
         "currency_hint": data.currency_hint,
@@ -227,6 +242,7 @@ def run_pipeline(file_name: str, raw: bytes, company: str, progress_cb=None, pag
             f"{k[0]}|{k[1]}": v for k, v
             in (getattr(data, "human_reviews", {}) or {}).items()},
         "decision_log": decision_log,
+        "pending_critical_review": [],
         "candidate_bbox": bbox,
         "candidate_labels": labels,
         "document_sha256_16": hashlib.sha256(raw).hexdigest()[:16],
@@ -234,30 +250,45 @@ def run_pipeline(file_name: str, raw: bytes, company: str, progress_cb=None, pag
 
 
 def build_gemini_payload(results: dict, currency: str = "$") -> dict:
-    """Payload: one pre-formatted entry per commentable metric (growth first)."""
-    notes = list(results["notes"])
-    for m in (results["prev_metrics"], results["curr_metrics"]):
-        notes.extend(m.notes.values())
+    """Payload: one pre-formatted entry per commentable metric (growth first).
+
+    Defensive on optional keys: partial result dicts (tests, review UIs)
+    must not crash the payload builder — missing metrics simply yield no
+    entries instead of a KeyError.
+    """
+    notes = list(results.get("notes") or [])
+    for m in (results.get("prev_metrics"), results.get("curr_metrics")):
+        if m is not None:
+            notes.extend(getattr(m, "notes", {}).values())
 
     from src.analysis.notes_rag import build_notes_digest
 
     notes_highlights = build_notes_digest(results.get("notes_text") or {})
 
-    ordered_rows = list(results["growth_rows"]) + list(results["rows"])
+    ordered_rows = list(results.get("growth_rows") or []) + list(results.get("rows") or [])
     metrics = []
     scale = int(results.get("unit_scale") or 1)
+    # v6 إصلاح حديد عز (إصلاح 4-ب): المؤشر المحجوب (تعارض محجوب /
+    # not_decisive عبر حالة تحقق أسوأ مدخلاته) لا يمر إلى Gemini إطلاقًا —
+    # حديد عز: 8 مؤشرات محجوبة (Fixed Asset Turnover/DPO/CCC بسبب جدول
+    # إيضاح الأصول الثابتة المشوه ص13) وصلت لبناء التوصيات 2 و3 و4.
+    verif = results.get("verification_status") or {}
+    blocked_markers = ("تعارض", "يحتاج مراجعة", "غير متوفر")
     for row in ordered_rows:
+        v = verif.get(row.key, "")
+        if any(m in v for m in blocked_markers):
+            continue
         entry = _metric_entry(row, results["prev_year"], results["curr_year"],
                               currency, scale)
         if entry is not None:
             metrics.append(entry)
 
     return build_payload(
-        company=results["company"],
-        prev_year=results["prev_year"],
-        curr_year=results["curr_year"],
+        company=results.get("company") or "",
+        prev_year=results.get("prev_year"),
+        curr_year=results.get("curr_year"),
         metrics=metrics,
-        missing_data=results["missing"],
+        missing_data=results.get("missing") or [],
         extraction_notes=notes,
         notes_highlights=notes_highlights,
     )

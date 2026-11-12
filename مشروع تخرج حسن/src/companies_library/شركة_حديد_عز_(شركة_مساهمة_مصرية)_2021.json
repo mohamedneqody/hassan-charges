@@ -1,0 +1,20 @@
+{
+  "company": "شركة حديد عز (شركة مساهمة مصرية)",
+  "file_name": "القوائم المالية المستقلة 2021.pdf",
+  "prev_year": 2020,
+  "curr_year": 2021,
+  "currency": "ج.م",
+  "saved_at": "2026-11-12T20:10:11",
+  "revenue": 13169656088.0,
+  "net_income": 288152668.0,
+  "net_margin_pct": 2.188,
+  "roe_pct": 4.6291,
+  "roa_pct": 1.9145,
+  "current_ratio": null,
+  "debt_to_equity": 0.0756,
+  "asset_turnover": 0.875,
+  "health_total": null,
+  "health_label": "مرفوض — بيانات حرجة ناقصة (سيولة/مديونية): لا تُصدر درجة قد تخفي مخاطر الشركة",
+  "altman_score": null,
+  "altman_zone": ""
+}

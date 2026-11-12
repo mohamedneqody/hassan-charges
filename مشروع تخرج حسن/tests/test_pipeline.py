@@ -1195,7 +1195,12 @@ def test_vision_parse_keeps_company():
     assert pages[1]["company"] == ""
 
 
-def test_portfolio_save_load_overwrite_and_clear():
+def test_portfolio_save_load_overwrite_and_clear(tmp_path, monkeypatch):
+    # v6: عزل مكتبة المحفظة — كانت على المجلد الحقيقي companies_library
+    # فتصادم مع تحليلات الخادم الحي (المستخدم يحلل بالتوازي) وتكسر العدّاد
+    from src.analysis import portfolio as pf
+
+    monkeypatch.setattr(pf, "LIBRARY_DIR", tmp_path)
     from src.analysis.portfolio import (
         clear_library,
         load_records,

@@ -248,14 +248,27 @@ def match_field(label: object) -> str | None:
                 break
     # A "before tax" row is NEVER net income — however the OCR phrased it
     # ("صافي ربح العام قبل ضريبة الدخل" / "قبل الضريبة" are pretax, not net).
+    # عز 2023: remap بدل الإسقاط — الإسقاط كان يفقد سطر الربح قبل
+    # الضريبة بالكامل بينما الفلسفة الإنجليزية أدناه تعيد توجيهه (وعز
+    # 2023 كان يفقد pretax من سطر التدفقات الأول فيُشتق بدل أن يُقرأ)
     if field == "net_income" and ("قبل الضريبه" in norm or "قبل ضريبه" in norm):
-        return None
+        field = "pretax_income"
     # English pretax rows are PRETAX INCOME, not a hijacked net income —
     # remap instead of dropping («Net profit for the period before income
     # tax» is the printed pretax line on TE-style statements)
     if field == "net_income" and ("before income tax" in norm
                                   or "before tax" in norm
                                   or "before taxes" in norm):
+        field = "pretax_income"
+    # حديد عز 2023 (التقاط حي): التسمية العربية لسطر التدفقات الأول
+    # «صافى أرباح / (خسائر) العام قبل ضريبة الدخل» كانت تُسند
+    # لـincome_tax_expense (الـsubstring «ضريبه الدخل» داخل التسمية!)
+    # ولـnet_income عبر مرشحات صافي الربح — net_income أخذ قيمة الربح
+    # قبل الضريبة (خطأ +35.9% مقابل المرجع). أي تسمية تحمل «قبل ضريب»
+    # هي سطر الربح قبل الضريبة حصرًا، مهما حوى من كلمات أخرى.
+    # (normalize يجعل «ضرائب» ⇒ «ضرايب»)
+    if ("قبل ضريب" in norm or "قبل الضرايب" in norm
+            or "قبل ضرايب" in norm):
         field = "pretax_income"
     # The Ezz-style statement prints BOTH a pre-financing subtotal
     # («النقدية الناتجة من أنشطة التشغيل») AND the true net line

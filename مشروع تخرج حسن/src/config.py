@@ -90,6 +90,11 @@ FIELD_ALIASES: dict[str, list[str]] = {
         "صافي الدخل",
         "صافي ارباح العام", "صافي ربح العام", "صافي ارباح السنه",
         "صافي ربح الفتره", "صافي ربح السنه", "الربح الصافي", "نتيجه السنه",
+        # عز 2023: «صافى أرباح / (خسائر) العام» — normalize يدخل
+        # «خساير» بين ارباح والعام فيكسر الـalias الأصصر. سطر «قبل
+        # ضريبة الدخل» الذي يحمل الـsubstring نفسه يُقلب pretax بفلتر
+        # «قبل ضريب» في match_field (عز 2023)
+        "صافي ارباح خساير العام",
     ],
     # ص6 prints this subtotal BEFORE the «يضاف / (يخصم)» bridge:
     # net activity profit − net financing costs + dividends from

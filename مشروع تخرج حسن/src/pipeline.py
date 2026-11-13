@@ -220,12 +220,22 @@ def run_pipeline(file_name: str, raw: bytes, company: str, progress_cb=None, pag
         if _missing:
             # أرضية الحجم: قيمة مستردة لبند قوائم يجب أن تكون بمرتبة
             # المستند (≥ 0.01% من أكبر قيمة ملتقطة) — garble اللاتيني
-            # يخرج أرقامًا مثل 1777 من بقايا صف EPS فتُرفض
+            # يخرج أرقامًا مثل 1777 من بقايا صف EPS فتُرفض. عز 2023:
+            # حين يكون المرساة نفسه مفقودًا (حصة نفدت والمسح مولّف)
+            # كانت الأرضية تصفر فيمر القمامة — البديل: أكبر قيمة ملتقطة
+            # في أي حقل، وإن لم يُلتقط شيء فلا استرجاع أصلًا.
             _anchor = max(
                 (abs(v) for f in ("revenue", "total_assets")
                  if (v := data.values.get(f, {}).get(curr_year)) is not None),
                 default=0.0)
+            if not _anchor:
+                _anchor = max(
+                    (abs(v) for by_year in data.values.values()
+                     for v in by_year.values() if v is not None),
+                    default=0.0)
             _floor = _anchor * 1e-4 if _anchor else 0.0
+            if not _anchor:
+                _missing = []  # لا مرساة إطلاقًا — الاسترجاع معطّل بالكامل
             recovered = 0
             # الربح قبل الضريبة أولًا: تحقق هوية صافي الربح يحتاجه
             _missing.sort(key=lambda f: 0 if f == "pretax_income" else 1)

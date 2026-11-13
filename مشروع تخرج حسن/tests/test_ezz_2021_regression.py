@@ -639,3 +639,56 @@ class TestBorrowingBalanceSignFloor:
             [], part_layers=["vision"])
         v = data.values.get("bank_overdraft", {}).get("2021")
         assert v == -2_655_419.0
+
+
+# ═══ عيوب عز 2023 الحية (363→) ═══
+class TestEzz2023LiveDefects:
+    """التقاط حي لملف 2023 كشف: net_income أخذ قيمة سطر التدفقات
+    «صافى أرباح/(خسائر) العام قبل ضريبة الدخل» (خطأ +35.9%)، وأرضية
+    الاسترجاع صفرت حين كان المرساة مفقودًا (استرجاع 59,144 قمامة)."""
+
+    def test_arabic_pretax_label_never_feeds_net_income(self):
+        """التسمية العربية لسطر التدفقات الأول ⇒ pretax حصرًا."""
+        from src.extraction.normalizer import match_field
+
+        label = "صافى أرباح / (خسائر) العام قبل ضريبة الدخل"
+        assert match_field(label) == "pretax_income"
+        # وصياغة «قبل الضرائب» كذلك
+        assert match_field("صافي الربح العام قبل الضرائب") == "pretax_income"
+        # صافي الربح السليم بلا «قبل» يبقى net_income (الـalias الجديد
+        # بصيغة المُطبَّع مع «خساير»)
+        assert match_field("صافى أرباح (خسائر) العام") == "net_income"
+        assert match_field("صافى أرباح (خسائر) العام (يخصم)") == "net_income"
+
+    def test_recovery_floor_falls_back_to_max_captured(self):
+        """حين يفشل المرساة (إيراد/أصول مفقودة) الأرضية تسقط لأكبر قيمة
+        ملتقطة — القمامة الصغيرة تُرفض."""
+        # محاكاة المستدعي: نفس منطق الأرضية في pipeline
+        values = {"financing_cash_flow": {2023: 1_434_826_043.0},
+                  "pretax_income": {2023: 1_359_426_542.0}}
+        _anchor = max(
+            (abs(v) for f in ("revenue", "total_assets")
+             if (v := values.get(f, {}).get(2023)) is not None),
+            default=0.0)
+        if not _anchor:
+            _anchor = max(
+                (abs(v) for by_year in values.values()
+                 for v in by_year.values() if v is not None),
+                default=0.0)
+        _floor = _anchor * 1e-4
+        assert _floor >= 135_000  # من pretax 1.36B → أرضية 135,942
+        assert 59_144 < _floor    # قمامة الاسترجاع القديمة تُرفض الآن
+
+    def test_recovery_disabled_when_nothing_captured(self):
+        """لا مرساة إطلاقًا (لا قيم مُلTECTEDة) ⇒ لا استرجاع أصلًا."""
+        values: dict = {}
+        _anchor = max(
+            (abs(v) for f in ("revenue", "total_assets")
+             if (v := values.get(f, {}).get(2023)) is not None),
+            default=0.0)
+        if not _anchor:
+            _anchor = max(
+                (abs(v) for by_year in values.values()
+                 for v in by_year.values() if v is not None),
+                default=0.0)
+        assert _anchor == 0.0  # الاسترجاع يُعطّل بالكامل

@@ -200,6 +200,113 @@ def run_pipeline(file_name: str, raw: bytes, company: str, progress_cb=None, pag
         for i, y in enumerate(years_sorted)
     }
 
+    # v6 استرجاع لاحق (إصلاح حديد عز — عيوب 1-4): البنود المفقودة من
+    # الاستخراج البصري تُستعاد من نصوص الإيضاحات الملتقطة محليًا عبر
+    # notes_value_lookup. الصدق: القيمة المستردة تُسجَّل كمرشح واحد
+    # (قراءة واحدة بلا تحقق مستقل → UNVERIFIED في سجل القرار) — لا تظهر
+    # قط كقيمة مؤكدة، والمؤشرات المحسوبة منها تُعرض بحالة تحقق أسوأ
+    # المدخلات. للربح قبل الضريبة تحقق متقاطع بالهوية المحاسبية
+    # (صافي الربح + ضريبة الدخل) إن توفّر المدخلان — يختار المرشح
+    # المطابق إن وجد ويُفصح عن ذلك دون ترقية الحالة.
+    _recovered_meta: list[tuple] = []
+    if data.notes_text:
+        from src.extraction.ocr_sanitizer import notes_value_lookup
+        from src.extraction.normalizer import FIELD_ALIASES
+        from src.extraction.ocr_sanitizer import _LABEL_PATTERNS
+
+        _missing = [c for c in FIELD_ALIASES
+                    if data.values.get(c, {}).get(curr_year) is None
+                    and c in _LABEL_PATTERNS]
+        if _missing:
+            # أرضية الحجم: قيمة مستردة لبند قوائم يجب أن تكون بمرتبة
+            # المستند (≥ 0.01% من أكبر قيمة ملتقطة) — garble اللاتيني
+            # يخرج أرقامًا مثل 1777 من بقايا صف EPS فتُرفض
+            _anchor = max(
+                (abs(v) for f in ("revenue", "total_assets")
+                 if (v := data.values.get(f, {}).get(curr_year)) is not None),
+                default=0.0)
+            _floor = _anchor * 1e-4 if _anchor else 0.0
+            recovered = 0
+            # الربح قبل الضريبة أولًا: تحقق هوية صافي الربح يحتاجه
+            _missing.sort(key=lambda f: 0 if f == "pretax_income" else 1)
+            for field in _missing:
+                hits = notes_value_lookup(field, data.notes_text,
+                                          min_value=_floor)
+                if not hits:
+                    continue
+                best = hits[0]
+                picked = best["value"]
+                crosscheck = ""
+                cross_ok = False
+                if field == "pretax_income":
+                    _net = data.values.get("net_income", {}).get(curr_year)
+                    _tax = data.values.get("income_tax_expense", {}).get(
+                        curr_year)
+                    if _net is not None and _tax is not None:
+                        # محاولتا الإشارة: مصروف موجب أو دائن سالب
+                        for expected in (_net + abs(_tax), _net - abs(_tax)):
+                            if any(abs(c - expected) < 1.0
+                                   for c in best["candidates"]):
+                                picked = expected
+                                cross_ok = True
+                                crosscheck = (" — يؤكدها الهوية المحاسبية "
+                                              "(صافي الربح + الضريبة)")
+                                break
+                elif field == "net_income":
+                    # حديد عز: صفحة الميزانية تحمل «صافى أرباح العام»
+                    # بقيمة الأرباح المرحلة (563,670,132) — التقاط حقل
+                    # خاطئ. متى توفر الربح قبل الضريبة والضريبة، لا
+                    # يُقبل مرشح يخالف الهوية (net = pretax − tax) —
+                    # الرفض كامل: الرقم المغلوط أسوأ من الغياب الصادق.
+                    _pt = data.values.get("pretax_income", {}).get(curr_year)
+                    _tax = data.values.get("income_tax_expense", {}).get(
+                        curr_year)
+                    if _pt is not None and _tax is not None:
+                        expected = _pt - abs(_tax)
+                        if any(abs(c - expected) < 1.0
+                               for c in best["candidates"]):
+                            picked = expected
+                            cross_ok = True
+                            crosscheck = (" — تؤكدها الهوية المحاسبية "
+                                          "(الربح قبل الضريبة − الضريبة)")
+                        else:
+                            data.notes.append(
+                                f"استرجاع مرفوض لـ{field}: المرشح "
+                                f"{best['value']:,.0f} (ص{best['page']}) "
+                                "يخالف الهوية المحاسبية "
+                                f"(المتوقع {expected:,.0f}) — لا يُعتمد.")
+                            continue
+                data.values.setdefault(field, {})[curr_year] = picked
+                data.candidates.setdefault(field, {}).setdefault(
+                    curr_year, []).append((picked, 0))
+                data.confidence.setdefault(field, {})[curr_year] = 1
+                fs_pages = getattr(data, "field_sources", {}).setdefault(
+                    field, [])
+                if best["page"] not in fs_pages:
+                    fs_pages.append(best["page"])
+                recovered += 1
+                _recovered_meta.append(
+                    (field, curr_year, picked, best["page"], cross_ok))
+                data.notes.append(
+                    f"استرجاع من الإيضاح: {field} = {picked:,.0f} "
+                    f"(ص{best['page']}){crosscheck} — قراءة واحدة من "
+                    "الإيضاح، تحتاج مراجعة بشرية.")
+            if recovered:
+                prev_metrics = compute_year_metrics(
+                    prev_year, data.values, prev_year=None)
+                curr_metrics = compute_year_metrics(
+                    curr_year, data.values, prev_year=prev_year)
+                all_year_metrics.update({
+                    y: compute_year_metrics(
+                        y, data.values,
+                        prev_year=(years_sorted[i - 1] if i else None))
+                    for i, y in enumerate(years_sorted)
+                })
+                data.notes.append(
+                    f"استرجاع الإيضاحات: {recovered} حقلًا مستعادًا — "
+                    "المؤشرات أُعيد حسابها. "
+                    "⚠ القيم المستردة تحتاج تأكيداً بشرياً.")
+
     rows = build_comparison(prev_metrics, curr_metrics)
     growth_rows = growth_metrics(prev_metrics, curr_metrics)
 
@@ -207,9 +314,18 @@ def run_pipeline(file_name: str, raw: bytes, company: str, progress_cb=None, pag
     # سجل القرار (أساس عمود حالة التحقق وقرار البوابة) + مواضع الخانات
     # (bbox) + تسميات المرشحين + هاش المستند. لا تغيير في أي قرار مالي:
     # كل هذه القيم مشتقة من نفس data التي بُنيت منها النتائج أعلاه.
-    from src.extraction.normalizer import build_decision_log
+    from src.extraction.normalizer import build_decision_log, recovered_log_entry
 
     decision_log = _cached_log if _cached_log else build_decision_log(data)
+    # مدخلات الاسترجاع اللاحق: الكاش لا يحفظ المرشحين فالسجل المخزون لا
+    # يعرف القيم المستردة — تُلحق مُدخلاتها الصادقة (UNVERIFIED) فوقه.
+    # المسار الطازج يشملها طبيعيًا من data.candidates (تُبنى بعد الاسترجاع).
+    if _recovered_meta:
+        _in_log = {(e.get("field"), e.get("year")) for e in decision_log}
+        decision_log = list(decision_log) + [
+            recovered_log_entry(f, y, v, p, ok)
+            for f, y, v, p, ok in _recovered_meta
+            if (f, y) not in _in_log]
 
     bbox = _cached_bbox or _flatten(getattr(data, "candidate_bbox", {}))
     labels = _cached_labels or _flatten(getattr(data, "candidate_labels", {}))

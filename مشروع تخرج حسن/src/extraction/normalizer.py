@@ -1227,6 +1227,30 @@ def build_decision_log(data: FinancialData) -> list[dict]:
     return log
 
 
+def recovered_log_entry(field_name: str, year: int, value: float, page: int,
+                        identity_ok: bool = False) -> dict:
+    """مُدخل سجل لقيمة مستردة لاحقًا من نص الإيضاحات (استرجاع pipeline
+    اللاحق). قراءة واحدة بلا تحقق مستقل → UNVERIFIED دائمًا — لا تُرقّى
+    بالهوية ولا بالتصويت: الاسترجاع طبقة واحدة والترقية تحتاج طبقتين.
+    يُستخدم فوق السجل المخزون (الكاش لا يحفظ المرشحين فإعادة البناء منه
+    كانت ستفقد مدخل القيمة المستردة)."""
+    return {
+        "field": field_name,
+        "year": year,
+        "pages": [page],
+        "candidates": [f"{value:,.0f} (استرجاع من الإيضاح)"],
+        "final": value,
+        "distinct_reads": 1,
+        "confidence": 1,
+        "identity_ok": identity_ok,
+        "source": "SCANNED_OCR",
+        "winner_layers": None,
+        "status": "UNVERIFIED",
+        "reason": ("استرجاع لاحق من نص الإيضاح — قراءة واحدة بلا تحقق "
+                   "مستقل، تحتاج مراجعة بشرية"),
+    }
+
+
 def _identity_anchor_upgrade(log: list[dict], data) -> list[dict]:
     """إصلاح حديد عز (إصلاح 4): إذا ثبتت الهوية المحاسبية الكبرى للميزانية
     (الأصول = الالتزامات + الملكية ضمن سماحية ضيقة) فأرقام القوائم

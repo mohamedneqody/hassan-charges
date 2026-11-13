@@ -451,3 +451,158 @@ class TestEGXHardening:
             curr_total_assets=14_614_683_997)
         assert allowed is False
         assert reason.strip()
+
+
+# ═══ الاسترجاع اللاحق من الإيضاحات (v6 — عيوب 1-4) ═══
+class TestNotesRecovery:
+    """البنود الأربعة المفقودة: أنماط الإيضاحات + اختيار RTL الصادق."""
+
+    NOTES = {
+        32: ("التزامات قصيرة الأجل: قروض قصيرة الأجل وتسهيلات ائتمانية "
+             "قصيرة الأجل 3,915,952,409 جنيه (2020: 1,605,589,444)، "
+             "وسحب بنكي 2,655,419 جنيه (2020: 1,995,817)"),
+        28: ("نتيجة النشاط صافي ربح النشاط 875,232,929 جنيه خلال العام "
+             "مقابل 1,415,470,237 خلال العام السابق"),
+        30: ("الربح قبل الضريبة 391,633,505 جنيه خلال العام مقابل "
+             "1,299,468,606 خلال العام السابق"),
+    }
+
+    def test_short_term_facilities_pattern(self):
+        from src.extraction.ocr_sanitizer import notes_value_lookup
+
+        hits = notes_value_lookup("short_term_credit_facilities", self.NOTES)
+        assert hits
+        # أول مرشح بعد التسمية = قيمة السنة الحالية (وليس الأكبر — 2020 أصغر
+        # هنا لكن العبرة بالترتيب لا بالقيمة)
+        assert abs(hits[0]["value"] - 3_915_952_409) < 1.0
+        assert 3_915_952_409 in hits[0]["candidates"]
+
+    def test_short_term_pattern_rejects_long_term(self):
+        """«تسهيلات ائتمانية طويلة الأجل» لا تلتقط لنمط القصيرة."""
+        from src.extraction.ocr_sanitizer import notes_value_lookup
+
+        notes = {5: "تسهيلات ائتمانية طويلة الأجل 9,500,000,000 جنيه "
+                    "بفترات سداد تمتد بعد اثني عشر شهرًا"}
+        hits = notes_value_lookup("short_term_credit_facilities", notes)
+        assert hits == []
+
+    def test_bank_overdraft_small_value(self):
+        """سحب بنكي 2,655,419 — heuristic الأكبر كان سيفشل هنا."""
+        from src.extraction.ocr_sanitizer import notes_value_lookup
+
+        hits = notes_value_lookup("bank_overdraft", self.NOTES)
+        assert hits
+        assert abs(hits[0]["value"] - 2_655_419) < 1.0
+
+    def test_operating_income_arabic_label(self):
+        from src.extraction.ocr_sanitizer import notes_value_lookup
+
+        hits = notes_value_lookup("operating_income", self.NOTES)
+        assert hits
+        assert abs(hits[0]["value"] - 875_232_929) < 1.0
+
+    def test_pretax_income_first_candidate_declining_year(self):
+        """سنة هابطة: قيمة 2021 (391.6م) أصغر من 2020 (1.29مليار) —
+        الاختيار بالترتيب لا بالأكبر."""
+        from src.extraction.ocr_sanitizer import notes_value_lookup
+
+        hits = notes_value_lookup("pretax_income", self.NOTES)
+        assert hits
+        assert abs(hits[0]["value"] - 391_633_505) < 1.0
+        assert 1_299_468_606 in hits[0]["candidates"]
+
+    def test_recovered_log_entry_always_unverified(self):
+        """مدخل السجل المُستخلص: UNVERIFIED دائمًا — الاسترجاع طبقة واحدة."""
+        from src.extraction.normalizer import recovered_log_entry
+        from src.analysis.financial_gate import decide
+
+        entry = recovered_log_entry(
+            "pretax_income", 2021, 391_633_505, 30, identity_ok=True)
+        assert entry["status"] == "UNVERIFIED"
+        assert decide(entry["status"]) == "not_decisive"
+        assert entry["distinct_reads"] == 1
+        assert entry["final"] == 391_633_505
+        assert entry["identity_ok"] is True  # يُفصح عن التطابق دون ترقية
+
+    def test_recovery_notes_arabic_disclosure(self):
+        """ملاحظة الاسترجاع عربية وتذكر الصفحة والحاجة للمراجعة."""
+        from src.pipeline import run_pipeline  # noqa: F401 — الاتصال الحي
+        # فحص نصي: صيغة الملاحظة كما تُبنى في pipeline
+        page, value = 30, 391_633_505
+        note = (f"استرجاع من الإيضاح: pretax_income = {value:,.0f} "
+                f"(ص{page}) — قراءة واحدة من الإيضاح، تحتاج مراجعة بشرية.")
+        assert "استرجاع من الإيضاح" in note
+        assert "(ص30)" in note
+        assert "مراجعة بشرية" in note
+
+    # ── تحصينات v6.1: القراءة الهندية الأمينة ──
+    def test_indic_preferred_over_latin_garble(self):
+        """صفحة الدخل ص6 قرأت عمود 2021 Latin-garble (191,175,000 من
+        «TAA…») بينما ص9 تحمل ٣٩١,٦٣٣,٥٠٥ هندية نظيفة — الهندية تفوز
+        حتى لو كانت ص6 أبكر ترتيبًا."""
+        from src.extraction.ocr_sanitizer import notes_value_lookup
+
+        notes = {
+            6: ("<table><tr><td>صسافى أرباح (خسائر) العام قبل ضريبة الدخل"
+                "</td><td colspan=\"2\">191,175,000</td>"
+                "<td>(TAA, AAT, ATT)</td></tr></table>"),
+            9: ("<table><tr><td>صافى أرباح / (خسائر) العام قبل ضريبة الدخل"
+                "</td><td colspan=\"2\">٣٩١,٦٣٣,٥٠٥</td>"
+                "<td>(TAA, 19, At)</td></tr></table>"),
+        }
+        hits = notes_value_lookup("pretax_income", notes)
+        assert hits
+        assert hits[0]["indic"] is True
+        assert hits[0]["page"] == 9
+        assert abs(hits[0]["value"] - 391_633_505) < 1.0
+
+    def test_row_scope_does_not_leak_next_row(self):
+        """النافذة تقف عند </tr> — رقم الصف التالي لا يُلتقط."""
+        from src.extraction.ocr_sanitizer import notes_value_lookup
+
+        notes = {6: ("<table><tr><td>مصروفات إدارية وعمومية</td>"
+                     "<td>(144,754,000)</td></tr>"
+                     "<tr><td>صف تالٍ</td><td>9,999,999,999</td></tr>"
+                     "</table>")}
+        hits = notes_value_lookup("administrative_expenses", notes)
+        assert hits
+        assert abs(hits[0]["value"] - 144_754_000) < 1.0
+
+    def test_net_income_rejects_garble_eps_residue(self):
+        """سطر صافي الربح المشوه بالكامل (VAA, JOY, ANA) لا يلتقط بقايا
+        رقم EPS الصغيرة (1777) — أرضية الحجم ترفضها."""
+        from src.extraction.ocr_sanitizer import notes_value_lookup
+
+        notes = {6: ("<table><tr><td>صافى أرباح (خسائر) العام</td>"
+                     "<td colspan=\"2\">VAA, JOY, ANA</td>"
+                     "<td>(18, 14. 1777</td></tr></table>")}
+        # أرضية مرساة مستند بمليارات: 14.6B × 1e-4 = 1.46M
+        hits = notes_value_lookup("net_income", notes, min_value=1_460_000)
+        assert hits == []
+
+    def test_net_income_pattern_excludes_pretax_row(self):
+        """«صافى أرباح (خسائر) العام قبل ضريبة الدخل» لا يُلتقط لصافي
+        الربح — الاستبعاد (?!\s*قبل) يمنعه."""
+        from src.extraction.ocr_sanitizer import notes_value_lookup
+
+        notes = {9: ("<table><tr><td>صافى أرباح / (خسائر) العام قبل "
+                     "ضريبة الدخل</td><td>٣٩١,٦٣٣,٥٠٥</td></tr></table>")}
+        hits = notes_value_lookup("net_income", notes)
+        assert hits == []
+
+    def test_net_recovery_rejected_on_identity_mismatch(self):
+        """مرشح صافي الربح المخالف للهوية (pretax − tax) يُرفض كاملًا —
+        حديد عز: عمود 2021 في قائمة الدخل الشامل ص7 garble فأول رقم
+        واضح هو خسارة 2020 (٥٦٣,٦٧٠,١٣٢) — التقاط سنة خاطئة يرفضه
+        تحقق الهوية (المتوقع 391,633,505 − 343,133,505 = 48,500,000)."""
+        from src.extraction.ocr_sanitizer import notes_value_lookup
+
+        notes = {7: ("<table><tr><td>صافي أرباح / (خسائر) العام "
+                     "(يخصم):</td><td></td><td></td><td>TAA, 109,77</td>"
+                     "<td>(٥٦٣,٦٧٠,١٣٢)</td></tr></table>")}
+        hits = notes_value_lookup("net_income", notes)
+        assert hits and abs(hits[0]["value"] - 563_670_132) < 1.0
+        # الهوية ترفضه في المستدعي: لا مرشح يطابق 48,500,000
+        expected = 391_633_505 - 343_133_505
+        assert not any(abs(c - expected) < 1.0
+                       for c in hits[0]["candidates"])

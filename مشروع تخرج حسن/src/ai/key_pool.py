@@ -19,6 +19,12 @@ from dataclasses import dataclass, field
 
 DEPLETION_RESET_SECONDS = 24 * 60 * 60
 DEFAULT_MODELS = ["gemini-3.8-flash", "gemini-3.7-flash"]
+# التبريد الناعم (تسريع 2026-11-13): 503 «high demand» عابرة لكن إعادة
+# الدوران على موديل معطل يهدر حتى 45 ثانية × كل محاولة pick — بعد فشلين
+# متتاليين يُستبعد الموديل من pick لمدة قصيرة تلقائيًا، والجولة تتقارب
+# فورًا على الموديلات الحية. ومضة واحدة لا تبرّد (النجاح يفك العداد).
+TRANSIENT_THRESHOLD = 2
+SOFT_COOLDOWN_SECONDS = 90
 
 
 @dataclass
@@ -47,6 +53,10 @@ class APIKeyPool:
         self.states = [KeyState(k.strip()) for k in keys if k and k.strip()]
         self.models = [m.strip() for m in (models or DEFAULT_MODELS) if m and m.strip()]
         self.depletion_reset_seconds = depletion_reset_seconds
+        self._transient_503: dict[str, int] = {}     # model -> consecutive fails
+        self._model_cooldown: dict[str, float] = {}  # model -> cooldown-until
+        self.soft_cooldown_seconds = SOFT_COOLDOWN_SECONDS
+        self.transient_threshold = TRANSIENT_THRESHOLD
         # Random start: every process used to begin at pair 0, so repeated
         # short-lived runs (each Streamlit/script run) hammered the SAME first
         # pairs until they 429'd while the rest of the pool sat unused.
@@ -59,10 +69,36 @@ class APIKeyPool:
     def _usable_model(self, state: KeyState, model: str) -> bool:
         if model in state.unavailable:
             return False
+        # التبريد الناعم: موديل يترصد 503 عابرة — تنتهي تلقائيًا بالزمن
+        if time.time() < self._model_cooldown.get(model, 0.0):
+            return False
         marked_at = state.depleted.get(model)
         if marked_at is None:
             return True
         return time.time() - marked_at > self.depletion_reset_seconds
+
+    # ------------------------------------------------- transient soft-cooldown
+
+    def mark_transient_failure(self, model: str) -> None:
+        """سجّل فشلًا عابرًا (503) على موديل — بعد فشلين متتاليين يُبرَّد
+        الموديل كلًّا فلا يُختار في pick خلال نافذة قصيرة (يولّد الجولة
+        العاصفة دقائق هدرًا بدل التقارب على الموديلات الحية)."""
+        with self._lock:
+            n = self._transient_503.get(model, 0) + 1
+            self._transient_503[model] = n
+            if n >= self.transient_threshold:
+                self._model_cooldown[model] = (
+                    time.time() + self.soft_cooldown_seconds)
+
+    def reset_transient(self, model: str) -> None:
+        """نجاح = ومضة الـ503 السابقة لم تكن عطلًا — يفك العداد."""
+        with self._lock:
+            self._transient_503.pop(model, None)
+
+    def model_in_cooldown(self, model: str) -> bool:
+        """للتشخيص والاختبار: هل الموديل في نافذة التبريد الآن؟"""
+        with self._lock:
+            return time.time() < self._model_cooldown.get(model, 0.0)
 
     def pick(self) -> tuple[KeyState, str] | None:
         """Next available (key, model) pair.
@@ -165,8 +201,19 @@ class APIKeyPool:
 
         Lets callers fail fast with a clear quota message instead of sweeping
         every batch against a pool that is already known-dead.
+
+        التصحيح (تسريع 2026-11-13): كانت `pick() is not None` — الفحص
+        يستهلك خانة من الدوران في كل استدعاء (200 خانة ضائعة في رحلة
+        نموذجية بـ5 عمال × 40 نداءً + تفاوت حرق الحصص). الآن فحص وجودي
+        لا يمس العدّاد.
         """
-        return self.pick() is not None
+        for state in self.states:
+            if state.dead:
+                continue
+            for model in self.models:
+                if self._usable_model(state, model):
+                    return True
+        return False
 
     # ------------------------------------------------------------------ env
 

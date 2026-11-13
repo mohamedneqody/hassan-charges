@@ -1135,3 +1135,84 @@ def test_derivation_keeps_the_original_capture_visible():
     # original capture still visible among the candidates
     assert any("-100,000,000" in c for c in e["candidates"])
     assert e["status"] == "VERIFIED_DERIVED"            # disclosed derivation
+
+
+# ═══ التبريد الناعم للموديلات 503 (تسريع 2026-11-13) ═══
+from src.ai.key_pool import APIKeyPool
+
+
+class TestSoftCooldown:
+    """موديل يترصد 503 عابرة لا يُختار في pick بعد فشلين متتاليين —
+    الجولة العاصفة تتقارب على الموديلات الحية بدل هدر 45 ثانية × كل
+    محاولة دوران. ومضة واحدة لا تبرّد والنجاح يفك العداد."""
+
+    def _pool(self) -> APIKeyPool:
+        return APIKeyPool(["k1", "k2"], ["m-hot", "m-ok"])
+
+    def test_two_consecutive_503s_cool_the_model_down(self):
+        pool = self._pool()
+        pool.mark_transient_failure("m-hot")
+        assert not pool.model_in_cooldown("m-hot")   # ومضة واحدة تكفي؟ لا
+        pool.mark_transient_failure("m-hot")
+        assert pool.model_in_cooldown("m-hot")
+        # pick يتخطى الموديل المبرَّد ويعيد الآخر
+        models = {pool.pick()[1] for _ in range(6)}
+        assert "m-ok" in models and "m-hot" not in models
+
+    def test_success_resets_the_counter(self):
+        pool = self._pool()
+        pool.mark_transient_failure("m-hot")
+        pool.reset_transient("m-hot")
+        pool.mark_transient_failure("m-hot")         # عدّاد جديد — لا تبريد
+        assert not pool.model_in_cooldown("m-hot")
+
+    def test_cooldown_expires_and_model_returns(self):
+        pool = APIKeyPool(["k1"], ["m1"])
+        pool.soft_cooldown_seconds = 0.05            # نافذة قصيرة للاختبار
+        pool.mark_transient_failure("m1")
+        pool.mark_transient_failure("m1")
+        assert pool.model_in_cooldown("m1")
+        import time as _t
+        _t.sleep(0.06)
+        assert not pool.model_in_cooldown("m1")
+        assert pool.pick() is not None               # عاد للاختيار
+
+    def test_call_with_rotation_records_call_stats(self):
+        """قياس زمن النداءات: _call_with_rotation يسجل (model, seconds)
+        لكل نداء ناجح ويفك عدّاد العابر."""
+        from src.extraction.vision_ocr import _call_with_rotation
+        import unittest.mock as mock
+
+        pool = APIKeyPool(["k1"], ["m1"])
+        stats: list = []
+        with mock.patch("src.extraction.vision_ocr._call_vision",
+                        return_value="{}") as cv:
+            cv.side_effect = [RuntimeError("503 high demand"), "{}"]
+            raw = _call_with_rotation(pool, "p", [b"x"], stats)
+        assert raw == "{}"
+        assert len(stats) == 1 and stats[0][0] == "m1"
+        assert stats[0][1] >= 0
+        assert not pool.model_in_cooldown("m1")      # النجاح أفك العداد
+
+    def test_call_with_rotation_cools_stormy_model(self):
+        """جولة عاصفة: 503 متتالية على م1 → تبريد؛ pick يقفز لموديل آخر
+        فورًا بدل دورة الـ14 زوجًا."""
+        from src.extraction.vision_ocr import _call_with_rotation
+        import unittest.mock as mock
+
+        pool = APIKeyPool(["k1", "k2"], ["m-bad", "m-good"])
+        pool._counter = 0  # البداية عشوائية بالتصميم — نثبتها للحتمية
+        with mock.patch("src.extraction.vision_ocr._call_vision") as cv:
+            def fake(key, model, prompt, imgs):
+                if model == "m-bad":
+                    raise RuntimeError("503 Service Unavailable: high demand")
+                return "{}"
+            cv.side_effect = fake
+            # جولتان عاصفتان: فشل متتالٍ ثانٍ على m-bad يشعل التبريد
+            assert _call_with_rotation(pool, "p", [b"x"], []) == "{}"
+            assert _call_with_rotation(pool, "p", [b"x"], []) == "{}"
+            assert pool.model_in_cooldown("m-bad")
+            # pick يتخطى المبرَّد على كل المفاتيح
+            picked_models = [m for (_s, m) in
+                             (pool.pick() for _ in range(4))]
+            assert all(m == "m-good" for m in picked_models)

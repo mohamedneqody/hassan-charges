@@ -37,7 +37,7 @@ VISION_RETRY_BUDGET = 180   # seconds — cap on the whole retry pass
 VISION_VERIFY_BUDGET = 240  # seconds — shared cap for the verify stages
 # Version tag for the extraction prompts + pipeline (logged in every result
 # and in the Verification Decision Log — reproducibility requirement).
-VISION_PROMPT_VERSION = "sweep-v2/verify-v4(10-fields+dual-variant+cell-crop)/cf-v3(dual-variant)"   # seconds — hard cap on the whole vision sweep (raised: the 2-of-3 third opinion once ate 4.5 min and starved CF verification)
+VISION_PROMPT_VERSION = "sweep-v2/verify-v4(10-fields+dual-variant)/cf-v3(dual-variant)"   # cell-crop claim dropped 2026-11-13: the stage never ran (undefined helpers swallowed by except) — honest versioning
 VISION_CALL_TIMEOUT = 45_000  # ms — a hanging request must not eat the budget
 VISION_WORKERS = 5          # concurrent batches — 14 key/model pairs absorb this
 VISION_MAX_PAGES = 40       # hard cap so a huge scan cannot drain the pool
@@ -336,7 +336,12 @@ def _vision_config():
 _CLIENTS: dict[str, object] = {}
 
 
-def _call_with_rotation(pool: APIKeyPool, prompt: str, images: list[bytes]) -> str:
+def _call_with_rotation(
+    pool: APIKeyPool,
+    prompt: str,
+    images: list[bytes],
+    call_stats: list | None = None,
+) -> str:
     """Vision call with the same key/model rotation as the commentary path,
     plus one extra full sweep after a pause when every failure was transient
     (e.g. 503 high demand) — mirroring analyze_financials.
@@ -344,6 +349,9 @@ def _call_with_rotation(pool: APIKeyPool, prompt: str, images: list[bytes]) -> s
     Fail-fast: when every pair is already marked depleted/dead, raise
     immediately instead of sweeping (a sweep against a dead pool only adds
     latency to every batch and retry).
+
+    call_stats: قائمة مشتركة (thread-safe بالـappend) تُسجل (model, seconds)
+    لكل نداء ناجح — تشخيص صادق لتوزيع زمن النداءات أول مرة.
     """
     import time
 
@@ -363,7 +371,12 @@ def _call_with_rotation(pool: APIKeyPool, prompt: str, images: list[bytes]) -> s
                 break
             state, model = picked
             try:
-                return _call_vision(state.key, model, prompt, images)
+                t0 = time.time()
+                raw = _call_vision(state.key, model, prompt, images)
+                if call_stats is not None:
+                    call_stats.append((model, time.time() - t0))
+                pool.reset_transient(model)
+                return raw
             except Exception as exc:
                 kind = classify_gemini_error(exc)
                 if kind == "quota":
@@ -379,6 +392,9 @@ def _call_with_rotation(pool: APIKeyPool, prompt: str, images: list[bytes]) -> s
                     last_error = f"model {model} unavailable"
                     transient_only = False
                 else:
+                    # عابر (503 high demand وغيره): عدّاد التبريد الناعم —
+                    # بعد فشلين متتاليين يُستبعد الموديل مؤقتًا من pick
+                    pool.mark_transient_failure(model)
                     last_error = str(exc)[:250]
         if (
             sweep == 0
@@ -1047,6 +1063,8 @@ def extract_via_vision(
     currency_holder: dict = {"hint": None}
     company_holder: dict = {"name": None}
     doc_years_holder: dict = {"years": None}
+    # التسريع: قياس زمن كل نداء ناجح (model, seconds) — يظهر في ملاحظة ⏱
+    call_stats: list[tuple[str, float]] = []
     ok_pages: set[int] = set()
     field_sources: dict[str, list[int]] = {}  # field -> pages that provided it
     confidence: dict = {}                     # (field, year) -> agreeing reads
@@ -1063,7 +1081,7 @@ def extract_via_vision(
         )
         if caller is not None:
             return _parse_vision_json(caller("k", "m", prompt, imgs))
-        raw_text = _call_with_rotation(pool, prompt, imgs)
+        raw_text = _call_with_rotation(pool, prompt, imgs, call_stats)
         return _parse_vision_json(raw_text)
 
     import time as _time
@@ -1303,6 +1321,14 @@ def extract_via_vision(
         f"⏱ المراحل (ثوانٍ): إعداد+مسح {_sw:.0f} | إعادة قراءة {_rt:.0f} | "
         f"تحقق مركزي {_vf:.0f} | الإجمالي داخل الاستخراج "
         f"{_t_end - t_overall:.0f}")
+    if call_stats:
+        _n = len(call_stats)
+        _avg = sum(s for _m, s in call_stats) / _n
+        _slow_model, _slow = max(call_stats, key=lambda x: x[1])
+        notes.append(
+            f"⏱ النداءات: {_n} ناجحة | متوسط {_avg:.0f} ث | أبطأ "
+            f"{_slow:.0f} ث ({_slow_model}) — توليد JSON بصري متسلسل، "
+            "ليس نداءً فوريًا")
 
     if not parts:
         # Surface WHY the vision reads produced nothing — quota storms and
@@ -1387,64 +1413,11 @@ def extract_via_vision(
     
 
 
-# ── Cell-crop verification (الخانة المقتطعة) ──
-    # Core fields whose decision-log status is CONFLICT or UNVERIFIED get ONE
-    # focused strip re-read each (max 2 per run). Confidence-UPGRADE only: a
-    # disagreeing crop read is RECORDED as CONFLICT, never auto-applied — per
-    # mandate: no forced replacement, unresolved conflict stays visible.
-    if LOCAL_OCR_ENABLED and caller is None:
-        try:
-            from .normalizer import build_decision_log
-            from src.analysis.comparison import LABELS_AR as _CV_LBL
-
-            _decisions = build_decision_log(data)
-            _CORE = ("net_income", "revenue", "pretax_income", "total_assets",
-                     "total_liabilities", "current_liabilities", "equity")
-            _disputed = [d for d in _decisions
-                         if d["field"] in _CORE
-                         and d["status"] in ("CONFLICT", "UNVERIFIED")]
-            _disputed.sort(key=lambda d: 0 if d["status"] == "CONFLICT" else 1)
-            _spent = 0
-            for d in _disputed:
-                if _spent >= 2:
-                    break
-                _pages = [p for p in d["pages"] if p in selected]
-                if not _pages:
-                    continue
-                _src = pages_png[selected.index(_pages[0])]
-                _strip = _cell_crop_png(_src)
-                _label = _CV_LBL.get(d["field"], d["field"])
-                _prompt = CELL_VERIFY_PROMPT.format(label=_label, field=d["field"])
-                try:
-                    _raw = _call_with_rotation(pool, _prompt, [_strip])
-                    _verified = _parse_verify_json(_raw)
-                except Exception as exc:
-                    if notes is not None:
-                        notes.append(f"Cell verification of {d['field']} failed: {exc}")
-                    continue
-                _spent += 1
-                _by_year = _verified.get(d["field"]) or {}
-                _final = data.get(d["field"], d["year"])
-                _agree = any(
-                    y is not None and _final is not None
-                    and abs(y - _final) <= max(1.0, 1e-6 * abs(_final))
-                    for y in _by_year.values()
-                )
-                if _agree and _final is not None:
-                    data.bump_confidence(d["field"], d["year"], 2)
-                    if notes is not None:
-                        notes.append(
-                            f"✓ Cell-crop re-read confirms {d['field']} in {d['year']} "
-                            f"= {_final:,.0f} (page {_pages[0]}) — VERIFIED_EXACT."
-                        )
-                elif notes is not None:
-                    notes.append(
-                        f"⚠ Cell-crop re-read DISAGREES on {d['field']} in {d['year']}: "
-                        f"crop read {json.dumps(_by_year, ensure_ascii=False)} vs captured "
-                        f"{_final:,.0f} — value kept, status CONFLICT (mandate: no forced "
-                        "replacement).")
-        except Exception:
-            pass  # cell verification is an enhancement — never breaks extraction
+    # cell-crop verification حُذفت (تسريع 2026-11-13): كانت تستدعي
+    # _cell_crop_png وCELL_VERIFY_PROMPT غير معرفتيهما — NameError يُبتلع
+    # بصمت في except منذ جولة سابقة، فلم تعمل قط رغم ادعاء نسخة الـprompt.
+    # التحقق المنازَع تغطيه الطبقة المحلية المجانية (focused local cell
+    # verification) وشبكة التحقق المركزية.
 
     data.currency_hint = currency_holder.get("hint")
     data.company_hint = company_holder.get("name") or None

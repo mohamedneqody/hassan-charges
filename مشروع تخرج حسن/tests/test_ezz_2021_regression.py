@@ -606,3 +606,36 @@ class TestNotesRecovery:
         expected = 391_633_505 - 343_133_505
         assert not any(abs(c - expected) < 1.0
                        for c in hits[0]["candidates"])
+
+
+class TestBorrowingBalanceSignFloor:
+    """أرصدة الاقتراض تُطبع موجبة — السالب يعني صفًا خاطئًا فالمقدار يحفظ
+    اتفاق الطباعة (مثل بقية _ABSOLUTE_FIELDS)."""
+
+    def test_facilities_negative_capture_taken_as_magnitude(self):
+        from src.extraction.normalizer import merge_parsed
+
+        data = merge_parsed(
+            [{"2021": {"short_term_credit_facilities": -186_871_411.0}}],
+            [], part_layers=["vision"])
+        v = data.values.get("short_term_credit_facilities", {}).get("2021")
+        assert v == 186_871_411.0
+
+    def test_current_portion_negative_capture_taken_as_magnitude(self):
+        from src.extraction.normalizer import merge_parsed
+
+        data = merge_parsed(
+            [{"2021": {"current_portion_lt_debt": -201_143_687.0}}],
+            [], part_layers=["vision"])
+        v = data.values.get("current_portion_lt_debt", {}).get("2021")
+        assert v == 201_143_687.0
+
+    def test_bank_overdraft_keeps_sign_semantics(self):
+        """السحب البنكي مستثنى — له دلالة إشارة حقيقية."""
+        from src.extraction.normalizer import merge_parsed
+
+        data = merge_parsed(
+            [{"2021": {"bank_overdraft": -2_655_419.0}}],
+            [], part_layers=["vision"])
+        v = data.values.get("bank_overdraft", {}).get("2021")
+        assert v == -2_655_419.0

@@ -17,7 +17,9 @@ from src.config import GEMINI_MODEL, REPORT_LANGUAGE
 
 # Fast-fail HTTP timeout (ms) — a hung key must not block the rotation.
 HTTP_TIMEOUT_MS = 45_000
-COMMENTARY_BUDGET = 100  # seconds — total commentary time before rule-based fallback
+COMMENTARY_BUDGET = 60  # seconds — total commentary time before rule-based fallback
+# (التسريع 2026-11-13: 100 → 60 — قاعدة الاحتياط القائمة على القواعد تعوض
+# أي تعليق لم يُنتج، والرحلة النموذجية كانت تستهلك حتى دقيقتين في التعليق)
 # Cap the response: 60 short comments + recommendations fit comfortably.
 MAX_OUTPUT_TOKENS = 8192
 

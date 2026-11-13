@@ -27,6 +27,14 @@ from src.extraction.normalizer import (
 VISION_BATCH_SIZE = 4       # pages per Gemini call — fewer calls fit the free
                             # tier (20 req/day/model/key) and halve wall time
 VISION_TOTAL_BUDGET = 720   # seconds — hard cap on the whole vision sweep
+# التسريع (طلب 2026-11-13: ~20 دقيقة → ~8): السقوف المرحلية التي تجعل
+# الرحلة النموذجية تلتزم ~8 دقائق بدل استهلاك السقف الكلي.
+# 1) إعادة قراءة الصفحات الفاشلة: كانت تسلسلية (10 صفحات × 45 ثانية =
+#    ~7.5 دقيقة خارج كل سقف!) — صارت متوازية وبسقف خاص.
+VISION_RETRY_BUDGET = 180   # seconds — cap on the whole retry pass
+# 2) مراحل التحقق الثلاث (CF recovery + CF verify + core verify) تتقاسم
+#    ميزانية واحدة — كل مرحلة كانت يمكن أن تمشي حتى سقف المسح الكامل.
+VISION_VERIFY_BUDGET = 240  # seconds — shared cap for the verify stages
 # Version tag for the extraction prompts + pipeline (logged in every result
 # and in the Verification Decision Log — reproducibility requirement).
 VISION_PROMPT_VERSION = "sweep-v2/verify-v4(10-fields+dual-variant+cell-crop)/cf-v3(dual-variant)"   # seconds — hard cap on the whole vision sweep (raised: the 2-of-3 third opinion once ate 4.5 min and starved CF verification)
@@ -986,6 +994,7 @@ def extract_via_vision(
     pages_png = _render_pages(raw, VISION_MAX_PAGES, notes, indices)
     selected = indices if indices is not None else list(range(1, len(pages_png) + 1))
     n_pages = len(pages_png)
+    t_overall = __import__("time").time()  # التسريع: قياس الرحلة للأسفل
 
     # Local OCR pre-layer (free, CPU-only): triage which pages carry table
     # markup and reorder them FIRST. Statement pages reach the early-stop
@@ -1060,7 +1069,10 @@ def extract_via_vision(
     import time as _time
 
     deadline = _time.time() + VISION_TOTAL_BUDGET
+    t_stage = {"sweep": _time.time()}  # التسريع: قياس زمن كل مرحلة للملاحظة النهائية
     wave_size = max(n_workers, 1)  # batches per wave
+    last_captured = -1
+    dry_waves = 0
     for wave_start in range(0, len(batches), wave_size):
         if _time.time() > deadline:
             notes.append(
@@ -1105,6 +1117,27 @@ def extract_via_vision(
                     progress_cb(f"📚 وصلنا للصفحة {done_pages} من {n_pages}…")
 
         accumulated = merge_parsed(parts, [], part_layers=["vision"] * len(parts))
+        # التسريع — توقف الموجة الجافة: موجتان متتاليتان بلا أي بند جديد =
+        # الصفحات الباقية إيضاحات لن تضيف شيئًا — لا تحرق السقف الكامل
+        # (حديد عز: صافي الربح لا يُلتقط أبدًا في هذا المستند فكان
+        # _enough_core لن ينطلق والمسح يستهلك السقف كاملًا)
+        captured_now = sum(
+            1 for _f, by_y in accumulated.values.items()
+            for v in by_y.values() if v is not None)
+        if captured_now > last_captured:
+            dry_waves = 0
+        else:
+            dry_waves += 1
+        last_captured = captured_now
+        if dry_waves >= 2:
+            # ملاحظة: لا نضع stopped_early هنا — الصفحات الفاشلة قد تكون
+            # قوائمًا فشلت عابرةً (503) وتستحق إعادة القراءة المحدودة
+            notes.append(
+                f"Vision sweep stopped after {done_pages}/{n_pages} pages: "
+                "two consecutive waves captured no new fields (remaining "
+                "pages are notes — diminishing returns)."
+            )
+            break
         if _enough_core(accumulated):
             stopped_early = True
             notes.append(
@@ -1132,16 +1165,45 @@ def extract_via_vision(
         notes.append(f"Retrying {len(failed_pages)} unread page(s): {failed_pages[:12]}…")
         if progress_cb:
             progress_cb(f"🔁 إعادة قراءة {len(failed_pages)} صفحة لم تكتمل…")
-        for page_number in failed_pages:
-            if not pool.has_usable_pairs():
-                break
+        # التسريع: كانت الإعادة تسلسلية — 10 صفحات × 45 ثانية = ~7.5 دقيقة
+        # خارج كل سقف (حديد عز: أكلت نصف الرحلة). صارت متوازية بنفس عرض
+        # الموجات + سقف زمني خاص.
+        retry_deadline = min(deadline, _time.time() + VISION_RETRY_BUDGET)
+        t_stage["retry"] = _time.time()
+        by_page_png = dict(zip(selected, pages_png))
+
+        def _retry_one(page_number: int) -> tuple[int, str | None, str]:
             try:
-                img = preprocess_image(pages_png[selected.index(page_number)])
                 raw_text = (
-                    caller("k", "m", _single_prompt(page_number), [img])
+                    caller("k", "m", _single_prompt(page_number),
+                           [preprocess_image(by_page_png[page_number])])
                     if caller is not None
-                    else _call_with_rotation(pool, _single_prompt(page_number), [img])
+                    else _call_with_rotation(
+                        pool, _single_prompt(page_number),
+                        [preprocess_image(by_page_png[page_number])])
                 )
+                return page_number, raw_text, ""
+            except Exception as exc:
+                return page_number, None, str(exc)
+
+        retried_done = 0
+        with ThreadPoolExecutor(max_workers=n_workers) as executor:
+            futures = {executor.submit(_retry_one, p): p for p in failed_pages}
+            for future in as_completed(futures):
+                if _time.time() > retry_deadline:
+                    for f in futures:
+                        f.cancel()  # المعلقة فقط تُلغى — الجارية تكتمل وتُسقط
+                    notes.append(
+                        f"Retry budget ({VISION_RETRY_BUDGET}s) exhausted "
+                        "— proceeding with what was re-read.")
+                    break
+                pn, raw_text, err = future.result()
+                retried_done += 1
+                if raw_text is None:
+                    notes.append(f"Vision page {pn} failed again (skipped).")
+                    if err:
+                        failure_reasons.append(err)
+                    continue
                 for page in _parse_vision_json(raw_text):
                     frame = _page_to_frame(page)
                     if frame is not None:
@@ -1153,9 +1215,9 @@ def extract_via_vision(
                             notes.append(f"Vision page skipped ({exc}).")
                     if not company_holder.get("name") and page.get("company"):
                         company_holder["name"] = page["company"]
-            except ExtractionError as exc:
-                notes.append(f"Vision page {page_number} failed again (skipped).")
-                failure_reasons.append(str(exc))
+                if progress_cb:
+                    progress_cb(
+                        f"🔁 إعادة قراءة {retried_done}/{len(failed_pages)}…")
         accumulated = merge_parsed(parts, [], part_layers=["vision"] * len(parts))
 
     # Focused double-read of the four core balance-sheet totals: replaces
@@ -1170,6 +1232,10 @@ def extract_via_vision(
     # Cash-flow recovery: re-ask adjacent pages with a focused CF prompt
     # when the cash-flow statement exists but wasn't captured.
     pre_merge = merge_parsed(parts, [], part_layers=["vision"] * len(parts))
+    # التسريع: مراحل التحقق الثلاث تتقاسم ميزانية واحدة (كانت كل مرحلة
+    # يمكن أن تمشي حتى سقف المسح الكامل 720 ثانية)
+    verify_deadline = min(deadline, _time.time() + VISION_VERIFY_BUDGET)
+    t_stage["verify"] = _time.time()
     _recover_cash_flow(
         pre_merge,
         parts,
@@ -1182,7 +1248,7 @@ def extract_via_vision(
         caller,
         notes,
         progress_cb,
-        deadline=deadline,
+        deadline=verify_deadline,
         local_reads=local_reads,
     )
 
@@ -1202,7 +1268,7 @@ def extract_via_vision(
             notes,
             progress_cb,
             local_reads=local_reads,
-            deadline=deadline,
+            deadline=verify_deadline,
             confidence=confidence,
         )
 
@@ -1222,9 +1288,21 @@ def extract_via_vision(
             notes,
             progress_cb,
             local_reads=local_reads,
-            deadline=deadline,
+            deadline=verify_deadline,
             confidence=confidence,
         )
+
+    # التسريع — ملاحظة توقيت المراحل: تشخيص صادق أين ذهب الزمن (تظهر في
+    # ملاحظات الاستخراج بالواجهة) — تُبنى قبل فحص الفراغ حتى تظهر أيضًا
+    # في الرحلات الفاشلة
+    _t_end = _time.time()
+    _sw = t_stage.get("retry", t_stage.get("verify", _t_end)) - t_stage["sweep"]
+    _rt = (t_stage["verify"] - t_stage["retry"]) if "retry" in t_stage else 0.0
+    _vf = _t_end - t_stage.get("verify", _t_end)
+    notes.append(
+        f"⏱ المراحل (ثوانٍ): إعداد+مسح {_sw:.0f} | إعادة قراءة {_rt:.0f} | "
+        f"تحقق مركزي {_vf:.0f} | الإجمالي داخل الاستخراج "
+        f"{_t_end - t_overall:.0f}")
 
     if not parts:
         # Surface WHY the vision reads produced nothing — quota storms and

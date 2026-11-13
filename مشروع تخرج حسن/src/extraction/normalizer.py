@@ -615,6 +615,11 @@ _ABSOLUTE_FIELDS = {
     "cash", "fixed_assets", "accounts_payable", "current_liabilities",
     "total_liabilities", "short_term_debt", "long_term_debt",
     "total_debt", "equity",
+    # أرصدة اقتراض تُطبع موجبة دائمًا في قائمة المركز — التقاط سالب =
+    # صف حركة/فائدة قرئ في مكان الخطأ (حديد عز جولة التسريع: −186.9م)
+    # — المقدار يحفظ الاتفاق مع طباعة القوائم (bank_overdraft مستثنى:
+    # له دلالة إشارة حقيقية)
+    "short_term_credit_facilities", "current_portion_lt_debt",
 }
 
 

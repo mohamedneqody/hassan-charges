@@ -1,37 +1,135 @@
 {
-  "_meta": "EZZ Steel FY2023 settled ground truth — visual reading of pypdfium renders (eval_pages/ezz_2023) cross-checked by arithmetic identities (row sums, balance identity, CF roll-forward, note internal sums). Column identity: LEFT=2022, RIGHT=2023 (equity statement explicit date labels). Uncertainty flagged where reading noise persisted.",
-  "2022": {
-    "revenue": [16265919878, "first-group ±digit noise"],
-    "cost_of_revenue": [15033776899, "visual"],
-    "gross_profit": [1232142979, "arithmetic revenue-cost"],
-    "inventory": [623356849, "triple: CA-sum + CF movement + note gross"],
-    "accounts_receivable": [770203387, "note net = gross 803996179 - ECL 33792792 EXACT"],
-    "cash": [1804894141, "SOFP + CF closing EXACT"],
-    "current_assets": [4248947378, "printed, row-sum EXACT with inventory"],
-    "non_current_assets": [11726699072, "component sum (FA 495544550 note-confirmed)"],
-    "total_assets": [15975646450, "NCA+TCA arithmetic"],
-    "equity": [6938330481, "SOFP + equity-statement closing EXACT"],
-    "non_current_liabilities": [720697780, "component-sum EXACT"],
-    "pretax_income": [1336363213, "CF left; ±digit noise vs 1236363213 (platform read)"],
-    "net_income": [1053672086, "equity statement ±noise; retained movement implies ~1056574206"],
-    "financing_cash_flow": [-727063341, "printed"],
-    "operating_cash_flow": [1214507839, "printed"]
-  },
-  "2023": {
-    "revenue": [27624502412, "two independent clean crops"],
-    "cost_of_revenue": [22221441055, "visual"],
-    "gross_profit": [5403061357, "arithmetic revenue-cost"],
-    "inventory": [2092224250, "note: gross 2112718048 - writedown 20493798 EXACT; CF gross movement 1489361199 + opening 623356849 EXACT"],
-    "accounts_receivable": [54893089, "note net EXACT"],
-    "cash": [1699349174, "CF roll-forward EXACT (SOFP line 1704160969 = cash + overdraft 4811795)"],
-    "current_assets": [5318944941, "note-implied (printed read 5217944941 ±101M)"],
-    "non_current_assets": [11670598429, "TA - TCA arithmetic"],
-    "total_assets": [16989543370, "NCA+TCA EXACT"],
-    "equity": [7938720031, "SOFP + equity-statement closing"],
-    "non_current_liabilities": [203647336, "component-sum"],
-    "pretax_income": [1359426542, "CF right clean"],
-    "net_income": [1000289546, "equity statement ±100k"],
-    "financing_cash_flow": [1434826043, "components sum EXACT (+1814503440 borrowing)"],
-    "operating_cash_flow": [-1556727229, "printed"]
-  }
+ "_meta": "EZZ Steel FY2023 settled ground truth — visual reading of pypdfium renders (eval_pages/ezz_2023) cross-checked by arithmetic identities (row sums, balance identity, CF roll-forward, note internal sums). Column identity: LEFT=2022, RIGHT=2023 (equity statement explicit date labels). Uncertainty flagged where reading noise persisted. V2 CORRECTIONS 2026-11-14 (visual scale-12 crops): pretax_2022=1,236,363,213 (p6_scan49), net_income_2022=1,056,737,086 (identity pretax-tax EXACT + retained movement), tax_2022=-179,626,127 (identity), revenue_2022=16,665,919,878 (gross 1,632,142,979 + cost EXACT — my earlier z1 read was the 6/2 confusion), gross_2022=1,632,142,979 (p6_v_gross), total_assets_2022=15,965,646,460 (p5_v_ta5 visual — my identity-chain had component noise), current_assets_2023=5,217,944,941 (p5_v_tca visual — the 101M note-chain hole lives in a مدينون/موردون component read, flagged open). OPEN ITEM: SOFP CA components vs printed TCA leave a 101,000,000 hole — likely مدينون 1,144,086,683 read (candidate 1,043,086,683).",
+ "2022": {
+  "revenue": [
+   16665919878,
+   "gross 1,632,142,979 + cost EXACT — platform exact"
+  ],
+  "cost_of_revenue": [
+   15033776899,
+   "visual"
+  ],
+  "gross_profit": [
+   1632142979,
+   "visual p6_v_gross scale-12"
+  ],
+  "inventory": [
+   623356849,
+   "triple: CA-sum + CF movement + note gross"
+  ],
+  "accounts_receivable": [
+   770203387,
+   "note net = gross 803996179 - ECL 33792792 EXACT"
+  ],
+  "cash": [
+   1804894141,
+   "SOFP + CF closing EXACT"
+  ],
+  "current_assets": [
+   4248947378,
+   "printed, row-sum EXACT with inventory"
+  ],
+  "non_current_assets": [
+   11726699072,
+   "component sum (FA 495544550 note-confirmed)"
+  ],
+  "total_assets": [
+   15965646460,
+   "visual p5_v_ta5 scale-12 — platform decisive EXACT"
+  ],
+  "equity": [
+   6938330481,
+   "SOFP + equity-statement closing EXACT"
+  ],
+  "non_current_liabilities": [
+   720697780,
+   "component-sum EXACT"
+  ],
+  "pretax_income": [
+   1236363213,
+   "visual p6_scan49 scale-12 — platform was RIGHT"
+  ],
+  "net_income": [
+   1056737086,
+   "identity pretax - tax EXACT; retained movement consistent"
+  ],
+  "financing_cash_flow": [
+   -727063341,
+   "printed"
+  ],
+  "operating_cash_flow": [
+   1214507839,
+   "printed"
+  ],
+  "income_tax_expense": [
+   -179626127,
+   "identity-derived, platform decisive"
+  ],
+  "total_liabilities": [
+   9027315979,
+   "TA - equity EXACT (platform read ...479 tail 500 off, gated)"
+  ]
+ },
+ "2023": {
+  "revenue": [
+   27624502412,
+   "two independent clean crops"
+  ],
+  "cost_of_revenue": [
+   22221441055,
+   "visual"
+  ],
+  "gross_profit": [
+   5413061358,
+   "visual p6_v_gross scale-12 (rev-cost arithmetic gives ...357 — last-digit pair open)"
+  ],
+  "inventory": [
+   2092224250,
+   "note: gross 2112718048 - writedown 20493798 EXACT; CF gross movement 1489361199 + opening 623356849 EXACT"
+  ],
+  "accounts_receivable": [
+   54893089,
+   "note net EXACT"
+  ],
+  "cash": [
+   1699349174,
+   "CF roll-forward EXACT (SOFP line 1704160969 = cash + overdraft 4811795)"
+  ],
+  "current_assets": [
+   5217944941,
+   "visual p5_v_tca scale-12 — platform was RIGHT; note-chain had 101M component hole (open item)"
+  ],
+  "non_current_assets": [
+   11670598429,
+   "TA - TCA arithmetic"
+  ],
+  "total_assets": [
+   16989543370,
+   "NCA+TCA EXACT"
+  ],
+  "equity": [
+   7938720031,
+   "SOFP + equity-statement closing"
+  ],
+  "non_current_liabilities": [
+   203647336,
+   "component-sum"
+  ],
+  "pretax_income": [
+   1359426542,
+   "CF right clean"
+  ],
+  "net_income": [
+   1000289546,
+   "equity statement ±100k"
+  ],
+  "financing_cash_flow": [
+   1434826043,
+   "components sum EXACT (+1814503440 borrowing)"
+  ],
+  "operating_cash_flow": [
+   -1556727229,
+   "printed"
+  ]
+ }
 }

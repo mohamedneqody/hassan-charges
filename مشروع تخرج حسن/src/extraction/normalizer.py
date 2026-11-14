@@ -167,6 +167,18 @@ _FIELD_NEGATIVE_PATTERNS: dict[str, tuple[str, ...]] = {
              # the cash-flow SUBTOTAL «Cash provided by operating activities»
              # is not the balance-sheet cash line (TE holdout root cause)
              "provided by operating activities", "operating activities"),
+    # عز 2023 (التقاط الحي): إيضاح المخزون يطبع صف «الانخفاض في قيمة
+    # المخزون» (مخصص الخصم) — الـsubstring «المخزون» أسند قيمة الخصم
+    # (20,493,798) لحقل المخزون نفسه (الصحيح 2,092,224,250 من الإيضاح).
+    # صف الخصم ليس رصيد المخزون — فيتو حاسم.
+    "inventory": ("انخفاض",),
+    # وإيضاح العملاء يطبع «الخسائر الائتمانية المتوقعة من العملاء» —
+    # الـsubstring «العملاء» أسند مخصص ECL (33,792,792) للعميلين معًا.
+    # المخصص ليس رصيد العملاء — فيتو حاسم. (normalize: ة→ه، ئ→ي)
+    "accounts_receivable": ("الائتمانيه", "خساير",
+                             # «عملاء دفعات مقدمة» التزام عملاء — ليس رصيدًا مدينًا
+                             # (normalize ة→ه: «مقدمة» ⇒ «مقدمه»)
+                             "دفعات مقدمه", "دفعات مقدمة"),
 }
 
 # A raw cell containing a percent sign is a ratio, never an absolute amount.
@@ -887,6 +899,45 @@ def reconcile(data: FinancialData) -> None:
                     data.values.setdefault(f, {})[year] = value
                 # downstream groups should see the reconciled value only
                 data.candidates[f][year] = [(value, 0)]
+
+    # عز 2023: الإجمالي المفقود يُشتق هوياتيًا بدل أن يبقى N/A — عز قدمت
+    # الإيراد والتكلفة ملتقطين (مطابقين للطباعة) بينما مجمل الربح لم
+    # يُلتقط قط، فبقي هامش المجمل N/A رغم أن الطرح حسم مطبوعًا. الإنشاء
+    # فقط: لا قراءة مباشرة تُستبدل، والمشتق يحمل ملاحظة صريحة و
+    # derived_uncertain حين تكون المدخلات معلقة (قراءة مسح واحد) — لا
+    # يصل للمؤشرات كقيمة مؤكدة أبدًا.
+    _CREATE_IDENTITIES: list[tuple[str, tuple[tuple[str, int], ...]]] = [
+        ("gross_profit", (("revenue", 1), ("cost_of_revenue", -1))),
+    ]
+    for target, comps in _CREATE_IDENTITIES:
+        for year in list(data.years):
+            if data.get(target, year) is not None:
+                continue  # قراءة مباشرة موجودة — لا إنشاء فوقها
+            comp_vals = {c: data.get(c, year) for c, _s in comps}
+            if any(v is None for v in comp_vals.values()):
+                continue  # مكوّن مفقود — لا اشتقاق
+            derived = sum(sign * abs(comp_vals[c]) for c, sign in comps)
+            formula = " + ".join(
+                (c if s == 1 else f"− {c}") for c, s in comps)
+            data.values.setdefault(target, {})[year] = derived
+            data.derived = getattr(data, "derived", {})
+            data.derived[(target, year)] = f"identity ({target} = {formula})"
+            data.candidates.setdefault(target, {}).setdefault(
+                year, []).append((derived, 0))
+            _pending_inputs = any(
+                (getattr(data, "confidence", {}).get(c, {}).get(year, 0) < 2)
+                for c, _s in comps)
+            if _pending_inputs or not (
+                getattr(data, "document_profile", {}) or {}
+            ).get("text_layer_trusted", True):
+                data.derived_uncertain = getattr(
+                    data, "derived_uncertain", set())
+                data.derived_uncertain.add((target, year))
+            data.notes.append(
+                f"⚠ '{target}' in {year} derived from the identity "
+                f"({formula} = {derived:,.0f}) — not a direct capture; "
+                "verify against the printed statement."
+            )
 
     # Sanity cross-checks: a detail item can never exceed its total.
     for year in list(data.years):

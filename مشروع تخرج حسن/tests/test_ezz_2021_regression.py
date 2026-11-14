@@ -692,3 +692,91 @@ class TestEzz2023LiveDefects:
                  for v in by_year.values() if v is not None),
                 default=0.0)
         assert _anchor == 0.0  # الاسترجاع يُعطّل بالكامل
+
+
+# ═══ عيوب عز 2023 الجولة الثانية (060a5e9 ←) ═══
+class TestEzz2023Round2Defects:
+    """المقارنة الحية 2026-11-14 (18 exact/3 wrong/8 missing) — إصلاح
+    فئة الصف-الخاطئ وفئة المفقود."""
+
+    def test_write_down_row_never_feeds_inventory(self):
+        """إيضاح المخزون يطبع «الانخفاض في قيمة المخزون» (الخصم 20,493,798)
+        — الـsubstring «المخزون» أسندها لحقل المخزون. الصف ليس رصيدًا."""
+        from src.extraction.normalizer import match_field
+
+        assert match_field("الانخفاض في قيمة المخزون") is None
+        assert match_field("مخزون") == "inventory"        # الصف الصحيح
+        assert match_field("صافي المخزون") == "inventory"
+
+    def test_ecl_row_never_feeds_receivables(self):
+        """«الخسائر الائتمانية المتوقعة من العملاء» (33,792,792 للسنتين)
+        أسندت لمخصص ECL رصيد العملاء. المخصص ليس رصيدًا."""
+        from src.extraction.normalizer import match_field
+
+        assert match_field("الخسائر الائتمانية المتوقعة من العملاء") is None
+        assert match_field("عملاء و اوراق قبض") == "accounts_receivable"
+        assert match_field("عملاء") == "accounts_receivable"
+
+    def test_customer_prepayments_never_feeds_receivables(self):
+        """«عملاء دفعات مقدمة» التزام (بلا قيود) — لا يلتقط لصافي العملاء."""
+        from src.extraction.normalizer import match_field
+
+        assert match_field("عملاء دفعات مقدمة") is None
+
+    def test_parenthetical_cf_labels_map(self):
+        """صيغة عز المطبوعة «(المستخدمة في) / الناتجة من أنشطة...» —
+        بعد التطبيع «المستخدمه في الناتجه من انشطه...» كانت تكسر كل
+        الألقاب فبقيت OCF/ICF مفقودتين وإن قُرئت الصفحة."""
+        from src.extraction.normalizer import match_field
+
+        assert match_field("صافي التدفقات النقدية (المستخدمة في) / "
+                           "الناتجة من أنشطة التشغيل") == "operating_cash_flow"
+        assert match_field("صافى النقدية (المستخدمة في) أنشطة الاستثمار") \
+            == "investing_cash_flow"
+        assert match_field("صافي التدفقات النقدية (المستخدمة في) / "
+                           "الناتجة من أنشطة التمويل") == "financing_cash_flow"
+        # الإجمالي الفرعي (بلا صافي) يظل محجوبًا
+        assert match_field("النقدية الناتجة من أنشطة التشغيل") is None
+
+    def test_gross_profit_created_from_identity_when_missing(self):
+        """مجمل الربح المفقود يُشتق من الإيراد − التكلفة مع الإفصاح و
+        derived_uncertain (مدخلات معلقة) — لا يصل كقيمة مؤكدة."""
+        from src.extraction.normalizer import FinancialData, reconcile
+
+        data = FinancialData()
+        data.values = {
+            "revenue": {2023: 27_624_502_412.0},
+            "cost_of_revenue": {2023: 22_221_441_055.0},
+        }
+        data.candidates = {
+            "revenue": {2023: [(27_624_502_412.0, 0)]},
+            "cost_of_revenue": {2023: [(22_221_441_055.0, 0)]},
+        }
+        data.document_profile = {"text_layer_trusted": False}
+        reconcile(data)
+        got = data.values.get("gross_profit", {}).get(2023)
+        assert got is not None
+        assert abs(got - (27_624_502_412.0 - 22_221_441_055.0)) < 1.0
+        assert ("gross_profit", 2023) in (data.derived_uncertain or set())
+        assert any("derived from the identity" in n
+                   or "اشتقاق" in n for n in data.notes)
+
+    def test_identity_consistent_gross_untouched_by_create(self):
+        """الإنشاء فقط: قراءة مباشرة متطابقة مع الهوية لا تُمس ولا يُبنى
+        فوقها ملاحظة اشتقاق — القيمة تبقى قراءة مباشرة."""
+        from src.extraction.normalizer import FinancialData, reconcile
+
+        data = FinancialData()
+        data.values = {
+            "revenue": {2023: 100.0},
+            "cost_of_revenue": {2023: 30.0},
+            "gross_profit": {2023: 70.0},   # مطابق للهوية (100 − 30)
+        }
+        data.candidates = {
+            "revenue": {2023: [(100.0, 0)]},
+            "cost_of_revenue": {2023: [(30.0, 0)]},
+            "gross_profit": {2023: [(70.0, 0)]},
+        }
+        reconcile(data)
+        assert data.values.get("gross_profit", {}).get(2023) == 70.0
+        assert not any("not a direct capture" in n for n in data.notes)

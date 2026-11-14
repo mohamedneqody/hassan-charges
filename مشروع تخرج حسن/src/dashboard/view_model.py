@@ -230,3 +230,15 @@ def categorized_insights(results: dict, analysis) -> dict:
     for action, text in analysis.recommendations:
         out["recommendations"].append({"metric": action, "text": text})
     return out
+
+
+def report_memo(results: dict, key: str, builder):
+    """تقارير تُبنى مرة واحدة لكل مستند — كانت تُبنى على كل إعادة رسم
+    للداشبورد (Excel/HTML على زر التنزيل في كل rerun). المفتاح =
+    هاش المستند + نوع التقرير."""
+    import streamlit as st
+
+    memo = st.session_state.setdefault("_report_memo", {})
+    if key not in memo:
+        memo[key] = builder()
+    return memo[key]

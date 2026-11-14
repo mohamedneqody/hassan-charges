@@ -964,3 +964,61 @@ class TestSemanticVision:
         _absorb_semantic_page(page, [2023], [6], parts, set(), {},
                               sink, [], [])
         assert parts == [] and len(sink) == 1   # المفردات مغلقة فعليًا
+
+
+# ═══ الوضع السريع: استرجاع التدفقات متخطى (الجولة الأخيرة) ═══
+class TestFastModeSkipsRecovery:
+    """الوضع السريع لا يستدعي استرجاع التدفقات — أكبر مُكلف (حتى 8
+    نداءات): عدّاد نداءات الحاوي الاصطناعي يثبت السلوك."""
+
+    @staticmethod
+    def _run(fast_mode: bool, monkeypatch):
+        import json as _json
+
+        import src.extraction.vision_ocr as V
+        from src.extraction.vision_ocr import extract_via_vision
+
+        pages = {
+            1: {"page": 1, "currency": "جنيه مصري", "company": "",
+                "years": [2022, 2023],
+                "rows": [{"label": "المبيعات (بالصافي)",
+                          "field": "revenue",
+                          "values": {2022: 16_665_919_878.0,
+                                     2023: 27_634_502_413.0},
+                          "conf": "high"}]},
+            2: {"page": 2, "currency": "", "company": "",
+                "years": [2022, 2023], "rows": []},
+        }
+        monkeypatch.setattr(V, "_render_pages",
+                            lambda raw, mp, notes, indices=None: [b"p1", b"p2"])
+        monkeypatch.setattr(V, "preprocess_image", lambda png, **kw: png)
+        monkeypatch.setattr(V, "_detect_transposed", lambda df: False,
+                            raising=False)
+
+        calls = {"n": 0}
+
+        def caller(key, model, prompt, images):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                # نداء المسح: الصفحتان (1 بالبيانات، 2 فارغة)
+                return _json.dumps({"pages": [pages[1], pages[2]]},
+                                   ensure_ascii=False)
+            # نداءات الاسترجاع/التحقق: لا تدفقات
+            return _json.dumps({"pages": []}, ensure_ascii=False)
+
+        raw = b"%PDF-fake"
+        data = extract_via_vision(raw, [], caller=caller, fast_mode=fast_mode)
+        return data, calls["n"]
+
+    def test_fast_mode_skips_cf_recovery_calls(self, monkeypatch):
+        data, n_fast = self._run(fast_mode=True, monkeypatch=monkeypatch)
+        assert any("cash-flow recovery skipped" in x for x in data.notes)
+        assert data.get("revenue", 2023) == 27_634_502_413.0
+        # المقارنة النسبية: الدقيق يستدعي الاسترجاع فوق نفس السيناريو
+        _, n_precise = self._run(fast_mode=False, monkeypatch=monkeypatch)
+        assert n_precise > n_fast  # الفرق = نداءات الاسترجاع المقتصدة
+
+    def test_precise_mode_runs_recovery_calls(self, monkeypatch):
+        _, n_fast = self._run(fast_mode=True, monkeypatch=monkeypatch)
+        data, n_precise = self._run(fast_mode=False, monkeypatch=monkeypatch)
+        assert n_precise >= n_fast + 1  # الاسترجاع حاول الصفحات المجاورة

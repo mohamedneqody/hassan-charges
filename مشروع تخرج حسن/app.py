@@ -229,11 +229,13 @@ def upload_screen() -> None:
             # يسار الشاشة في RTL = وضع المعالجة
             st.radio(
                 "وضع القراءة (لملفات PDF الممسوحة)",
-                ["تحليل دقيق — استخراج وفحص البيانات", "معالجة سريعة — أداء أسرع"],
+                ["🔬 دقيق (~8-9 دقائق) — طبقات تحقق كاملة",
+                 "⚡ سريع (~5 دقائق) — طبقات أقل: بعض الخانات تبقى بحاجة مراجعة والتدفقات غير متاحة"],
                 index=0,
                 key="read_mode",
-                help="السريع يعمل مسحًا واحدًا (~نصف النداءات وثلث الوقت) لفرز عدد كبير من الملفات؛ "
-                     "أعد التشغيل بالوضع الشامل للأرقام الموثقة التي ستضعها في الرسالة.",
+                help="السريع يعمل مسحًا واحدًا ويؤجل التعليق التحليلي لضغطة من قسم الرؤى — "
+                     "مثالي لفرز عدد كبير من الملفات؛ الدقيق يفحص الإجماليات الكبرى بقراءة مركزة "
+                     "ويوفر خانات حاسمة أكثر. الصدق محفوظ في الوضعين: لا قيمة تُعرض مؤكدة إلا بتحقق.",
             )
         with w_col1:
             # يمين الشاشة في RTL = نطاق الصفحات
@@ -355,6 +357,13 @@ def _pipeline_with_progress(file_name: str, raw: bytes, page_range, currency: st
             else:
                 results = memo[1]
             outcome["results"] = results
+            if fast_mode:
+                # الوضع السريع: التعليق مؤجل — يولّد بالضغطة من قسم الرؤى
+                # بدل حجب عرض الأرقام 60 ثانية إضافية
+                holder["line"] = "تم الاستخراج وحساب النسب — الوضع السريع: التعليق بالضغطة من قسم الرؤى."
+                outcome["analysis"] = None
+                _memo_put(_PIPELINE_MEMO, key, "ok", results)
+                return
             holder["line"] = "تم الاستخراج وحساب النسب — جارٍ تجهيز التعليق التحليلي…"
             amemo = _memo_get(_ANALYSIS_MEMO, akey)
             if amemo is None:
@@ -463,7 +472,7 @@ def process_upload(uploaded) -> None:
 
     page_range = _parse_page_range(st.session_state.get("page_range"))
     currency = st.session_state.get("currency", "$")
-    fast_mode = st.session_state.get("read_mode") == "معالجة سريعة — أداء أسرع"
+    fast_mode = (st.session_state.get("read_mode") or "").startswith("⚡ سريع")
     batch = len(jobs) > 1
 
     oks: list = []
@@ -902,10 +911,11 @@ def overview_screen(r: dict) -> None:
     )
 
     from src.dashboard.excel_report import build_excel_report, safe_file_name
+    from src.dashboard.view_model import report_memo
 
     st.download_button(
         "⬇️ تصدير التقرير الشامل (Excel — 5 أوراق)",
-        data=build_excel_report(r),
+        data=report_memo(r, "xlsx", lambda: build_excel_report(r)),
         file_name=f"{safe_file_name(r.get('company', 'report'))}_تحليل_شامل.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         use_container_width=True,
@@ -1449,7 +1459,9 @@ def ai_screen(r: dict, analysis: AIAnalysis) -> None:
     with col_html:
         st.download_button(
             "⬇️ تنزيل تقرير قابل للطباعة (HTML ← PDF)",
-            data=build_html_report(r, analysis, score, currency),
+            data=report_memo(r, "html",
+                             lambda: build_html_report(r, analysis, score,
+                                                       currency)),
             file_name=f"financial_report_{r['prev_year']}_{r['curr_year']}.html",
             mime="text/html",
             use_container_width=True,

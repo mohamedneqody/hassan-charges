@@ -250,6 +250,18 @@ def _parse_vision_json(text: str) -> list[dict]:
         for row in page.get("rows") or []:
             if isinstance(row, dict):
                 label = row.get("label") or row.get("item") or row.get("name")
+                # الشكل الدلالي v3: الصف يحمل تصنيفه وقيمه كقاموس سنوات —
+                # يُحفظ كما هو (الامتصاص الدلالي يحل y1/y2 موضعيًا على
+                # years). تحويله لقائمة كان يجعل مفاتيح السنوات قيمًا
+                # (2022.0/2023.0) ويكسر الفرع الدلالي كله!
+                if "field" in row:
+                    rows.append({
+                        "label": str(label or "").strip(),
+                        "field": row.get("field"),
+                        "values": row.get("values") or {},
+                        "conf": row.get("conf") or "high",
+                    })
+                    continue
                 values = row.get("values") or []
             elif isinstance(row, list) and row:
                 label, values = row[0], row[1:]
@@ -1359,22 +1371,31 @@ def extract_via_vision(
     # يمكن أن تمشي حتى سقف المسح الكامل 720 ثانية)
     verify_deadline = min(deadline, _time.time() + VISION_VERIFY_BUDGET)
     t_stage["verify"] = _time.time()
-    _recover_cash_flow(
-        pre_merge,
-        parts,
-        field_sources,
-        pages_png,
-        selected,
-        ok_pages,
-        doc_years_holder,
-        pool,
-        caller,
-        notes,
-        progress_cb,
-        deadline=verify_deadline,
-        local_reads=local_reads,
-        gap_sink=gap_sink,
-    )
+    if fast_mode:
+        # الوضع السريع: استرجاع التدفقات متخطى (أكبر مُكلف: حتى 8 نداءات)
+        # — حقول التدفقات تبقى مفقودة بصدق ومقاييسها غير متوفر، أعد
+        # بالوضع الدقيق للتحليل الكامل
+        notes.append(
+            "⚡ Fast mode: cash-flow recovery skipped — CF metrics show "
+            "غير متوفر; re-run in precise mode for the full analysis."
+        )
+    else:
+        _recover_cash_flow(
+            pre_merge,
+            parts,
+            field_sources,
+            pages_png,
+            selected,
+            ok_pages,
+            doc_years_holder,
+            pool,
+            caller,
+            notes,
+            progress_cb,
+            deadline=verify_deadline,
+            local_reads=local_reads,
+            gap_sink=gap_sink,
+        )
 
     # Focused double-read of the three net-cash totals — the CF statement
     # carries SIGNS (outflows negative). Runs BEFORE the expensive core

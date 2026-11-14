@@ -361,9 +361,58 @@ def sec_insights(vm: dict, analysis) -> None:
     if vm["pending_count"]:
         st.warning(_T["provisional"][lang])
     if not (analysis is not None and getattr(analysis, "ok", False)):
-        reason = getattr(analysis, "error", "") or "—"
-        st.info(("لا تحليل Gemini — السبب: " if lang == "ar" else
-                 "No Gemini analysis — reason: ") + reason)
+        # الوضع السريع: التعليق مؤجل — يولّد بالضغطة (spinner هنا في
+        # قسم الرؤى) ويُخزن كالعادة عند النجاح
+        fast_deferred = (getattr(analysis, "error", "") == ""
+                         and analysis is None)
+        if fast_deferred:
+            st.info("⚡ الوضع السريع: التعليق التحليلي مؤجل — "
+                    "اضغط الزر لتوليده الآن (يستغرق حتى دقيقة).")
+            if st.button("🤝 توليد التعليق التحليلي", key="gen_commentary"):
+                import json as _json
+
+                from src.ai.gemini_agent import AIAnalysis, analyze_financials
+                from src.pipeline import build_gemini_payload
+                from src.extraction.result_cache import (
+                    analysis_key, load_cached_analysis, store_analysis)
+
+                results = st.session_state.get("results") or {}
+                currency = st.session_state.get("currency", "$")
+                payload = build_gemini_payload(results, currency)
+                dkey = analysis_key(payload)
+                cached_a = load_cached_analysis(dkey)
+                if cached_a is not None:
+                    analysis = AIAnalysis(
+                        ok=bool(cached_a["ok"]),
+                        ratio_comments=[tuple(x) for x in cached_a["ratio_comments"]],
+                        recommendations=[tuple(x) for x in cached_a["recommendations"]],
+                        error=str(cached_a.get("error") or ""),
+                        model=str(cached_a.get("model") or ""),
+                    )
+                else:
+                    with st.spinner("جارٍ توليد التعليق التحليلي…"):
+                        analysis = analyze_financials(payload)
+                        if not analysis.ok:
+                            from src.analysis.narrative import (
+                                build_fallback_narrative,)
+                            analysis = build_fallback_narrative(
+                                results, analysis)
+                        if analysis.ok:
+                            store_analysis(dkey, {
+                                "ok": analysis.ok,
+                                "ratio_comments": [list(x)
+                                                   for x in analysis.ratio_comments],
+                                "recommendations": [list(x)
+                                                    for x in analysis.recommendations],
+                                "error": analysis.error,
+                                "model": analysis.model,
+                            })
+                st.session_state["analysis"] = analysis
+                st.rerun()
+        else:
+            reason = getattr(analysis, "error", "") or "—"
+            st.info(("لا تحليل Gemini — السبب: " if lang == "ar" else
+                     "No Gemini analysis — reason: ") + reason)
         return
     st.caption(f"model: {analysis.model} · {len(analysis.ratio_comments)} "
                + ("تعليقًا — كل رقم متتبع لأصل محسوب في Python"
@@ -418,7 +467,10 @@ def sec_reports(vm: dict, results: dict, analysis) -> None:
                               blocked_fields=blocked)
     c1, c2 = st.columns(2)
     with c1:
-        xlsx = build_excel_report(results)
+        from src.dashboard.view_model import report_memo
+
+        xlsx = report_memo(results, "xlsx",
+                           lambda: build_excel_report(results))
         st.download_button(
             "Excel (.xlsx)", xlsx,
             file_name=f"FinSight_{results.get('curr_year')}_analysis.xlsx",
@@ -427,8 +479,12 @@ def sec_reports(vm: dict, results: dict, analysis) -> None:
                    if lang == "ar" else
                    "Summary · metrics · statements · review trail")
     with c2:
-        html = build_html_report(results, analysis, hs,
-                                 currency=vm["currency"])
+        from src.dashboard.view_model import report_memo
+
+        html = report_memo(
+            results, "html",
+            lambda: build_html_report(results, analysis, hs,
+                                      currency=vm["currency"]))
         st.download_button(
             "HTML", html.encode("utf-8"),
             file_name=f"FinSight_{results.get('curr_year')}_report.html",

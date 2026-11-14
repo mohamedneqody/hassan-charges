@@ -657,6 +657,11 @@ def _verify_core_fields(
                     continue
                 if field != "net_income":
                     value = abs(value)  # magnitudes; NI may be a real loss (negative)
+                # الحاجز الهيكلي (عز 2023): الأعمدة المشوهة تجعل قراءة
+                # التحقق ترجع موضع العمود (2/1) بدل المبلغ — قيمة عدد
+                # صحيح 0-3 ليست مبلغ قائمة: لا شاهد ولا نزاع ولا رأي ثالث
+                if float(value).is_integer() and 0 <= value <= 3:
+                    continue
                 if local_reads:
                     from src.extraction.local_ocr import confirms
 
@@ -713,6 +718,9 @@ def _verify_core_fields(
             third = third_map.get(field, {}).get(year)
             if third is not None and field != "net_income":
                 third = abs(third)
+            # نفس الحاجز: موضع العمود من الرأي الثالث ليس شاهدًا
+            if third is not None and float(third).is_integer() and 0 <= third <= 3:
+                third = None
             if third is None:
                 winner = value  # no third vote: focused read decides (old behavior)
                 why = "focused verify read"
@@ -1152,6 +1160,18 @@ def extract_via_vision(
         if caller is not None:
             return _parse_vision_json(caller("k", "m", prompt, imgs))
         raw_text = _call_with_rotation(pool, prompt, imgs, call_stats)
+        if _semantic_enabled():
+            # التشخيص القاطع: الرد الخام يُحفظ — تحليل ما أرجعه الموديل
+            # فعليًا بدل الارتكاز على آثار القيم في السجل
+            try:
+                import time as _t
+                from pathlib import Path as _P
+                _dir = _P(__file__).resolve().parents[2] / "logs" / "semantic_raw"
+                _dir.mkdir(parents=True, exist_ok=True)
+                (_dir / f"batch_{first}_{last}_{int(_t.time()*1000) % 10**9}.txt"
+                 ).write_text(str(raw_text)[:300000], encoding="utf-8")
+            except Exception:
+                pass
         return _parse_vision_json(raw_text)
 
     import time as _time
@@ -1256,18 +1276,25 @@ def extract_via_vision(
         # التسريع: كانت الإعادة تسلسلية — 10 صفحات × 45 ثانية = ~7.5 دقيقة
         # خارج كل سقف (حديد عز: أكلت نصف الرحلة). صارت متوازية بنفس عرض
         # الموجات + سقف زمني خاص.
+        # تنوع العقود (عز 2023): المسح الدلالي قد ينهار لمواضع الأعمدة على
+        # الأعمدة المشوهة — الإعادة تستخدم العقد الحرفي v2 (فشل كل عقد
+        # يغطيه الآخر: عقود مختلفة = أنماط فشل مختلفة = تنوع حقيقي)
+        retry_semantic = _semantic_enabled()
         retry_deadline = min(deadline, _time.time() + VISION_RETRY_BUDGET)
         t_stage["retry"] = _time.time()
         by_page_png = dict(zip(selected, pages_png))
 
         def _retry_one(page_number: int) -> tuple[int, str | None, str]:
             try:
+                prompt = (_single_prompt(page_number) if retry_semantic
+                          else VISION_PROMPT.format(first=page_number,
+                                                    last=page_number))
                 raw_text = (
-                    caller("k", "m", _single_prompt(page_number),
+                    caller("k", "m", prompt,
                            [preprocess_image(by_page_png[page_number])])
                     if caller is not None
                     else _call_with_rotation(
-                        pool, _single_prompt(page_number),
+                        pool, prompt,
                         [preprocess_image(by_page_png[page_number])])
                 )
                 return page_number, raw_text, ""
@@ -1293,13 +1320,14 @@ def extract_via_vision(
                         failure_reasons.append(err)
                     continue
                 for page in _parse_vision_json(raw_text):
-                    if page.get("rows") and isinstance(page["rows"][0], dict):
+                    if page.get("rows") and isinstance(page["rows"][0], dict)                             and retry_semantic:
                         years0 = page["years"] or (doc_years_holder.get("years") or [])
                         if len(years0) >= 2:
                             _absorb_semantic_page(
                                 page, years0, [pn], parts, ok_pages,
                                 field_sources, gap_sink, caps_acc, notes)
                     else:
+                        # عقد v2 الحرفي (الإعادة المعاكسة) أو رد غير دلالي
                         frame = _page_to_frame(page)
                         if frame is not None:
                             try:
@@ -1938,12 +1966,21 @@ def _absorb_semantic_page(
         values = row.get("values") or {}
         if field not in FIELD_ALIASES:
             field = None
-        # القراءات لكل سنة (المفتاح = السنة كما أرجعها الموديل)
+        # خريطة مفاتيح القيم → السنة: الموديل يرجع y1/y2 (مفاتيح القالب)
+        # أو السنوات أو المواضع — وyears قد تأتي معكوسة [الحالية، السابقة]
+        # فالمفتاح y1 يُحل موضعيًا على years وليس بالفرض
+        key_map: dict = {}
+        for i, y in enumerate(years):
+            key_map[f"y{i + 1}"] = int(y)
+            key_map[str(y)] = int(y)
+            key_map[int(y)] = int(y)
+            key_map[i + 1] = int(y)
+            key_map[str(i + 1)] = int(y)
         row_vals: dict[int, float] = {}
-        for y in years:
-            v = values.get(str(y), values.get(y))
-            if isinstance(v, (int, float)):
-                row_vals[int(y)] = float(v)
+        for k, v in (values or {}).items():
+            yy = key_map.get(k, key_map.get(str(k)))
+            if yy is not None and isinstance(v, (int, float)):
+                row_vals[int(yy)] = float(v)
         if field is None:
             # الصف بلا تصنيف — سجل الفجوات إن كان يحمل أرقامًا
             if row_vals and gap_sink is not None:
@@ -1957,6 +1994,13 @@ def _absorb_semantic_page(
                 f"model={field}, regex={regex_field} — captured under "
                 "the model's field; both go through the gate."
             )
+        for y, v in list(row_vals.items()):
+            # حاجز الحجم الهيكلي: مبلغ قائمة لا يكون 0-3 جنيهًا لشركة
+            # بإيرادات المليارات — القيم الصغيرة العشرية الصحيحة هي
+            # تسرب بنية من الموديل (فهرس عمود/عدد أعمدة) ⇒ unreadable
+            if float(v).is_integer() and 0 <= v <= 3:
+                row_vals.pop(y)
+                continue
         for y, v in row_vals.items():
             page_parts.setdefault(y, {}).setdefault(field, v)
             field_sources.setdefault(field, []).extend(chunk)
@@ -1966,6 +2010,14 @@ def _absorb_semantic_page(
                 "raw_printed": "", "print_convention": "unknown",
                 "row": None, "col": None, "transposed": False,
             })
+
+    _vals = [v for yf in page_parts.values() for v in yf.values()]
+    if page_parts and _vals and all(
+        float(v).is_integer() and 0 <= v <= 3 for v in _vals):
+        notes.append(
+            f"⚠ Degenerate semantic page dropped (positions instead of "
+            f"amounts on pages {chunk}) — the verify layers cover it.")
+        return
     if page_parts:
         parts.append(page_parts)
         ok_pages.update(chunk)
@@ -2025,6 +2077,18 @@ def _absorb_batch(
         frame = pd.DataFrame(rows, columns=["Item"] + years, dtype=object)
         try:
             parsed = parse_table(frame, gap_sink=gap_sink)
+            # كاشف الصفحة المنحلة (عز 2023): عمود مشوه يجعل الموديل يرجع
+            # مواضع الأعمدة (1/2) بدل المبالغ لكل صفوف الصفحة — صفحة كل
+            # قيمها أعداد صحيحة ≤3 = تسرب بنية ⇒ تُسقط كاملة، ومراحل
+            # التحقق وإعادة القراءة تعوضها بدل أن تسمم ~20 حقلاً
+            _vals = [v for yf in parsed.values() for v in yf.values()]
+            if parsed and _vals and all(
+                float(v).is_integer() and 0 <= v <= 3 for v in _vals):
+                notes.append(
+                    f"⚠ Degenerate page read dropped (positions 1/2 instead "
+                    f"of amounts on pages {chunk}) — the verify layers and "
+                    "re-reads cover it.")
+                continue
             if parsed:
                 parts.append(parsed)
                 ok_pages.update(chunk)

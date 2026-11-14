@@ -1,0 +1,422 @@
+[
+ {
+  "field": "revenue",
+  "year": 2023,
+  "value": 27634502413.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "revenue",
+  "year": 2022,
+  "value": 16665919878.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "cost_of_revenue",
+  "year": 2023,
+  "value": 1.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "cost_of_revenue",
+  "year": 2022,
+  "value": 2.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "gross_profit",
+  "year": 2023,
+  "value": 27634502412.0,
+  "gate_kind": "ok"
+ },
+ {
+  "field": "gross_profit",
+  "year": 2022,
+  "value": 16665919876.0,
+  "gate_kind": "ok"
+ },
+ {
+  "field": "operating_income",
+  "year": 2023,
+  "value": 1.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "operating_income",
+  "year": 2022,
+  "value": 2.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "pretax_income",
+  "year": 2023,
+  "value": 1359426542.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "pretax_income",
+  "year": 2022,
+  "value": 1236363213.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "income_tax_expense",
+  "year": 2023,
+  "value": -359037002.0,
+  "gate_kind": "ok"
+ },
+ {
+  "field": "income_tax_expense",
+  "year": 2022,
+  "value": -179626127.0,
+  "gate_kind": "ok"
+ },
+ {
+  "field": "net_income",
+  "year": 2023,
+  "value": 1000389540.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "net_income",
+  "year": 2022,
+  "value": 1056737086.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "fixed_assets",
+  "year": 2023,
+  "value": 1.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "fixed_assets",
+  "year": 2022,
+  "value": 2.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "inventory",
+  "year": 2023,
+  "value": 1.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "inventory",
+  "year": 2022,
+  "value": 2.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "accounts_receivable",
+  "year": 2023,
+  "value": 1.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "accounts_receivable",
+  "year": 2022,
+  "value": 2.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "cash",
+  "year": 2023,
+  "value": 1704160969.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "cash",
+  "year": 2022,
+  "value": 1804894141.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "current_assets",
+  "year": 2023,
+  "value": 1.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "current_assets",
+  "year": 2022,
+  "value": 2.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "total_assets",
+  "year": 2023,
+  "value": 16989543370.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "total_assets",
+  "year": 2022,
+  "value": 15965646460.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "accounts_payable",
+  "year": 2023,
+  "value": 857537565.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "accounts_payable",
+  "year": 2022,
+  "value": 2939430800.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "current_liabilities",
+  "year": 2023,
+  "value": 8857176013.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "current_liabilities",
+  "year": 2022,
+  "value": 8306618199.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "total_liabilities",
+  "year": 2023,
+  "value": 9050823349.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "total_liabilities",
+  "year": 2022,
+  "value": 9027315979.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "equity",
+  "year": 2023,
+  "value": 7938720021.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "equity",
+  "year": 2022,
+  "value": 6938330481.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "operating_cash_flow",
+  "year": 2023,
+  "value": -1506727229.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "operating_cash_flow",
+  "year": 2022,
+  "value": 1214507839.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "investing_cash_flow",
+  "year": 2023,
+  "value": -63816614.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "investing_cash_flow",
+  "year": 2022,
+  "value": 722097212.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "financing_cash_flow",
+  "year": 2023,
+  "value": 1434826043.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "financing_cash_flow",
+  "year": 2022,
+  "value": -727063341.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "bank_overdraft",
+  "year": 2023,
+  "value": 1.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "capex",
+  "year": 2023,
+  "value": 1.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "capital",
+  "year": 2023,
+  "value": 1.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "current_lease_liabilities",
+  "year": 2023,
+  "value": 1.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "current_portion_lt_debt",
+  "year": 2023,
+  "value": 1.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "depreciation_amortization",
+  "year": 2023,
+  "value": 1.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "dividends_from_subsidiaries",
+  "year": 2023,
+  "value": 1.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "interest_expense",
+  "year": 2023,
+  "value": 1.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "long_term_debt",
+  "year": 2023,
+  "value": 1.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "non_current_assets",
+  "year": 2023,
+  "value": 1.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "non_current_lease_liabilities",
+  "year": 2023,
+  "value": 1.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "non_current_liabilities",
+  "year": 2023,
+  "value": 1.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "retained_earnings",
+  "year": 2023,
+  "value": 1.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "selling_expenses",
+  "year": 2023,
+  "value": 1.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "short_term_credit_facilities",
+  "year": 2023,
+  "value": 1.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "bank_overdraft",
+  "year": 2022,
+  "value": 2.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "capex",
+  "year": 2022,
+  "value": 2.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "capital",
+  "year": 2022,
+  "value": 2.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "current_lease_liabilities",
+  "year": 2022,
+  "value": 2.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "current_portion_lt_debt",
+  "year": 2022,
+  "value": 2.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "depreciation_amortization",
+  "year": 2022,
+  "value": 2.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "dividends_from_subsidiaries",
+  "year": 2022,
+  "value": 2.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "interest_expense",
+  "year": 2022,
+  "value": 2.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "long_term_debt",
+  "year": 2022,
+  "value": 2.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "non_current_assets",
+  "year": 2022,
+  "value": 2.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "non_current_lease_liabilities",
+  "year": 2022,
+  "value": 2.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "non_current_liabilities",
+  "year": 2022,
+  "value": 2.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "retained_earnings",
+  "year": 2022,
+  "value": 2.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "selling_expenses",
+  "year": 2022,
+  "value": 2.0,
+  "gate_kind": "pend"
+ },
+ {
+  "field": "short_term_credit_facilities",
+  "year": 2022,
+  "value": 2.0,
+  "gate_kind": "pend"
+ }
+]

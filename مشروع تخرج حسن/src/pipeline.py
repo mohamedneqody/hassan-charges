@@ -357,6 +357,7 @@ def run_pipeline(file_name: str, raw: bytes, company: str, progress_cb=None, pag
             metrics_by_year={y: all_year_metrics[y]
                              for y in all_year_metrics}),
         "notes": data.notes,
+        "unmapped_labels": list(getattr(data, "unmapped_labels", []) or []),
         "metric_years_available": data.years,
         "currency_hint": data.currency_hint,
         "unit_scale": getattr(data, "unit_scale", 1),

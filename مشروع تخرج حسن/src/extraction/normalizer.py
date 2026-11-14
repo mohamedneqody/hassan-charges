@@ -939,6 +939,9 @@ def reconcile(data: FinancialData) -> None:
     # يصل للمؤشرات كقيمة مؤكدة أبدًا.
     _CREATE_IDENTITIES: list[tuple[str, tuple[tuple[str, int], ...]]] = [
         ("gross_profit", (("revenue", 1), ("cost_of_revenue", -1))),
+        # عز 2023: التكلفة بلا قراءة (الصفحة المنحلة سُقطت) — تُشتق
+        # عكسيًا من الإيراد والمجمل المُنشأ قبله (الترتيب جوهري)
+        ("cost_of_revenue", (("revenue", 1), ("gross_profit", -1))),
         # عز 2023: «إجمالي الأصول/الالتزامات غير المتداولة» بلا حقول
         # كانونية — تُنشأ من الإجماليات الكبيرة والمتداولة
         ("non_current_assets",

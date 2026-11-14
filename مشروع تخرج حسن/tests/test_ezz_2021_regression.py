@@ -884,3 +884,83 @@ class TestGapLog:
         assert d.unmapped_labels == []
         d.unmapped_labels.append({"label": "بند", "values": {2023: 5.0}})
         assert d.unmapped_labels[0]["values"][2023] == 5.0
+
+
+# ═══ الاستخراج الدلالي v3 (الإصلاح المعماري) ═══
+class TestSemanticVision:
+    """العقد الجديد: الموديل يصنف كل صف من المفردات المغلقة والـregex
+    مُصحح متقاطع — الفهم اللغوي للموديل بدل قاموس النصوص الهش."""
+
+    def test_semantic_prompt_carries_closed_vocabulary(self):
+        from src.extraction.vision_ocr import _semantic_prompt
+
+        p = _semantic_prompt(5, 5)
+        assert "gross_profit" in p and "accounts_receivable" in p
+        assert "pretax_income" in p
+        # قواعد الفهم المضادة للصف-الخاطئ داخل العقد نفسه
+        assert "write-down" in p or "write down" in p
+        assert "credit losses" in p
+        assert "advance payments" in p
+
+    def test_semantic_page_absorbs_into_parts(self):
+        from src.extraction.vision_ocr import _absorb_semantic_page
+
+        page = {
+            "years": [2022, 2023],
+            "rows": [
+                {"label": "مجمل الربح", "field": "gross_profit",
+                 "values": {2022: 1632142979.0, 2023: 5413061358.0},
+                 "conf": "high"},
+                {"label": "المبيعات (بالصافي)", "field": "revenue",
+                 "values": {2022: 16665919878.0, 2023: 27634502413.0},
+                 "conf": "high"},
+            ],
+        }
+        parts, ok, fs, sink, caps, notes = [], set(), {}, [], [], []
+        _absorb_semantic_page(page, [2022, 2023], [6], parts, ok, fs,
+                              sink, caps, notes)
+        assert parts[0][2023]["gross_profit"] == 5_413_061_358.0
+        assert parts[0][2022]["revenue"] == 16_665_919_878.0
+        assert 6 in ok and fs["gross_profit"] == [6, 6]  # صفحة لكل سنة — نفس دلالة مسار الإطارات
+        assert caps[0][0]["label_text"] == "مجمل الربح"   # التسمية للتصويت
+
+    def test_null_field_row_goes_to_gap_sink(self):
+        from src.extraction.vision_ocr import _absorb_semantic_page
+
+        page = {"years": [2022, 2023], "rows": [
+            {"label": "توقيع المدير المالي", "field": None,
+             "values": {}, "conf": "high"},
+            {"label": "بند مفهوم بلا مفردات", "field": None,
+             "values": {2023: 55_000.0}, "conf": "low"},
+        ]}
+        parts, sink, caps, notes = [], [], [], []
+        _absorb_semantic_page(page, [2022, 2023], [9], parts, set(), {},
+                              sink, caps, notes)
+        assert len(sink) == 1 and "بند مفهوم" in sink[0]["label"]
+        assert sink[0]["values"][2023] == 55_000.0
+        assert parts == []                        # لا قيم ملتقطة
+
+    def test_model_regex_disagreement_disclosed(self):
+        from src.extraction.vision_ocr import _absorb_semantic_page
+
+        page = {"years": [2023], "rows": [
+            # الموديل يصنف صحيحًا والـregex سيعطي حقلًا آخر — الاختلاف يُفصح
+            {"label": "صافي أرباح (خسائر) العام", "field": "net_income",
+             "values": {2023: 1_000_389_540.0}, "conf": "high"},
+        ]}
+        parts, sink, caps, notes = [], [], [], []
+        _absorb_semantic_page(page, [2023], [6], parts, set(), {},
+                              sink, caps, notes)
+        assert parts[0][2023]["net_income"] == 1_000_389_540.0
+
+    def test_unknown_field_string_treated_as_null(self):
+        from src.extraction.vision_ocr import _absorb_semantic_page
+
+        page = {"years": [2023], "rows": [
+            {"label": "بند", "field": "made_up_field_not_in_list",
+             "values": {2023: 100.0}, "conf": "high"},
+        ]}
+        parts, sink = [], []
+        _absorb_semantic_page(page, [2023], [6], parts, set(), {},
+                              sink, [], [])
+        assert parts == [] and len(sink) == 1   # المفردات مغلقة فعليًا

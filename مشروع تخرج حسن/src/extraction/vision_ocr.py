@@ -37,7 +37,15 @@ VISION_RETRY_BUDGET = 180   # seconds — cap on the whole retry pass
 VISION_VERIFY_BUDGET = 240  # seconds — shared cap for the verify stages
 # Version tag for the extraction prompts + pipeline (logged in every result
 # and in the Verification Decision Log — reproducibility requirement).
-VISION_PROMPT_VERSION = "sweep-v2/verify-v4(10-fields+dual-variant)/cf-v3(dual-variant)"   # cell-crop claim dropped 2026-11-13: the stage never ran (undefined helpers swallowed by except) — honest versioning
+def _semantic_enabled() -> bool:
+    """بوابة الاستخراج الدلالي v3 (VISION_SEMANTIC=1): الموديل يصنف كل
+    صف من المفردات المغلقة والـregex يعمل مُصححًا متقاطعًا — A/B مقابل
+    العقد الحرفي v2 حتى يُحسم بالقياس الحي."""
+    import os
+    return os.environ.get("VISION_SEMANTIC", "0") == "1"
+
+
+VISION_PROMPT_VERSION = ("sweep-v3(semantic-roles)" if _semantic_enabled() else "sweep-v2/verify-v4(10-fields+dual-variant)/cf-v3(dual-variant)")   # cell-crop claim dropped 2026-11-13: the stage never ran (undefined helpers swallowed by except) — honest versioning
 VISION_CALL_TIMEOUT = 45_000  # ms — a hanging request must not eat the budget
 VISION_WORKERS = 5          # concurrent batches — 14 key/model pairs absorb this
 VISION_MAX_PAGES = 40       # hard cap so a huge scan cannot drain the pool
@@ -262,6 +270,60 @@ def _parse_vision_json(text: str) -> list[dict]:
             "company": str(page.get("company") or "").strip(),
         })
     return pages
+
+
+def _canonical_field_list() -> str:
+    """المفردات المغلقة: كل حقول FIELD_ALIASES — الموديل يصنف منها فقط."""
+    from src.config import FIELD_ALIASES
+    return ", ".join(sorted(FIELD_ALIASES.keys()))
+
+
+VISION_PROMPT_V3 = """You are reading scanned pages of ARABIC financial statements (قوائم مالية).
+The images are pages {first} to {last} of this document, in this exact order.
+
+SEMANTIC EXTRACTION — classify every financial row into a canonical concept.
+Return ONLY JSON:
+{{"pages": [
+  {{"page": {first}, "currency": "<...>", "company": "<... or empty>",
+    "years": [y1, y2],
+    "rows": [{{"label": "<exactly as printed>",
+               "field": "<one key from the CLOSED LIST below, or null>",
+               "values": {{"y1": <number|null>, "y2": <number|null>}},
+               "conf": "high"|"low"}}, ...]}}
+]}}
+
+CLOSED LIST (field keys — choose ONLY from these):
+{fields}
+
+Classification rules (language understanding applies, not memorization):
+1. Classify by MEANING, not by words: a row about expected credit losses on
+   customers is NOT receivables; an inventory write-down row is NOT inventory;
+   customer advance payments are a LIABILITY, not receivables; working capital
+   is not share capital; accumulated depreciation is not fixed assets.
+2. "الربح قبل الضريبة" → pretax_income; "صافي أرباح/ربح العام" → net_income;
+   "مجمل الربح" → gross_profit; "صافي ربح/أرباح النشاط" → operating_income.
+3. SUBTOTAL rows (النقدية الناتجة من أنشطة التشغيل without صافي, pre-bridge
+   activity profit rows marked يضاف/يخصم) → field = null.
+4. Sub-grand rows: "إجمالي الأصول غير المتداولة" → non_current_assets;
+   "إجمالي الالتزامات غير المتداولة" → non_current_liabilities;
+   "إجمالي المخزون" → inventory (but "الانخفاض في قيمة المخزون" → null).
+5. A row whose concept matches NONE of the list → field = null (do NOT force it).
+6. Numbers: copy digit-by-digit; parentheses = negative; unreadable digits →
+   null with conf = "low".
+7. years = the fiscal years printed in the page header, in order.
+"""
+
+
+def _semantic_prompt(first: int, last: int) -> str:
+    body = VISION_PROMPT_V3.format(first=first, last=last,
+                                   fields=_canonical_field_list())
+    if first == last:
+        return body
+    # متعدد الصفحات: نفس العقد — الصفوف تحمل رقم الصف ضمن الصف
+    nl = chr(10)
+    note = (nl + 'NOTE: the images are pages ' + str(first) + '..'
+            + str(last) + ' in order — add "page_no": N to each row object.')
+    return body + note
 
 
 def _page_to_frame(page: dict) -> pd.DataFrame | None:
@@ -1068,6 +1130,8 @@ def extract_via_vision(
     call_stats: list[tuple[str, float]] = []
     # سجل الفجوات: كل صف بقيم فشلت مطابقته يُسجل هنا ويظهر في الملاحظات
     gap_sink: list[dict] = []
+    # التقاطات التسميات للشكل الدلالي — تغذي تصويت الشهود بمعرفة التسميات
+    caps_acc: list = []
     ok_pages: set[int] = set()
     field_sources: dict[str, list[int]] = {}  # field -> pages that provided it
     confidence: dict = {}                     # (field, year) -> agreeing reads
@@ -1077,11 +1141,14 @@ def extract_via_vision(
 
     def _run_batch(chunk: list[int], imgs: list[bytes]) -> list[dict]:
         first, last = chunk[0], chunk[-1]
-        prompt = (
-            VISION_PROMPT.format(first=first, last=last)
-            if len(chunk) > 1
-            else _single_prompt(first)
-        )
+        if _semantic_enabled():
+            prompt = _semantic_prompt(first, last)
+        else:
+            prompt = (
+                VISION_PROMPT.format(first=first, last=last)
+                if len(chunk) > 1
+                else _single_prompt(first)
+            )
         if caller is not None:
             return _parse_vision_json(caller("k", "m", prompt, imgs))
         raw_text = _call_with_rotation(pool, prompt, imgs, call_stats)
@@ -1128,7 +1195,7 @@ def extract_via_vision(
                     notes.append(f"Vision batch {chunk[0]}-{chunk[-1]} error: {exc}")
                     failure_reasons.append(str(exc)[:250])
                     batch_pages = []
-                _absorb_batch(batch_pages, chunk, parts, ok_pages, notes, currency_holder, doc_years_holder, field_sources, gap_sink)
+                _absorb_batch(batch_pages, chunk, parts, ok_pages, notes, currency_holder, doc_years_holder, field_sources, gap_sink, caps_acc)
                 if not company_holder.get("name"):
                     company_holder["name"] = next(
                         (p.get("company") for p in batch_pages if p.get("company")), None
@@ -1226,14 +1293,21 @@ def extract_via_vision(
                         failure_reasons.append(err)
                     continue
                 for page in _parse_vision_json(raw_text):
-                    frame = _page_to_frame(page)
-                    if frame is not None:
-                        try:
-                            parsed = parse_table(frame, gap_sink=gap_sink)
-                            if parsed:
-                                parts.append(parsed)
-                        except Exception as exc:
-                            notes.append(f"Vision page skipped ({exc}).")
+                    if page.get("rows") and isinstance(page["rows"][0], dict):
+                        years0 = page["years"] or (doc_years_holder.get("years") or [])
+                        if len(years0) >= 2:
+                            _absorb_semantic_page(
+                                page, years0, [pn], parts, ok_pages,
+                                field_sources, gap_sink, caps_acc, notes)
+                    else:
+                        frame = _page_to_frame(page)
+                        if frame is not None:
+                            try:
+                                parsed = parse_table(frame, gap_sink=gap_sink)
+                                if parsed:
+                                    parts.append(parsed)
+                            except Exception as exc:
+                                notes.append(f"Vision page skipped ({exc}).")
                     if not company_holder.get("name") and page.get("company"):
                         company_holder["name"] = page["company"]
                 if progress_cb:
@@ -1359,7 +1433,9 @@ def extract_via_vision(
             ),
             encoding="utf-8",
         )
-    data = merge_parsed(parts, notes, part_layers=["vision"] * len(parts))
+    data = merge_parsed(parts, notes,
+                        captures_per_part=(caps_acc or None),
+                        part_layers=["vision"] * len(parts))
     # سجل الفجوات: الصفوف ذات القراءات التي لم تطابق أي حقل — تُفرغ في
     # data (results/unmapped_labels) وتُلخص في الملاحظات؛ أي مستند
     # جديد يكشف فجوة مفرداته فورًا بدل ضياع بنوده بصمت
@@ -1835,6 +1911,68 @@ def _extract_year_token(tok: str) -> int | None:
 
 
 
+def _absorb_semantic_page(
+    page: dict,
+    years: list[int],
+    chunk: list[int],
+    parts: list,
+    ok_pages: set,
+    field_sources: dict[str, list[int]],
+    gap_sink: list | None,
+    caps_acc: list | None,
+    notes: list[str],
+) -> None:
+    """امتصاص صفوف الشكل الدلالي: {label, field, values, conf} —
+    الموديل يصنف من المفردات المغلقة والـregex يعمل مُصححًا متقاطعًا:
+    الاتفاق يقوى، والاختلاف يُفصح عنه (مصنّفان مستقلان)."""
+    from src.config import FIELD_ALIASES
+    from src.extraction.normalizer import match_field
+
+    page_parts: dict[int, dict[str, float]] = {}
+    page_caps: list[dict] = []
+    for row in page.get("rows") or []:
+        if not isinstance(row, dict):
+            continue
+        label = str(row.get("label") or "").strip()
+        field = row.get("field")
+        values = row.get("values") or {}
+        if field not in FIELD_ALIASES:
+            field = None
+        # القراءات لكل سنة (المفتاح = السنة كما أرجعها الموديل)
+        row_vals: dict[int, float] = {}
+        for y in years:
+            v = values.get(str(y), values.get(y))
+            if isinstance(v, (int, float)):
+                row_vals[int(y)] = float(v)
+        if field is None:
+            # الصف بلا تصنيف — سجل الفجوات إن كان يحمل أرقامًا
+            if row_vals and gap_sink is not None:
+                gap_sink.append({"label": label[:120], "values": row_vals})
+            continue
+        # مُصحح متقاطع: الـregex ضد تصنيف الموديل
+        regex_field = match_field(label)
+        if regex_field is not None and regex_field != field:
+            notes.append(
+                f"⚠ Semantic/regex disagreement on «{label[:40]}»: "
+                f"model={field}, regex={regex_field} — captured under "
+                "the model's field; both go through the gate."
+            )
+        for y, v in row_vals.items():
+            page_parts.setdefault(y, {}).setdefault(field, v)
+            field_sources.setdefault(field, []).extend(chunk)
+            page_caps.append({
+                "field": field, "year": y, "value": v,
+                "label_text": label[:120],
+                "raw_printed": "", "print_convention": "unknown",
+                "row": None, "col": None, "transposed": False,
+            })
+    if page_parts:
+        parts.append(page_parts)
+        ok_pages.update(chunk)
+        if caps_acc is not None:
+            caps_acc.append(page_caps)
+
+
 def _absorb_batch(
     batch_pages: list[dict],
     chunk: list[int],
@@ -1845,6 +1983,7 @@ def _absorb_batch(
     doc_years_holder: dict,
     field_sources: dict[str, list[int]],
     gap_sink: list | None = None,
+    caps_acc: list | None = None,
 ) -> None:
     """Merge one batch's parsed pages into the accumulators.
 
@@ -1852,6 +1991,22 @@ def _absorb_batch(
     inherits the document's years when the row value-count matches.
     """
     for page in batch_pages:
+        # الشكل الدلالي v3: الصفوف قواميس {label, field, values}
+        if page.get("rows") and isinstance(page["rows"][0], dict):
+            years0 = page["years"]
+            if len(years0) < 2 and doc_years_holder.get("years"):
+                years0 = doc_years_holder["years"]
+            if len(years0) < 2:
+                continue
+            _absorb_semantic_page(
+                page, years0, chunk, parts, ok_pages, field_sources,
+                gap_sink, caps_acc, notes)
+            if not currency_holder.get("hint") and page.get("currency"):
+                hint = _currency_hint(page["currency"])
+                if hint:
+                    currency_holder["hint"] = hint
+                    notes.append(f"Currency detected from the document: {hint}")
+            continue
         if not currency_holder.get("hint") and page.get("currency"):
             hint = _currency_hint(page["currency"])
             if hint:

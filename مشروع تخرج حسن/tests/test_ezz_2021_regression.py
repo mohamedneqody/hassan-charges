@@ -780,3 +780,61 @@ class TestEzz2023Round2Defects:
         reconcile(data)
         assert data.values.get("gross_profit", {}).get(2023) == 70.0
         assert not any("not a direct capture" in n for n in data.notes)
+
+
+# ═══ عز 2023 الجولة الثالثة: حقول غير المتداولة + رأس المال ═══
+class TestEzz2023Round3Fields:
+    """«إجمالي الأصول/الالتزامات غير المتداولة» كانت بلا حقل كانوني
+    (ومدرجة في FIELD_EXCLUSIONS من جولة قديمة) — لها حقول الآن مع
+    إنشاء هوياتي، و«مجمل الربح» كان بلا alias أصلًا."""
+
+    def test_mojmal_ribah_alias_exists(self):
+        """قائمة الدخل تطبع «مجمل الربح» — «اجمالي الربح» ليست كلمتها."""
+        from src.extraction.normalizer import match_field
+
+        assert match_field("مجمل الربح") == "gross_profit"
+
+    def test_non_current_rows_map_to_new_fields(self):
+        from src.extraction.normalizer import match_field
+
+        assert match_field("إجمالي الأصول غير المتداولة") == "non_current_assets"
+        assert match_field("الاصول الغير متداوله") == "non_current_assets"
+        assert match_field("اجمالي الالتزامات غير المتداوله") == "non_current_liabilities"
+        assert match_field("الخصوم غير المتداوله") == "non_current_liabilities"
+
+    def test_grand_totals_not_hijacked_by_new_fields(self):
+        from src.extraction.normalizer import match_field
+
+        assert match_field("اجمالي الاصول") == "total_assets"
+        assert match_field("اجمالي الالتزامات") == "total_liabilities"
+        assert match_field("الالتزامات المتداولة") == "current_liabilities"
+
+    def test_capital_field_maps_and_working_capital_vetoed(self):
+        from src.extraction.normalizer import match_field
+
+        assert match_field("راس المال المصدر والمدفوع") == "capital"
+        assert match_field("راس المال العامل") is None
+
+    def test_nca_ncl_created_from_identity_when_missing(self):
+        """NCA = إجمالي الأصول − المتداولة و NCL = الالتزامات − المتداولة
+        — إنشاء معلن فقط، والمدخلات المعلقة تُعلّمه UNVERIFIED."""
+        from src.extraction.normalizer import FinancialData, reconcile
+
+        data = FinancialData()
+        data.values = {
+            "total_assets": {2023: 16_989_543_370.0},
+            "current_assets": {2023: 5_217_944_941.0},
+            "total_liabilities": {2023: 9_050_823_339.0},
+            "current_liabilities": {2023: 8_847_175_003.0},
+        }
+        data.candidates = {
+            f: {2023: [(v, 0)]} for f, v in data.values.items()
+        }
+        data.document_profile = {"text_layer_trusted": False}
+        reconcile(data)
+        nca = data.values.get("non_current_assets", {}).get(2023)
+        ncl = data.values.get("non_current_liabilities", {}).get(2023)
+        assert abs(nca - (16_989_543_370.0 - 5_217_944_941.0)) < 1.0
+        assert abs(ncl - (9_050_823_339.0 - 8_847_175_003.0)) < 1.0
+        assert ("non_current_assets", 2023) in (data.derived_uncertain or set())
+        assert ("non_current_liabilities", 2023) in (data.derived_uncertain or set())

@@ -141,14 +141,20 @@ def test_excel_end_to_end_source_exact():
     dl = build_decision_log(d)
     statuses = {e["status"] for e in dl}
     assert "VERIFIED_SOURCE_EXACT" in statuses
-    assert all(e["source"] == "NATIVE_SPREADSHEET_CELL" for e in dl)
+    # عز 2023: gross_profit يُنشأ هوياتيًا من الإيراد والتكلفة المؤكدين
+    # (digital-exact) — مصدره DERIVED معلن، ولا مصدر ثالث يجوز
+    assert all(e["source"] in ("NATIVE_SPREADSHEET_CELL", "DERIVED")
+               for e in dl)
+    assert any(e["source"] == "NATIVE_SPREADSHEET_CELL" for e in dl)
     ev = d.cell_provenance[("net_income", 2026)]
     assert ev["file_sha256"] == file_sha256(raw)
     assert ev["sheet"] == "Income Statement"
     assert ev["cell_address"] and ev["label_text"] == "Net Income"
     dv = decisive_values(d)
     assert all(v["usable_decisive"] for v in dv.values())
-    assert len(dv) == 54
+    # 54 الخلية الرقمية + 4 مشتقة هوياتيًا (gross/NCA/NCL المدخلات
+    # المؤكدة أدلتها) — كلها حاسمة ومعلنة
+    assert len(dv) == 58
 
 
 def test_decision_log_reason_disclaims_economic_truth():

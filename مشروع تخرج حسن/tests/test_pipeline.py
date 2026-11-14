@@ -720,8 +720,14 @@ def test_liabilities_noncurrent_excluded():
     # be captured as total liabilities (it poisoned leverage ratios).
     from src.extraction.normalizer import match_field
 
-    assert match_field("إجمالي الالتزامات غير المتداولة") is None
-    assert match_field("الخصوم غير المتداولة") is None
+    # عز 2023: للصفين حقل كانوني الآن — الوجهة non_current_liabilities
+    # (كانت مستبعدة كليًا قبل وجود الحقل) — والنية الأصلية باقية:
+    # لا يُمسكان أبدًا كالتزامات إجمالية
+    got1 = match_field("إجمالي الالتزامات غير المتداولة")
+    got2 = match_field("الخصوم غير المتداولة")
+    assert got1 == "non_current_liabilities"
+    assert got2 == "non_current_liabilities"
+    assert got1 != "total_liabilities" and got2 != "total_liabilities"
     assert match_field("إجمالي الخصوم") == "total_liabilities"
     assert match_field("إجمالي الالتزامات") == "total_liabilities"
 

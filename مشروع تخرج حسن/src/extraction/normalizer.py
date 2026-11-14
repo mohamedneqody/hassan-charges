@@ -172,6 +172,8 @@ _FIELD_NEGATIVE_PATTERNS: dict[str, tuple[str, ...]] = {
     # (20,493,798) لحقل المخزون نفسه (الصحيح 2,092,224,250 من الإيضاح).
     # صف الخصم ليس رصيد المخزون — فيتو حاسم.
     "inventory": ("انخفاض",),
+    # «رأس المال العامل» مقياس محسوب — ليس رصيد رأس المال المصدر
+    "capital": ("عامل",),
     # وإيضاح العملاء يطبع «الخسائر الائتمانية المتوقعة من العملاء» —
     # الـsubstring «العملاء» أسند مخصص ECL (33,792,792) للعميلين معًا.
     # المخصص ليس رصيد العملاء — فيتو حاسم. (normalize: ة→ه، ئ→ي)
@@ -645,6 +647,8 @@ _ABSOLUTE_FIELDS = {
     # — المقدار يحفظ الاتفاق مع طباعة القوائم (bank_overdraft مستثنى:
     # له دلالة إشارة حقيقية)
     "short_term_credit_facilities", "current_portion_lt_debt",
+    # عز 2023: الأرصدة غير المتداولة ورأس المال — أرصدة تُطبع موجبة
+    "non_current_assets", "non_current_liabilities", "capital",
 }
 
 
@@ -908,6 +912,12 @@ def reconcile(data: FinancialData) -> None:
     # يصل للمؤشرات كقيمة مؤكدة أبدًا.
     _CREATE_IDENTITIES: list[tuple[str, tuple[tuple[str, int], ...]]] = [
         ("gross_profit", (("revenue", 1), ("cost_of_revenue", -1))),
+        # عز 2023: «إجمالي الأصول/الالتزامات غير المتداولة» بلا حقول
+        # كانونية — تُنشأ من الإجماليات الكبيرة والمتداولة
+        ("non_current_assets",
+         (("total_assets", 1), ("current_assets", -1))),
+        ("non_current_liabilities",
+         (("total_liabilities", 1), ("current_liabilities", -1))),
     ]
     for target, comps in _CREATE_IDENTITIES:
         for year in list(data.years):
@@ -924,12 +934,22 @@ def reconcile(data: FinancialData) -> None:
             data.derived[(target, year)] = f"identity ({target} = {formula})"
             data.candidates.setdefault(target, {}).setdefault(
                 year, []).append((derived, 0))
+
+            def _input_verified(f_: str, y_: int) -> bool:
+                """مدخل المشتق موثوق عند: تصويت مستقل ≥2، أو خلية رقمية
+                بفحص المصدر الكامل (VERIFIED_SOURCE_EXACT) — بديل الفحص
+                الوحيد بالـconfidence الذي ظلم مسار xlsx الرقمي."""
+                if (getattr(data, "confidence", {}).get(f_, {}).get(y_, 0)
+                        >= 2):
+                    return True
+                ok, _ev, _fails = _source_exact(data, f_, y_)
+                return ok
+
             _pending_inputs = any(
-                (getattr(data, "confidence", {}).get(c, {}).get(year, 0) < 2)
-                for c, _s in comps)
-            if _pending_inputs or not (
-                getattr(data, "document_profile", {}) or {}
-            ).get("text_layer_trusted", True):
+                not _input_verified(c, year) for c, _s in comps)
+            # الفحص الموحد كافٍ: مسار xlsx يحمل text_layer_trusted=False
+            # عمدًا (الثقة عبر فحص الأدلات) — بروفايله لا يعلم المشتق
+            if _pending_inputs:
                 data.derived_uncertain = getattr(
                     data, "derived_uncertain", set())
                 data.derived_uncertain.add((target, year))

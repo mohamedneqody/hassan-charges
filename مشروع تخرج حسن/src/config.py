@@ -61,6 +61,8 @@ FIELD_ALIASES: dict[str, list[str]] = {
         "gross profit", "gross income", "total gross profit",
         # Arabic
         "اجمالي الربح", "الربح الاجمالي",
+        # عز 2023: قائمة الدخل تطبع «مجمل الربح» — «اجمالي» ليست كلمتها
+        "مجمل الربح", "المجمل",
     ],
     "operating_expenses": [
         "operating expenses", "total operating expenses", "opex",
@@ -281,6 +283,27 @@ FIELD_ALIASES: dict[str, list[str]] = {
         # عز 2023: صيغة القوسين «(المستخدمة في) / الناتجة من أنشطة التمويل»
         "المستخدمه في الناتجه من انشطه التمويل",
     ],
+    # عز 2023: صفوف «إجمالي الأصول/الالتزامات غير المتداولة» كانت بلا
+    # حقل كانونية إطلاقًا فبقيت مفقودة في كل تشغيل
+    "non_current_assets": [
+        "non current assets", "non-current assets", "fixed and non current assets",
+        # Arabic
+        "اجمالي الاصول غير المتداوله", "الاصول غير المتداوله",
+        "الاصول الغير متداوله", "اجمالي الاصول الغير متداوله",
+    ],
+    "non_current_liabilities": [
+        "non current liabilities", "non-current liabilities",
+        # Arabic
+        "اجمالي الالتزامات غير المتداوله", "الالتزامات غير المتداوله",
+        "الالتزامات الغير متداوله", "اجمالي الالتزامات الغير متداوله",
+        "الخصوم غير المتداوله", "اجمالي الخصوم غير المتداوله",
+    ],
+    "capital": [
+        "paid in capital", "share capital", "issued capital",
+        "capital stock",
+        # Arabic — «رأس المال العامل» (المقياس) محجوب بنمط سلبي
+        "راس المال المصدر", "راس المال المدفوع", "راس المال",
+    ],
     # --- Extended fields (optional; ratios fall back to N/A when absent) ---
     "cash": [
         "cash and cash equivalents", "cash and equivalents", "cash and bank",
@@ -376,11 +399,8 @@ FIELD_EXCLUSIONS: set[str] = {
     "total liabilities and owners equity",
     "total equity and liabilities",
     "total assets and liabilities",
-    "total non current assets",
-    "non current assets",
-    # Arabic variants seen in real statements
-    "اجمالي الاصول غير المتداوله",
-    "الاصول غير المتداوله",
+    # عز 2023: «total/اجمالي الاصول غير المتداولة» أُزيلت من الاستبعاد —
+    # لها حقل كانوني الآن (كانت تستبعد لأنها اختُرفت لحقل الإجمالي)
     "اجمالي الخصوم وحقوق الملكيه",
     "الخصوم وحقوق الملكيه",
     "اجمالي الالتزامات وحقوق الملكيه",
@@ -389,10 +409,6 @@ FIELD_EXCLUSIONS: set[str] = {
     "اجمالي الخصوم طويله الاجل",
     "الالتزامات طويله الاجل",
     "اجمالي الالتزامات طويله الاجل",
-    "الالتزامات غير المتداوله",
-    "اجمالي الالتزامات غير المتداوله",
-    "الخصوم غير المتداوله",
-    "اجمالي الخصوم غير المتداوله",
     "مجمع الاهلاك",
     "مجمع الاهلاكات",
     "معدل ضريبه الدخل افتراض",

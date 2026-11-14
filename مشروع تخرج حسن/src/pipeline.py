@@ -139,6 +139,7 @@ def run_pipeline(file_name: str, raw: bytes, company: str, progress_cb=None, pag
             store_extraction(key, {
                 "values": data.values,
                 "notes": data.notes,
+        "unmapped_labels": list(getattr(data, "unmapped_labels", []) or []),
                 "currency_hint": data.currency_hint,
         "unit_scale": getattr(data, "unit_scale", 1),
         "unit_note": getattr(data, "unit_note", ""),

@@ -377,6 +377,9 @@ class FinancialData:
     """
     values: dict[str, dict[int, float]] = field(default_factory=dict)
     candidates: dict[str, dict[int, list[tuple[float, int]]]] = field(default_factory=dict)
+    # سجل الفجوات: صفوف بقراءات فشلت مطابقتها لأي حقل — تشخيص هيكلي
+    # يكشف فجوات مفردات كل مستند جديد فورًا بدل الاختفاء الصامت
+    unmapped_labels: list[dict] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
     currency_hint: str | None = None
     company_hint: str | None = None  # company name read from the document itself
@@ -498,19 +501,26 @@ def _row_label(row: pd.Series, year_cols: set[int]) -> str | None:
     return None
 
 
-def parse_table(df: pd.DataFrame) -> dict[int, dict[str, float]]:
+def parse_table(df: pd.DataFrame, gap_sink: list | None = None
+                ) -> dict[int, dict[str, float]]:
     """Parse one DataFrame into {year: {canonical_field: value}}.
 
     Tables without a detectable two-year header return {}.
-    """
-    return parse_table_full(df)[0]
+    gap_sink: سجل الفجوات — الصفوف ذات القيم التي فشلت مطابقتها تُسجل
+    فيها (label + values) بدل الاختفاء الصامت."""
+    return parse_table_full(df, gap_sink=gap_sink)[0]
 
 
 def parse_table_full(
     df: pd.DataFrame,
+    gap_sink: list | None = None,
 ) -> tuple[dict[int, dict[str, float]], list[dict]]:
     """parse_table + one capture record per value (label, year, position,
-    transposed flag) so digital sources can attach verifiable evidence."""
+    transposed flag) so digital sources can attach verifiable evidence.
+
+    gap_sink (سجل الفجوات): كل صف يحمل قيمة وتفشل مطابقته يُسجَّل فيه
+    {label, values} — التشخيص الهيكلي بدل الاختفاء الصامت: أي مستند
+    جديد يكشف فجوة مفرداته فورًا ويظهر في ملاحظات الاستخراج."""
     captures: list[dict] = []
     if df.empty:
         return {}, captures
@@ -533,6 +543,23 @@ def parse_table_full(
             continue
         canonical = match_field(label)
         if canonical is None:
+            # سجل الفجوات: الصف يحمل أرقامًا لكنه بلا حقل — يُحفظ
+            # تشخيصيًا بدل الاختفاء الصامت (فجوات المفردات تظهر فورًا)
+            if gap_sink is not None:
+                gap_vals: dict[int, float] = {}
+                for col_pos, year in year_cols_map.items():
+                    raw_cell = row.iloc[col_pos] if col_pos < len(row) else None
+                    if isinstance(raw_cell, str) and any(
+                            c in raw_cell for c in _PERCENT_CHARS):
+                        continue
+                    v = parse_number(raw_cell)
+                    if v is not None:
+                        gap_vals[year] = v
+                if gap_vals:
+                    gap_sink.append({
+                        "label": str(label).strip()[:120],
+                        "values": gap_vals,
+                    })
             continue
         for col_pos, year in year_cols_map.items():
             raw_cell = row.iloc[col_pos] if col_pos < len(row) else None

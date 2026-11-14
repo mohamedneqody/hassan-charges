@@ -745,6 +745,7 @@ def _recover_cash_flow(
     progress_cb=None,
     deadline: float | None = None,
     local_reads=None,
+    gap_sink: list | None = None,
 ) -> None:
     """If the cash-flow statement exists but wasn't captured, re-ask the pages
     adjacent to the identified statement pages with a focused cash-flow prompt."""
@@ -820,7 +821,7 @@ def _recover_cash_flow(
                     continue
                 frame = pd.DataFrame(rows, columns=["Item"] + p_years, dtype=object)
                 try:
-                    parsed = parse_table(frame)
+                    parsed = parse_table(frame, gap_sink=gap_sink)
                     if parsed:
                         parts.append(parsed)
                         ok_pages.add(page_number)
@@ -1065,6 +1066,8 @@ def extract_via_vision(
     doc_years_holder: dict = {"years": None}
     # التسريع: قياس زمن كل نداء ناجح (model, seconds) — يظهر في ملاحظة ⏱
     call_stats: list[tuple[str, float]] = []
+    # سجل الفجوات: كل صف بقيم فشلت مطابقته يُسجل هنا ويظهر في الملاحظات
+    gap_sink: list[dict] = []
     ok_pages: set[int] = set()
     field_sources: dict[str, list[int]] = {}  # field -> pages that provided it
     confidence: dict = {}                     # (field, year) -> agreeing reads
@@ -1125,7 +1128,7 @@ def extract_via_vision(
                     notes.append(f"Vision batch {chunk[0]}-{chunk[-1]} error: {exc}")
                     failure_reasons.append(str(exc)[:250])
                     batch_pages = []
-                _absorb_batch(batch_pages, chunk, parts, ok_pages, notes, currency_holder, doc_years_holder, field_sources)
+                _absorb_batch(batch_pages, chunk, parts, ok_pages, notes, currency_holder, doc_years_holder, field_sources, gap_sink)
                 if not company_holder.get("name"):
                     company_holder["name"] = next(
                         (p.get("company") for p in batch_pages if p.get("company")), None
@@ -1226,7 +1229,7 @@ def extract_via_vision(
                     frame = _page_to_frame(page)
                     if frame is not None:
                         try:
-                            parsed = parse_table(frame)
+                            parsed = parse_table(frame, gap_sink=gap_sink)
                             if parsed:
                                 parts.append(parsed)
                         except Exception as exc:
@@ -1268,6 +1271,7 @@ def extract_via_vision(
         progress_cb,
         deadline=verify_deadline,
         local_reads=local_reads,
+        gap_sink=gap_sink,
     )
 
     # Focused double-read of the three net-cash totals — the CF statement
@@ -1356,6 +1360,22 @@ def extract_via_vision(
             encoding="utf-8",
         )
     data = merge_parsed(parts, notes, part_layers=["vision"] * len(parts))
+    # سجل الفجوات: الصفوف ذات القراءات التي لم تطابق أي حقل — تُفرغ في
+    # data (results/unmapped_labels) وتُلخص في الملاحظات؛ أي مستند
+    # جديد يكشف فجوة مفرداته فورًا بدل ضياع بنوده بصمت
+    if gap_sink:
+        uniq: dict[str, dict] = {}
+        for g in gap_sink:
+            uniq.setdefault(g["label"], g)
+        data.unmapped_labels = list(uniq.values())
+        _top = list(uniq.items())[:8]
+        _frag = "؛ ".join(
+            f"{lbl[:28]} ({next(iter(g['values'].values()), 0):,.0f})"
+            for lbl, g in _top)
+        notes.append(
+            f"📋 سجل الفجوات: {len(uniq)} بندًا بقراءات لم تُطابق أي حقل "
+            f"معروف — {(_frag + (" …" if len(uniq) > 8 else ""))}. "
+            "تُراجع لتوسيع مفردات المطابقة.")
     # Confidence must reach reconcile BEFORE it runs: the tax bridge anchors
     # on a multiply-verified net income, which is only known here.
     for (field_name, year), level in confidence.items():
@@ -1824,6 +1844,7 @@ def _absorb_batch(
     currency_holder: dict,
     doc_years_holder: dict,
     field_sources: dict[str, list[int]],
+    gap_sink: list | None = None,
 ) -> None:
     """Merge one batch's parsed pages into the accumulators.
 
@@ -1848,7 +1869,7 @@ def _absorb_batch(
             continue
         frame = pd.DataFrame(rows, columns=["Item"] + years, dtype=object)
         try:
-            parsed = parse_table(frame)
+            parsed = parse_table(frame, gap_sink=gap_sink)
             if parsed:
                 parts.append(parsed)
                 ok_pages.update(chunk)

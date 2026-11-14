@@ -838,3 +838,49 @@ class TestEzz2023Round3Fields:
         assert abs(ncl - (9_050_823_339.0 - 8_847_175_003.0)) < 1.0
         assert ("non_current_assets", 2023) in (data.derived_uncertain or set())
         assert ("non_current_liabilities", 2023) in (data.derived_uncertain or set())
+
+
+# ═══ سجل الفجوات (الإصلاح الهيكلي — عمومية الإصلاحات) ═══
+class TestGapLog:
+    """كل صف بقيم فشلت مطابقته يُسجل في gap_sink بدل الاختفاء الصامت —
+    أي مستند جديد يكشف فجوة مفرداته فورًا في ملاحظات الاستخراج."""
+
+    def test_unmapped_row_recorded_with_values(self):
+        import pandas as pd
+        from src.extraction.normalizer import parse_table_full
+
+        df = pd.DataFrame([
+            ["Item", 2022, 2023],
+            ["revenue", 100.0, 120.0],
+            ["بنود لولو غير معروفة اسمها", 5_000.0, 7_000.0],
+            ["مجمل الربح", 30.0, 40.0],
+        ], dtype=object)
+        sink: list = []
+        result, _caps = parse_table_full(df, gap_sink=sink)
+        assert result[2022].get("revenue") == 100.0          # المطابق سليم
+        assert len(sink) == 1
+        assert "لولو" in sink[0]["label"]
+        assert sink[0]["values"][2022] == 5_000.0
+        assert sink[0]["values"][2023] == 7_000.0
+
+    def test_mapped_rows_never_enter_gap_sink(self):
+        import pandas as pd
+        from src.extraction.normalizer import parse_table_full
+
+        df = pd.DataFrame([
+            ["Item", 2022, 2023],
+            ["مجمل الربح", 30.0, 40.0],
+            ["مخزون", 10.0, 12.0],
+        ], dtype=object)
+        sink: list = []
+        parse_table_full(df, gap_sink=sink)
+        assert sink == []
+
+    def test_financial_data_carries_unmapped_labels(self):
+        """FinancialData يحمل السجل — وأثره يظهر في results المنصة."""
+        from src.extraction.normalizer import FinancialData
+
+        d = FinancialData()
+        assert d.unmapped_labels == []
+        d.unmapped_labels.append({"label": "بند", "values": {2023: 5.0}})
+        assert d.unmapped_labels[0]["values"][2023] == 5.0

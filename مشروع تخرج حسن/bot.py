@@ -70,16 +70,49 @@ def _tg(method: str, payload: dict | None = None,
 
 
 def _download_file(file_id: str) -> bytes | None:
+    """تنزيل ملف من تليجرام — بفحص صارم: getFile.ok + ترميز المسار
+    (أسماء عربية!) + رفض ردود الخطأ JSON (كانت بتتكتب ملفًا!)."""
+    from urllib.parse import quote
+
     try:
         meta = _tg("getFile", {"file_id": file_id}, timeout=30)
+        if not meta or not meta.get("ok"):
+            print(f"⚠ getFile failed: {str(meta)[:200]}")
+            return None
         fpath = ((meta or {}).get("result") or {}).get("file_path")
         if not fpath:
+            print(f"⚠ getFile: no file_path — {str(meta)[:200]}")
             return None
-        r = requests.get(f"{API}/file/{BOT_TOKEN}/{fpath}", timeout=120)
-        return r.content or None
+        # المسار العربي لازم يتشفر — وإلا 404 ورد الخطأ يتكتب ملفًا
+        url = f"{API}/file/{BOT_TOKEN}/{quote(str(fpath), safe='/')}"
+        r = requests.get(url, timeout=120)
+        if r.status_code != 200:
+            print(f"⚠ download HTTP {r.status_code}: {r.content[:120]!r}")
+            return None
+        content = r.content
+        if content[:1] == b"{" and b'"ok":false' in content[:60]:
+            print(f"⚠ download got an API error instead of the file: "
+                  f"{content[:160]!r}")
+            return None
+        return content or None
     except Exception as exc:
         print(f"⚠ download: {type(exc).__name__}: {exc}")
         return None
+
+
+_MAGIC_OK = {
+    ".xlsx": lambda b: b[:2] == b"PK",
+    ".xls": lambda b: b[:4] == bytes.fromhex("d0cf11e0"),
+    ".csv": lambda b: not b[:1] == b"{",
+    ".pdf": lambda b: b[:4] == b"%PDF",
+}
+
+
+def magic_matches(ext: str, content: bytes) -> bool:
+    """هل بايتات الملف تطابق امتداده المعلن؟ — رد خطأ JSON/HTML يمسك
+    قبل ما يوصل للمحرك بخطأ pandas غامض."""
+    check = _MAGIC_OK.get(ext)
+    return check(content) if check else True
 
 
 # ─────────────────────────── منطق التحليل (قابل للاختبار) ──────────────────
@@ -217,7 +250,14 @@ def handle_update(update: dict) -> None:
         raw = _download_file(doc.get("file_id"))
         if not raw:
             _tg("sendMessage", {"chat_id": chat, "text":
-                                "❌ فشل تنزيل الملف من تليجرام — حاول مرة أخرى."})
+                                "❌ فشل تنزيل الملف من تليجرام — حاول مرة أخرى، "
+                                "وتأكد أنك أرسلته كـ Document (مش صورة/ضغط)."})
+            return
+        if not magic_matches(ext, raw[:16]):
+            _tg("sendMessage", {"chat_id": chat, "text":
+                                f"❌ الملف اللي وصل تالف أو مش {ext} فعلًا "
+                                f"(أول البايتات: {raw[:12]!r}) — أرسله كـ "
+                                "Document من مصدره الأصلي، مش مُعاد تسميته."})
             return
         inbox = INBOX / chat
         inbox.mkdir(parents=True, exist_ok=True)

@@ -1022,3 +1022,65 @@ class TestFastModeSkipsRecovery:
         _, n_fast = self._run(fast_mode=True, monkeypatch=monkeypatch)
         data, n_precise = self._run(fast_mode=False, monkeypatch=monkeypatch)
         assert n_precise >= n_fast + 1  # الاسترجاع حاول الصفحات المجاورة
+
+
+# ═══ بوت تليجرام — منطق التحليل بلا شبكة ═══
+class TestTelegramBotLogic:
+    def _results(self):
+        from src.extraction.normalizer import FinancialData
+        import json as _json
+        from pathlib import Path
+        # مرجع عز 2023 مختصر
+        return {
+            "company": "شركة حديد عز",
+            "curr_year": 2023,
+            "prev_year": 2022,
+            "metric_years_available": [2022, 2023],
+            "decision_log": [
+                {"status": "VERIFIED_EXACT"},
+                {"status": "UNVERIFIED"},
+                {"status": "CONFLICT"},
+            ],
+            "currency_hint": "ج.م",
+        }
+
+    def test_summary_contains_company_and_honesty(self):
+        import bot as B
+
+        s = B.build_result_summary(self._results())
+        assert "حديد عز" in s
+        assert "الحاسمة: 1" in s
+        assert "تحتاج مراجعة: 2" in s
+        assert "بوابة الصدق" in s
+
+    def test_summary_missing_metrics_honest(self):
+        import bot as B
+
+        s = B.build_result_summary({"company": "ش", "curr_year": 2023,
+                                    "metric_years_available": [],
+                                    "decision_log": [], "currency_hint": "ج.م"})
+        assert "غير متوفر" in s
+
+    def test_allowed_ids_gate(self):
+        import bot as B
+
+        B.ALLOWED_IDS.clear()
+        assert B.allowed("999") is True            # مفتوح
+        B.ALLOWED_IDS.add("123")
+        assert B.allowed("123") is True
+        assert B.allowed("999") is False           # محصور
+
+    def test_analyze_document_full_flow_synthetic(self):
+        """ملف CSV صغير → المحرك كامل → ملخص + Excel + HTML بلا شبكة."""
+        import bot as B
+
+        csv = ("Item,2022,2023\n"
+               "Revenue,1000000,1200000\n"
+               "Net income,100000,150000\n"
+               "Total assets,2000000,2200000\n"
+               "Total liabilities,800000,900000\n"
+               "Equity,1200000,1300000\n").encode("utf-8")
+        summary, xlsx, html = B.analyze_document("sample.csv", csv, "fast")
+        assert "الإيرادات: 1,200,000" in summary
+        assert xlsx.startswith(b"PK")              # xlsx = zip
+        assert b"<html" in html.lower()[:400]

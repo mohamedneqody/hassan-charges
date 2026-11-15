@@ -54,6 +54,24 @@ MAX_BYTES = 20 * 1024 * 1024  # حد تليجرام للملفات
 
 _MODES: dict[str, str] = {}  # chat_id → "fast" | "precise"
 
+# حرس النسخة الواحدة: 4 نسخ بوت كانت شغالين مع بعض (كل تشغيل سابق سبت
+# عملية حية) — تليجرام قسم التحديثات بينهم فتكررت الردود واختلطت
+# الإصدارات. قفل ملفي بالـPID يمنع التشغيل المزدوج نهائيًا.
+_LOCK = PROJECT_ROOT / "bot.lock"
+
+
+def _single_instance() -> bool:
+    if _LOCK.exists():
+        old_pid = _LOCK.read_text(encoding="utf-8").strip()
+        import subprocess
+        r = subprocess.run(["tasklist", "/FI", f"PID eq {old_pid}"],
+                           capture_output=True, text=True)
+        if old_pid.isdigit() and old_pid in r.stdout:
+            return False
+        _LOCK.unlink(missing_ok=True)  # العملية القديمة ماتت — القفل باقي
+    _LOCK.write_text(str(os.getpid()), encoding="utf-8")
+    return True
+
 
 # ─────────────────────────── Telegram API (stdlib-level) ───────────────────
 
@@ -128,13 +146,18 @@ def magic_matches(ext: str, content: bytes) -> bool:
 
 # ─────────────────────────── منطق التحليل (قابل للاختبار) ──────────────────
 
+def _clean_company(name: str) -> str:
+    """تنظيف اسم الشركة من لاحقة العنوان العامة («الشركة — السنة المالية
+    2025» كانت بتظهر اسمًا للشركة)."""
+    import re
+    return re.sub(r"\s*[—-]\s*السنة المالية.*$", "", str(name)).strip() or "الشركة"
+
+
 def build_result_summary(results: dict, currency: str = "ج.م") -> str:
-    """ملخص عربي مختصر من نتائج run_pipeline — بلا أي اختراع."""
-    company = results.get("company") or "الشركة"
+    """ملخص عربي غني: المؤشرات الأساسية + الصحة + الاتجاهات + التوصيات +
+    حالة البوابة الصادقة — كل شيء محسوب، والتفصيل الكامل في المرفقات."""
+    company = _clean_company(results.get("company") or "الشركة")
     years = results.get("metric_years_available") or []
-    vm_cell = {
-        "decisive": None, "pending": None,
-    }
     m = results.get("curr_metrics")
     lines = [
         f"📊 **{company}** — السنة المالية {results.get('curr_year')}",
@@ -149,7 +172,9 @@ def build_result_summary(results: dict, currency: str = "ج.م") -> str:
             lines.append(f"• {label}: {v:,.2f}{suffix}" if pct
                          else f"• {label}: {v:,.0f} {currency}{suffix}")
 
+    lines.append("💼 *المؤشرات الأساسية*")
     _val("الإيرادات", getattr(m, "revenue", None))
+    _val("مجمل الربح", getattr(m, "gross_profit", None))
     _val("صافي الربح", getattr(m, "net_income", None))
     cr = getattr(m, "current_ratio", None)
     lines.append("• نسبة التداول: " + (f"{cr:,.2f}x" if cr is not None
@@ -160,6 +185,48 @@ def build_result_summary(results: dict, currency: str = "ج.م") -> str:
     roe = getattr(m, "roe", None)
     lines.append("• العائد على حقوق الملكية: " + (f"{roe:,.1f}%" if roe is not None
                                                   else "غير متوفر"))
+    roa = getattr(m, "roa", None)
+    lines.append("• العائد على الأصول: " + (f"{roa:,.1f}%" if roa is not None
+                                            else "غير متوفر"))
+    npm = getattr(m, "net_profit_margin", None)
+    lines.append("• هامش صافي الربح: " + (f"{npm:,.1f}%" if npm is not None
+                                          else "غير متوفر"))
+
+    # تقييم الصحة — نفس منطق الواجهة (مرفوض يظهر مرفوضًا بسببه)
+    try:
+        from src.analysis.score import compute_health_score
+        hs = compute_health_score(m)
+        if hs.total is not None:
+            lines.append(f"🏥 تقييم الصحة المالية: {hs.total:.0f}/100")
+        else:
+            lines.append("🏥 تقييم الصحة: مرفوض — تغطية بيانات غير كافية "
+                         "(الحاسم ناقص)")
+    except Exception:
+        pass
+
+    # الاتجاهات المتحركة فقط (تحسّن/تراجع) — الثابت لا يضيف صوتًا
+    rows = results.get("rows") or []
+    moving = [r for r in rows
+              if getattr(r, "trend", None) in ("improving", "declining")]
+    if moving:
+        lines.append("")
+        lines.append("📈 *الاتجاهات*")
+        arrow = {"improving": "▲", "declining": "▼"}
+        for r in moving[:5]:
+            lines.append(f"• {getattr(r, 'label_ar', None) or r.label}: "
+                         f"{arrow.get(r.trend, '')} {r.trend}")
+
+    # أعلى التوصيات من السرد الحتمي
+    try:
+        from src.analysis.narrative import build_recommendations
+        recs = build_recommendations(results)
+        if recs:
+            lines.append("")
+            lines.append("💡 *أهم التوصيات*")
+            for action, _e in recs[:3]:
+                lines.append(f"• {action}")
+    except Exception:
+        pass
 
     # حالة التحقق — صدق البوابة
     log = results.get("decision_log") or []
@@ -170,8 +237,9 @@ def build_result_summary(results: dict, currency: str = "ج.م") -> str:
     pending = sum(1 for e in log if e.get("status") in
                   ("UNVERIFIED", "CONFLICT", "MULTI_ROW"))
     lines += ["", f"🔒 الخانات الحاسمة: {decisive} | تحتاج مراجعة: {pending}"]
-    lines.append("_القيم المؤكدة فقط هي التي حُسمت بتحقق مستقل — "
-                 "الباقي محجوب بعلن حسب بوابة الصدق._")
+    lines.append("_القيم المؤكدة فقط هي التي حُسمت بتحقق مستقل — التفصيل "
+                 "الكامل (كل المؤشرات والنماذج والجداول) في ملفي Excel "
+                 "وHTML المرفقين._")
     return "\n".join(lines)
 
 
@@ -366,6 +434,10 @@ def handle_update(update: dict) -> None:
 
 
 def main() -> None:
+    if not _single_instance():
+        print("❌ نسخة من البوت شغالة أصلًا (bot.lock) — أغلقها أولًا، "
+              "أو احذف bot.lock لو العملية القديمة ماتت فعلاً.")
+        sys.exit(1)
     if not BOT_TOKEN:
         print("=" * 60)
         print("TELEGRAM_BOT_TOKEN غير موجود في .env")

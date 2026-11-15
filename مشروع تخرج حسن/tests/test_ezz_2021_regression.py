@@ -1051,7 +1051,8 @@ class TestTelegramBotLogic:
         assert "حديد عز" in s
         assert "الحاسمة: 1" in s
         assert "تحتاج مراجعة: 2" in s
-        assert "بوابة الصدق" in s
+        assert "المؤشرات الأساسية" in s          # الملخص الغني
+        assert "Excel" in s                       # إشارة المرفقات الكاملة
 
     def test_summary_missing_metrics_honest(self):
         import bot as B

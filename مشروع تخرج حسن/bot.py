@@ -83,12 +83,21 @@ def _download_file(file_id: str) -> bytes | None:
         if not fpath:
             print(f"⚠ getFile: no file_path — {str(meta)[:200]}")
             return None
-        # المسار العربي لازم يتشفر — وإلا 404 ورد الخطأ يتكتب ملفًا
-        url = f"{API}/file/{BOT_TOKEN}/{quote(str(fpath), safe='/')}"
-        r = requests.get(url, timeout=120)
-        if r.status_code != 200:
-            print(f"⚠ download HTTP {r.status_code}: {r.content[:120]!r}")
-            return None
+        print(f"⬇ file_path = {fpath!r}")
+        # محاولتان: مُشفّر (أسماء عربية) وغير مشفّر — تليجرام حساس
+        # لشكل المسار حسب نوع الملف
+        for label, url in (
+            ("encoded",
+             f"{API}/file/{BOT_TOKEN}/{quote(str(fpath), safe='/')}"),
+            ("raw", f"{API}/file/{BOT_TOKEN}/{fpath}"),
+        ):
+            r = requests.get(url, timeout=120)
+            print(f"⬇ download {label}: HTTP {r.status_code} "
+                  f"({len(r.content)}B) {r.content[:60]!r}")
+            if r.status_code == 200 and not (
+                    r.content[:1] == b"{" and b'"ok":false' in r.content[:60]):
+                return r.content
+        return None
         content = r.content
         if content[:1] == b"{" and b'"ok":false' in content[:60]:
             print(f"⚠ download got an API error instead of the file: "
@@ -296,9 +305,62 @@ def handle_update(update: dict) -> None:
                                     io.BytesIO(html))}, timeout=300)
         return
 
+    # المسار المحلي (الحل المضمون): نقطة /file/ بتليجرام ترجع 404
+    # جانبيًا على بعض الشبكات — والملف المرسل من تليجرام ديسكتوب موجود
+    # على نفس الجهاز أصلًا. رسالة نصية تحمل مسارًا موجودًا ⇒ تحليل مباشر
+    # من القرص بلا أي تنزيل.
+    if text and not text.startswith("/"):
+        candidate = Path(text.strip().strip('"').strip("'")).expanduser()
+        if candidate.is_file():
+            raw = candidate.read_bytes()
+            ext = candidate.suffix.lower()
+            if ext not in ALLOWED_EXTS or not magic_matches(ext, raw[:16]):
+                _tg("sendMessage", {"chat_id": chat, "text":
+                                    f"❌ {candidate.name}: امتداد غير مدعوم "
+                                    f"أو الملف تالف (أول البايتات: {raw[:12]!r})."})
+                return
+            _tg("sendMessage", {"chat_id": chat, "text":
+                                f"📂 قرأت الملف محليًا: {candidate.name} — "
+                                "جارٍ التحليل (قد يستغرق عدة دقائق)…"})
+            try:
+                summary, xlsx, html = analyze_document(
+                    candidate.name, raw, _MODES.get(chat, "precise"))
+            except InsufficientDataError as exc:
+                _tg("sendMessage", {"chat_id": chat, "text":
+                                    "❌ " + str(exc) + "\n\nتأكد أن الملف قوائم "
+                                    "مالية فيها سنتان على الأقل وأرقام مقروءة."})
+                return
+            except AppError as exc:
+                _tg("sendMessage", {"chat_id": chat, "text": f"❌ {exc}"})
+                return
+            except Exception as exc:
+                _tg("sendMessage", {"chat_id": chat, "text":
+                                    f"❌ خطأ غير متوقع: {type(exc).__name__}"})
+                return
+            _tg("sendMessage", {"chat_id": chat, "text": summary,
+                                "parse_mode": "Markdown"})
+            if xlsx:
+                _tg("sendDocument",
+                    {"chat_id": chat,
+                     "caption": f"📊 التقرير الشامل — {candidate.name}"},
+                    files={"document": (f"{candidate.stem}_تحليل.xlsx",
+                                        io.BytesIO(xlsx))}, timeout=300)
+            if html:
+                _tg("sendDocument",
+                    {"chat_id": chat,
+                     "caption": "🌐 تقرير HTML (افتحه في المتصفح)"},
+                    files={"document": (f"{candidate.stem}_report.html",
+                                        io.BytesIO(html))}, timeout=300)
+            return
+        if len(text) > 3 and (":" in text or text.startswith("\\")):
+            _tg("sendMessage", {"chat_id": chat, "text":
+                                f"❌ المسار غير موجود على الجهاز: {text[:80]}"})
+            return
+
     if text:
         _tg("sendMessage", {"chat_id": chat, "text":
-                            "ارسل ملف PDF / Excel / CSV لتحليله، أو /help للمساعدة."})
+                            "ارسل ملف PDF / Excel / CSV لتحليله، أو /help "
+                            "للمساعدة، أو الصق مسار الملف المحلي من جهازك."})
 
 
 def main() -> None:

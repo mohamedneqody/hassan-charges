@@ -1084,3 +1084,59 @@ class TestTelegramBotLogic:
         assert "الإيرادات: 1,200,000" in summary
         assert xlsx.startswith(b"PK")              # xlsx = zip
         assert b"<html" in html.lower()[:400]
+
+
+# ═══ إصلاح جذر تنزيل البوت: التوكن مرة واحدة في /file/bot{TOKEN} ═══
+class TestTelegramDownloadUrl:
+    """404 حي: رابط التنزيل بُني {API}/file/{TOKEN}/... والتوكن ظهر
+    مرتين (requests.request.url أثبته) — تليجرام يرد Not Found لملف
+    موجود. الصيغة الموثقة: التوكن مرة واحدة بعد /file/bot."""
+
+    def test_download_url_has_token_once(self, monkeypatch):
+        import bot as B
+
+        captured = {}
+
+        def fake_get(url, timeout=0):
+            captured["url"] = url
+
+            class R:
+                status_code = 200
+                content = b"PKfake"
+
+            return R()
+
+        def fake_post(url, json=None, timeout=0):
+            class P:
+                status_code = 200
+
+                def json(self):
+                    return {"ok": True,
+                            "result": {"file_path": "documents/file_0.xlsx"}}
+
+            return P()
+
+        monkeypatch.setattr(B.requests, "get", fake_get)
+        monkeypatch.setattr(B.requests, "post", fake_post)
+        got = B._download_file("fake_file_id")
+        assert got == b"PKfake"
+        url = captured["url"]
+        assert url.startswith("https://api.telegram.org/file/bot")
+        # التوكن مرتين = العلة المؤكدة من اللوج الحي — الصيغة الصحيحة
+        # تحمله مرة واحدة بعد /file/bot فقط
+        token = url.split("/file/bot")[1].split("/")[0]
+        assert url.count(token) == 1
+        assert "/file/" + ("bot" + token) in url
+
+    def test_download_returns_real_content_not_error_json(self, monkeypatch):
+        import bot as B
+
+        def fake_get(url, timeout=0):
+            class R:
+                status_code = 200
+                content = b'{"ok":false,"error_code":400}'
+
+            return R()
+
+        monkeypatch.setattr(B.requests, "get", fake_get)
+        assert B._download_file("fid") is None   # رد الخطأ لا يمر كمبتغات

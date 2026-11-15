@@ -39,6 +39,10 @@ from src.exceptions import AppError, InsufficientDataError  # noqa: E402
 from src.pipeline import run_pipeline  # noqa: E402
 
 BOT_TOKEN = (os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()
+
+
+def _tg_token_for_test():
+    return BOT_TOKEN
 ALLOWED_IDS = {
     s.strip() for s in (os.getenv("TELEGRAM_ALLOWED_IDS") or "").split(",")
     if s.strip()
@@ -84,19 +88,17 @@ def _download_file(file_id: str) -> bytes | None:
             print(f"⚠ getFile: no file_path — {str(meta)[:200]}")
             return None
         print(f"⬇ file_path = {fpath!r}")
-        # محاولتان: مُشفّر (أسماء عربية) وغير مشفّر — تليجرام حساس
-        # لشكل المسار حسب نوع الملف
-        for label, url in (
-            ("encoded",
-             f"{API}/file/{BOT_TOKEN}/{quote(str(fpath), safe='/')}"),
-            ("raw", f"{API}/file/{BOT_TOKEN}/{fpath}"),
-        ):
-            r = requests.get(url, timeout=120)
-            print(f"⬇ download {label}: HTTP {r.status_code} "
-                  f"({len(r.content)}B) {r.content[:60]!r}")
-            if r.status_code == 200 and not (
-                    r.content[:1] == b"{" and b'"ok":false' in r.content[:60]):
-                return r.content
+        # الصيغة الموثقة: /file/bot{TOKEN}/{path} — التوكن مرة واحدة
+        # (الخلط بين base-API الذي يحمل التوكن ونقطة /file/ كان يكرره
+        # فيُرجع تليجرام 404 لملف موجود فعلًا!)
+        url = (f"https://api.telegram.org/file/bot{BOT_TOKEN}/"
+               f"{quote(str(fpath), safe='/')}")
+        r = requests.get(url, timeout=120)
+        print(f"⬇ download: HTTP {r.status_code} "
+              f"({len(r.content)}B) {r.content[:60]!r}")
+        if r.status_code == 200 and not (
+                r.content[:1] == b"{" and b'"ok":false' in r.content[:60]):
+            return r.content
         return None
         content = r.content
         if content[:1] == b"{" and b'"ok":false' in content[:60]:

@@ -243,17 +243,158 @@ def build_result_summary(results: dict, currency: str = "ج.م") -> str:
     return "\n".join(lines)
 
 
+def build_full_report_messages(results: dict, currency: str = "ج.م",
+                               max_chars: int = 3800) -> list[str]:
+    """التقرير الكامل كرسائل متعددة (حد تليجرام 4096 حرفًا) — نفس
+    breadth الداشبورد: المؤشرات كلها + النماذج الأكاديمية + الصحة
+    بأركانها + الأعلام الحمراء + Beneish + حالة التحقق لكل مؤشر.
+    نص عادي (بلا Markdown) — الأسماء العربية والشرطات تكسر المحلل."""
+    from src.analysis.academic_models import academic_models
+    from src.analysis.redflags import red_flag_analysis, beneish_m_score
+    from src.analysis.score import compute_health_score
+
+    company = _clean_company(results.get("company") or "الشركة")
+    m = results.get("curr_metrics")
+    currency = results.get("currency_hint") or currency
+    chunks: list[str] = []
+
+    def flush(cur: list[str]) -> None:
+        if cur:
+            chunks.append("\n".join(cur))
+
+    cur: list[str] = [f"📊 التقرير الكامل — {company}",
+                      f"السنوات: {results.get('prev_year')} ← "
+                      f"{results.get('curr_year')}", ""]
+
+    # 1) المؤشرات الأساسية
+    def _val(label, v, kind="currency"):
+        if v is None:
+            cur.append(f"• {label}: غير متوفر")
+        elif kind == "currency":
+            cur.append(f"• {label}: {v:,.0f} {currency}")
+        elif kind == "pct":
+            cur.append(f"• {label}: {v:,.1f}%")
+        else:
+            cur.append(f"• {label}: {v:,.2f}x")
+
+    cur.append("💼 القائمة — الموجود والأرباح")
+    _val("الإيرادات", getattr(m, "revenue", None))
+    _val("تكلفة الإيرادات", getattr(m, "cost_of_revenue", None))
+    _val("مجمل الربح", getattr(m, "gross_profit", None))
+    _val("صافي الربح", getattr(m, "net_income", None))
+    cur.append("💼 المركز المالي")
+    _val("إجمالي الأصول", getattr(m, "total_assets", None))
+    _val("المتداولة", getattr(m, "current_assets", None))
+    _val("الالتزامات", getattr(m, "total_liabilities", None))
+    _val("حقوق الملكية", getattr(m, "equity", None))
+    cur.append("⚖️ النسب")
+    for label, key, kind in (
+            ("نسبة التداول", "current_ratio", "x"),
+            ("السريعة", "quick_ratio", "x"),
+            ("الدين إلى حقوق الملكية", "debt_to_equity", "x"),
+            ("هامش صافي الربح", "net_profit_margin", "pct"),
+            ("هامش التشغيل", "operating_margin", "pct"),
+            ("ROE", "roe", "pct"), ("ROA", "roa", "pct"),
+            ("دوران الأصول", "asset_turnover", "x")):
+        _val(label, getattr(m, key, None), kind)
+
+    # الصحة بأركانها
+    try:
+        hs = compute_health_score(m)
+        cur.append("")
+        if hs.total is not None:
+            cur.append(f"🏥 الصحة المالية: {hs.total:.0f}/100 — {hs.label}")
+        else:
+            cur.append(f"🏥 الصحة: {hs.label}")
+        for p in hs.pillars:
+            sc = f"{p.score:.0f}/100" if p.score is not None else "N/A"
+            cur.append(f"   ▪ {p.name} ({p.weight:.0%}): {sc}")
+    except Exception:
+        pass
+    flush(cur)
+
+    # 2) المؤشرات الكاملة (التغيرات + حالة التحقق لكل مؤشر)
+    verif = results.get("verification_status") or {}
+    cur = ["📋 المؤشرات الكاملة (السنة السابقة ← الحالية)"]
+    for r in list(results.get("growth_rows") or []) + list(results.get("rows") or []):
+        label = getattr(r, "label_ar", None) or r.label
+        prev_v = getattr(r, "previous", None)
+        curr_v = getattr(r, "current", None)
+        kind = getattr(r, "kind", "currency")
+        unit = currency if kind == "currency" else ("%" if kind == "percent" else "x")
+        def _f(v):
+            return f"{v:,.0f} {unit}" if v is not None else "غير متوفر"
+        line = f"• {label}: {_f(prev_v)} ← {_f(curr_v)}"
+        cp = getattr(r, "change_pct", None)
+        if cp is not None:
+            line += f" ({cp:+.1f}%)"
+        line += f" [{r.trend_symbol} {r.status}]"
+        vs = verif.get(r.key)
+        if vs:
+            line += f" | {vs}"
+        cur.append(line)
+        if len("\n".join(cur)) > max_chars:
+            flush(cur)
+            cur = ["📋 المؤشرات الكاملة (تتمة)"]
+    flush(cur)
+
+    # 3) النماذج الأكاديمية
+    cur = ["🎓 النماذج الأكاديمية"]
+    for mod in academic_models(m):
+        cur.append(f"• {mod.icon} {mod.name}: {mod.value:g}"
+                   if isinstance(mod.value, (int, float))
+                   else f"• {mod.icon} {mod.name}")
+        cur.append(f"   الحكم: {mod.verdict}")
+        if mod.components:
+            cur.append("   " + " · ".join(f"{k}={v:g}"
+                                          for k, v in mod.components.items()))
+        if mod.missing:
+            cur.append(f"   بيانات ناقصة: {', '.join(mod.missing)}")
+    flush(cur)
+
+    # 4) الأعلام الحمراء + Beneish
+    try:
+        flags = red_flag_analysis(results.get("prev_metrics"),
+                                  results.get("curr_metrics"))
+        cur = ["🚩 الأعلام الحمراء"
+               + (f" ({len(flags)} علم)" if flags else " — صفر 🎉")]
+        for fl in flags:
+            icon = {"high": "🔴", "medium": "🟠", "low": "🟡"}.get(
+                fl.severity, "•")
+            cur.append(f"• {icon} {fl.name}: {fl.detail}")
+        bn = beneish_m_score(results.get("prev_metrics"),
+                             results.get("curr_metrics"))
+        if bn.m_score is None:
+            cur.append("• Beneish M-Score: غير متوفر — بيانات ناقصة")
+        else:
+            cur.append(f"• Beneish M-Score: {bn.m_score:g} — {bn.verdict}")
+        if bn.missing:
+            cur.append(f"   بيانات ناقصة: {', '.join(bn.missing)}")
+        flush(cur)
+    except Exception:
+        pass
+
+    # 5) حالة التحقق الإجمالية
+    log = results.get("decision_log") or []
+    dec = sum(1 for e in log if e.get("status") in
+              ("VERIFIED_EXACT", "VERIFIED_DERIVED",
+               "VERIFIED_SOURCE_EXACT", "VERIFIED_HUMAN"))
+    pend = sum(1 for e in log if e.get("status") in
+               ("UNVERIFIED", "CONFLICT", "MULTI_ROW"))
+    cur = [f"🔒 بوابة الصدق: الحاسمة {dec} | تحتاج مراجعة {pend} "
+           f"| مفقود {len(results.get('missing') or [])}",
+           "_كل قيمة حاسمة حُسمت بتحقق مستقل — الباقي ينتظر المراجعة "
+           "البشرية._"]
+    flush(cur)
+    return chunks
+
+
 def analyze_document(file_name: str, raw: bytes,
-                     mode: str) -> tuple[str, bytes | None, bytes | None]:
-    """شغّل المحرك على الملف وأعد (الملخص، Excel bytes، HTML bytes)."""
+                     mode: str) -> tuple[dict, bytes | None, bytes | None]:
+    """شغّل المحرك على الملف وأعد (results، Excel bytes، HTML bytes)."""
     fast = mode == "fast"
     results = run_pipeline(file_name, raw, company="",
                            fast_mode=fast)
-    summary = build_result_summary(results)
-    note = ("⚡ الوضع السريع — أعد بالوضع الدقيق (/mode) للتحقق المزدوج"
-            if fast else
-            "🔬 الوضع الدقيق — تحقق مركزي كامل")
-    summary = note + "\n\n" + summary
     xlsx = build_excel_report(results)
 
     # تقرير HTML بالسرد الاحتياطي الحتمي (بلا نداء تعليق — سرعة البوت)
@@ -264,7 +405,23 @@ def analyze_document(file_name: str, raw: bytes,
         results, analysis,
         score=compute_health_score(results.get("curr_metrics")),
         currency=results.get("currency_hint") or "ج.م")
-    return summary, xlsx, html.encode("utf-8")
+    return results, xlsx, html.encode("utf-8")
+
+
+_LAST_DOC: dict[str, tuple[str, bytes]] = {}  # chat → آخر ملف للـ/reanalyze
+
+
+def _clear_file_cache(file_name: str, raw: bytes, mode: str) -> int:
+    """حذف كاش الاستخراج لهذا الملف تحديدًا — /reanalyze يعيد التحليل الحي."""
+    from src.extraction.result_cache import extraction_key
+
+    key = extraction_key(file_name, raw, None, mode == "fast")
+    cache_file = (PROJECT_ROOT / "cache" / "extraction"
+                  / (key.replace("|", "__") + ".json"))
+    if cache_file.exists():
+        cache_file.unlink()
+        return 1
+    return 0
 
 
 def allowed(chat_id: str) -> bool:
@@ -308,6 +465,41 @@ def handle_update(update: dict) -> None:
                              "🔬 الوضع الدقيق (~8 دقائق) — تحقق مركزي كامل")})
         return
 
+    if text.startswith("/reanalyze"):
+        last = _LAST_DOC.get(chat)
+        if not last:
+            _tg("sendMessage", {"chat_id": chat, "text":
+                                "أرسل الملف أولًا — ثم /reanalyze يعيد "
+                                "التحليل الحي بنداءات جديدة (بعد حذف الكاش)."})
+            return
+        rfname, rraw = last
+        cleared = _clear_file_cache(rfname, rraw, _MODES.get(chat, "precise"))
+        _tg("sendMessage", {"chat_id": chat, "text":
+                            "🧹 حُذف كاش الاستخراج (" + str(cleared)
+                            + " ملف) — جارٍ إعادة التحليل الحي…"})
+        try:
+            rresults, rxlsx, rhtml = analyze_document(
+                rfname, rraw, _MODES.get(chat, "precise"))
+        except Exception as exc:
+            _tg("sendMessage", {"chat_id": chat, "text":
+                                f"❌ {type(exc).__name__}: {str(exc)[:200]}"})
+            return
+        for chunk in build_full_report_messages(
+                rresults, rresults.get("currency_hint") or "ج.م"):
+            _tg("sendMessage", {"chat_id": chat, "text": chunk})
+        if rxlsx:
+            _tg("sendDocument",
+                {"chat_id": chat,
+                 "caption": "📊 التقرير الشامل (تحليل حي جديد)"},
+                files={"document": (Path(rfname).stem + "_تحليل.xlsx",
+                                    io.BytesIO(rxlsx))}, timeout=300)
+        if rhtml:
+            _tg("sendDocument",
+                {"chat_id": chat, "caption": "🌐 تقرير HTML"},
+                files={"document": (Path(rfname).stem + "_report.html",
+                                    io.BytesIO(rhtml))}, timeout=300)
+        return
+
     if doc:
         fname = doc.get("file_name") or "file"
         ext = Path(fname).suffix.lower()
@@ -341,9 +533,11 @@ def handle_update(update: dict) -> None:
         inbox = INBOX / chat
         inbox.mkdir(parents=True, exist_ok=True)
         (inbox / fname).write_bytes(raw)
+        _LAST_DOC[chat] = (fname, raw)  # لـ/reanalyze
+        _LAST_DOC[chat] = (fname, raw)  # لـ/reanalyze
 
         try:
-            summary, xlsx, html = analyze_document(fname, raw,
+            results, xlsx, html = analyze_document(fname, raw,
                                                    _MODES.get(chat, "precise"))
         except InsufficientDataError as exc:
             _tg("sendMessage", {"chat_id": chat, "text":
@@ -359,8 +553,18 @@ def handle_update(update: dict) -> None:
                                 "جرب الوضع الدقيق أو ملفاً أوضح."})
             return
 
-        _tg("sendMessage", {"chat_id": chat, "text": summary,
-                            "parse_mode": "Markdown"})
+        # وسم الكاش بصدق: إعادة تشغيل من الكاش المحلي = صفر نداءات
+        from_cache = any("local cache" in str(n)
+                         for n in results.get("notes") or [])
+        # التقرير الكامل: كل الأقسام كرسائل متعددة
+        chunks = build_full_report_messages(
+            results, results.get("currency_hint") or "ج.م")
+        if from_cache:
+            chunks.insert(0, "⚡ مُعاد من الكاش المحلي (صفر نداءات) — "
+                             "التحليل السابق نفسه.\nأرسل /reanalyze "
+                             "لإعادة التحليل الحي بنداءات جديدة.")
+        for chunk in chunks:
+            _tg("sendMessage", {"chat_id": chat, "text": chunk})
         if xlsx:
             _tg("sendDocument",
                 {"chat_id": chat,
@@ -393,7 +597,7 @@ def handle_update(update: dict) -> None:
                                 f"📂 قرأت الملف محليًا: {candidate.name} — "
                                 "جارٍ التحليل (قد يستغرق عدة دقائق)…"})
             try:
-                summary, xlsx, html = analyze_document(
+                results, xlsx, html = analyze_document(
                     candidate.name, raw, _MODES.get(chat, "precise"))
             except InsufficientDataError as exc:
                 _tg("sendMessage", {"chat_id": chat, "text":
@@ -407,8 +611,9 @@ def handle_update(update: dict) -> None:
                 _tg("sendMessage", {"chat_id": chat, "text":
                                     f"❌ خطأ غير متوقع: {type(exc).__name__}"})
                 return
-            _tg("sendMessage", {"chat_id": chat, "text": summary,
-                                "parse_mode": "Markdown"})
+            for chunk in build_full_report_messages(
+                    results, results.get("currency_hint") or "ج.م"):
+                _tg("sendMessage", {"chat_id": chat, "text": chunk})
             if xlsx:
                 _tg("sendDocument",
                     {"chat_id": chat,

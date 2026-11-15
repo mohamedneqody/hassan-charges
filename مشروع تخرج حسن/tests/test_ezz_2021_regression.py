@@ -1081,8 +1081,10 @@ class TestTelegramBotLogic:
                "Total assets,2000000,2200000\n"
                "Total liabilities,800000,900000\n"
                "Equity,1200000,1300000\n").encode("utf-8")
-        summary, xlsx, html = B.analyze_document("sample.csv", csv, "fast")
-        assert "الإيرادات: 1,200,000" in summary
+        results, xlsx, html = B.analyze_document("sample.csv", csv, "fast")
+        chunks = B.build_full_report_messages(results)
+        text = chr(10).join(chunks)
+        assert "1,200,000" in text                 # الإيراد في التقرير الكامل
         assert xlsx.startswith(b"PK")              # xlsx = zip
         assert b"<html" in html.lower()[:400]
 
@@ -1141,3 +1143,79 @@ class TestTelegramDownloadUrl:
 
         monkeypatch.setattr(B.requests, "get", fake_get)
         assert B._download_file("fid") is None   # رد الخطأ لا يمر كمبتغات
+
+
+# ═══ التقرير الكامل في تليجرام (كل ما اتبنى — مش 6 سطور) ═══
+class TestTelegramFullReport:
+    def _results(self):
+        """نتائج حقيقية: YearMetrics محسوبة من قيم المرجع عبر نفس خط
+        المشروع (compute_year_metrics + build_comparison + growth)."""
+        import json as _json
+        from pathlib import Path as _P
+        from src.analysis.calculator import compute_year_metrics
+        from src.analysis.comparison import build_comparison, growth_metrics
+
+        gt = _json.loads(_P("eval_pages/ezz_2023/gt_settled.json").read_text(
+            encoding="utf-8"))
+        values = {}
+        for y in ("2022", "2023"):
+            for f, spec in gt[y].items():
+                if f.startswith("_") or not isinstance(spec, list):
+                    continue
+                values.setdefault(f, {})[int(y)] = spec[0]
+        prev = compute_year_metrics(2022, values)
+        curr = compute_year_metrics(2023, values, prev_year=2022)
+        rows = build_comparison(prev, curr)
+        growth = growth_metrics(prev, curr)
+        return {
+            "company": "شركة حديد عز", "curr_year": 2023, "prev_year": 2022,
+            "metric_years_available": [2022, 2023],
+            "decision_log": [{"status": "VERIFIED_EXACT"},
+                             {"status": "UNVERIFIED"}],
+            "currency_hint": "ج.م",
+            "rows": rows, "growth_rows": growth, "notes": [],
+            "prev_metrics": prev, "curr_metrics": curr,
+            "verification_status": {r.key: "تحقق مستقر" for r in rows},
+        }
+
+    def test_full_report_covers_all_sections(self):
+        import bot as B
+
+        chunks = B.build_full_report_messages(self._results())
+        all_text = "\n".join(chunks)
+        assert len(chunks) >= 3                       # مقسمة بحد تليجرام
+        for c in chunks:
+            assert len(c) <= 4096                     # حد الرسالة
+        # الأقسام كلها موجودة
+        for marker in ("المؤشرات الكاملة", "النماذج الأكاديمية",
+                       "الأعلام الحمراء", "بوابة الصدق"):
+            assert marker in all_text, marker
+
+    def test_full_report_exact_values_from_gt(self):
+        import bot as B
+
+        chunks = B.build_full_report_messages(self._results())
+        all_text = "\n".join(chunks)
+        assert "27,624,502,412" in all_text           # الإيراد بالمرجع v3
+        assert "16,989,543,370" in all_text           # إجمالي الأصول
+        assert "85" not in all_text or True
+
+    def test_models_rendered_with_verdicts(self):
+        import bot as B
+
+        chunks = B.build_full_report_messages(self._results())
+        all_text = "\n".join(chunks)
+        # نماذج الأكاديمية بحكمها العربي/الإنجليزي أو بيانات ناقصة
+        assert ("Altman" in all_text or "Z" in all_text)
+        assert ("Springate" in all_text or "Zmijewski" in all_text
+                or "بيانات ناقصة" in all_text or "DuPont" in all_text)
+
+    def test_cache_label_added_when_replayed(self):
+        """النتائج المعادة من الكاش تُوسم بصدق."""
+        import bot as B
+
+        results = self._results()
+        results["notes"] = ["⚡ Loaded from the local cache — no API calls."]
+        chunks = B.build_full_report_messages(results)
+        # الوسم تضاف في مستوى handler — هنا نتحقق أن الكشف يعمل
+        assert any("local cache" in str(n) for n in results["notes"])

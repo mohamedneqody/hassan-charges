@@ -26,6 +26,7 @@ from src.analysis.score import compute_health_score, top_movers  # noqa: E402
 from src.config import GEMINI_MODEL, MAX_UPLOAD_MB, REPORT_LANGUAGE, SUPPORTED_EXTENSIONS  # noqa: E402
 from src.dashboard import charts, theme  # noqa: E402
 from src.dashboard.report import build_html_report  # noqa: E402
+from src.dashboard.view_model import report_memo  # noqa: E402
 from src.exceptions import AppError, EmptyFileError  # noqa: E402
 from src.pipeline import build_gemini_payload, run_pipeline  # noqa: E402
 
@@ -218,8 +219,8 @@ def upload_screen() -> None:
             file_rows = "".join(
                 '<div class="fs-file-row">'
                 f'<span class="fs-file-ico">{_file_svg}</span>'
-                f'<div class="fs-file-info"><b>{f.name}</b>'
-                f'<span>{(f.type or "ملف").split(";")[0]} · {max(1, f.size // 1024):,} KB</span></div>'
+                f'<div class="fs-file-info"><b>{theme.ESC(f.name)}</b>'
+                f'<span>{theme.ESC((f.type or "ملف").split(";")[0])} · {max(1, f.size // 1024):,} KB</span></div>'
                 '<span class="fs-gate ok">جاهزة للتحليل</span></div>'
                 for f in uploaded
             )
@@ -249,7 +250,7 @@ def upload_screen() -> None:
             "ابدأ التحليل المالي",
             type="primary",
             use_container_width=True,
-            disabled=uploaded is None,
+            disabled=not uploaded,
         ):
             process_upload(uploaded)
         st.markdown("<p class='or-line'>أو</p>", unsafe_allow_html=True)
@@ -325,7 +326,7 @@ def upload_screen() -> None:
     st.markdown(
         '<div class="fs-footer"><b>وكيل تحليل بيانات مالية ذكي</b> — محلل القوائم المالية · '
         "استخراج موثق بقرار بوابة لكل قيمة · "
-        f"<b>313</b> اختبارًا على الكود · يعمل محليًا بالكامل</div>",
+        "حساب حتمي بـ Python · يعمل محليًا بالكامل</div>",
         unsafe_allow_html=True,
     )
 
@@ -483,18 +484,30 @@ def process_upload(uploaded) -> None:
     ) as status:
         progress_box = st.empty()
 
+        from src.dashboard.components.chrome import build_progress_html
+
         t0 = time.time()
 
         def _clock() -> str:
-            """العدّاد الحي: دقائق:ثوانٍ منذ بدء التحليل (طلب المستخدم)."""
+            """العدّاد الحي: دقائق:ثوانٍ منذ بدء التحليل."""
             secs = int(time.time() - t0)
-            return f"⏱ {secs // 60:02d}:{secs % 60:02d}"
+            return f"{secs // 60:02d}:{secs % 60:02d}"
 
         def progress_cb(i: int, total: int, name: str, msg: str) -> None:
-            prefix = f"[{i}/{total}] {name}: " if batch else ""
             # حلقة الاستطلاع في _pipeline_with_progress تستدعي هذا كل 0.4ث
-            # فيتحدث العداد حيًا في كل مرحلة (استخراج/تحليل) بلا خيوط إضافية
-            progress_box.write(f"⏱ {_clock()} — {prefix}{msg}")
+            # فيتحدث العداد حيًا وشريط التقدم والمراحل بلا خيوط إضافية
+            progress_box.markdown(
+                build_progress_html(
+                    name,
+                    _clock(),
+                    msg,
+                    fast_mode=fast_mode,
+                    batch_idx=i,
+                    batch_total=total,
+                    lang=st.session_state.get("ui_lang", "ar"),
+                ),
+                unsafe_allow_html=True,
+            )
 
         oks, failed = run_batch_jobs(jobs, page_range, currency, progress_cb, fast_mode)
         if failed and not oks:
@@ -503,7 +516,7 @@ def process_upload(uploaded) -> None:
             status.update(label=f"اكتمل: {len(oks)} ناجح · {len(failed)} فاشل", state="complete", expanded=False)
         else:
             status.update(
-                label=f"اكتمل التحليل ✔ — {_clock()}",
+                label=f"اكتمل التحليل ✔ — ⏱ {_clock()}",
                 state="complete", expanded=False)
     progress_box.empty()
 
@@ -527,6 +540,24 @@ def process_upload(uploaded) -> None:
     # The dashboard shows the LAST successful file (batch users then open the
     # comparison tab); single uploads behave exactly as before.
     results, analysis = oks[-1][1], oks[-1][2]
+    for stale_k in (
+        "ev_cell",
+        "live_queue",
+        "live_queue_key",
+        "_report_memo",
+        "_ev_img_cache",
+        "new_ui_currency_input",
+        "stmt_gate_filter",
+        "stmt_search",
+        "metrics_cat_filter",
+        "metrics_verif_filter",
+        "metrics_search_query",
+        "confirm_clear_cache",
+        "confirm_clear_library",
+    ):
+        st.session_state.pop(stale_k, None)
+    for stale_k in [k for k in st.session_state if str(k).startswith("conf-")]:
+        st.session_state.pop(stale_k, None)
     st.session_state["results"] = results
     st.session_state["analysis"] = analysis
     # v5: بايتات الملف الأصلي للجلسة — دليل المصدر الحي (صفحة + bbox) في
@@ -538,6 +569,35 @@ def process_upload(uploaded) -> None:
         st.session_state["currency"] = hint
     st.session_state["currency"] = st.session_state.get("currency", "$")
     st.rerun()
+
+
+def _blocked_fields(r: dict) -> set[str]:
+    """Fields blocked from decisive health scoring (consistent with view_model/new_ui)."""
+    from src.analysis.financial_gate import decide
+
+    dl = r.get("decision_log") or []
+    from_log = {
+        e["field"]
+        for e in dl
+        if e.get("field") and decide(e.get("status", "MISSING")) not in ("use", "use_disclosed")
+    }
+    if not dl:
+        return set(r.get("blocked_fields") or [])
+    dl_fields = {e["field"] for e in dl if e.get("field")}
+    extra_blocked = set(r.get("blocked_fields") or []) - dl_fields
+    return from_log | extra_blocked
+
+
+def _sync_gate_metadata(r: dict) -> set[str]:
+    """Compute blocked_fields and ensure Classic UI exports share gate metadata."""
+    from src.analysis.financial_gate import verification_labels
+
+    blocked = _blocked_fields(r)
+    dl = r.get("decision_log") or []
+    if dl:
+        r["blocked_fields"] = sorted(blocked)
+        r["verification_status"] = verification_labels(dl)
+    return blocked
 
 
 def overview_screen(r: dict) -> None:
@@ -575,26 +635,25 @@ def overview_screen(r: dict) -> None:
         )
 
     # --- Financial Health Score ---
-    score = compute_health_score(r["curr_metrics"])
+    blocked = _sync_gate_metadata(r)
+    score = compute_health_score(r["curr_metrics"], blocked_fields=blocked)
+    st.divider()
+    st.subheader("مؤشر الصحة المالية")
+    headers = ["الركيزة", "الدرجة", "الوزن", "مقارنة بالحدود الإرشادية العامة"]
+    rows_html = [
+        "<tr>"
+        f"<td>{theme.ESC(p.name)}</td>"
+        f'<td class="num"><b>{theme.ESC("N/A" if p.score is None else f"{p.score:.0f}/100")}</b></td>'
+        f'<td class="num">{p.weight:.0f}%</td>'
+        f"<td>{theme.ESC(' · '.join(p.details))}</td>"
+        "</tr>"
+        for p in score.pillars
+    ]
     if score.total is not None:
-        st.divider()
-        st.subheader("مؤشر الصحة المالية")
         col_gauge, col_pillars = st.columns([2, 3])
         with col_gauge:
             st.plotly_chart(charts.health_gauge(score), use_container_width=True)
         with col_pillars:
-            headers = ["الركيزة", "الدرجة", "الوزن", "مقارنة بالحدود الإرشادية العامة"]
-            rows_html = []
-            for p in score.pillars:
-                score_txt = "N/A" if p.score is None else f"{p.score:.0f}/100"
-                rows_html.append(
-                    "<tr>"
-                    f"<td>{theme.ESC(p.name)}</td>"
-                    f'<td class="num"><b>{theme.ESC(score_txt)}</b></td>'
-                    f'<td class="num">{p.weight:.0f}%</td>'
-                    f"<td>{theme.ESC(' · '.join(p.details))}</td>"
-                    "</tr>"
-                )
             col_pillars.markdown(
                 theme.fin_table(headers, rows_html), unsafe_allow_html=True
             )
@@ -602,6 +661,11 @@ def overview_screen(r: dict) -> None:
                 "درجة حتمية مقابل مستويات إرشادية عامة مقبولة — "
                 "ليست بيانات قطاعية. تُعاد موازنة الأوزان عند غياب البيانات."
             )
+    else:
+        st.warning(f"⚠️ {score.label}")
+        if getattr(score, "policy", ""):
+            st.caption(score.policy)
+        st.markdown(theme.fin_table(headers, rows_html), unsafe_allow_html=True)
 
     # --- Advanced analysis: DuPont + Altman Z'' (deterministic, Python-only) ---
     from src.analysis.advanced import altman_z, dupont_analysis
@@ -1338,7 +1402,7 @@ def metrics_table_screen(r: dict) -> None:
         "التغير % نسبي للسنة السابقة؛ ولمقاييس النسب المئوية يُقاس التغير بالنقاط (pp). الاتجاه محسوب حتمياً بـ Python."
     )
     with col2:
-        csv_combined = combined.to_csv(index=False).encode("utf-8")
+        csv_combined = combined.to_csv(index=False).encode("utf-8-sig")
         st.download_button(
             "⬇️ تصدير الجدول (CSV)",
             data=csv_combined,
@@ -1378,46 +1442,55 @@ def ai_screen(r: dict, analysis: AIAnalysis) -> None:
     )
 
     if not analysis.ok:
-        st.warning(analysis.error)
-        if not analysis.ratio_comments:
-            return
-        st.caption(
-            "Showing a rule-based commentary generated deterministically from the "
-            "computed metrics (no AI was involved)."
+        if analysis.error:
+            st.warning(analysis.error)
+            if not analysis.ratio_comments:
+                return
+        elif not analysis.ratio_comments and not analysis.recommendations:
+            st.info(
+                "⚡ الوضع السريع: التعليق التحليلي مؤجل — يمكنك توليده من تبويب «رؤى Gemini» في الواجهة الجديدة."
+            )
+        if analysis.ratio_comments:
+            st.caption(
+                "Showing a rule-based commentary generated deterministically from the "
+                "computed metrics (no AI was involved)."
+            )
+
+    if analysis.ratio_comments:
+        lines = "".join(
+            f'<div class="ratio-line"><span class="ratio-name">{theme.ESC(metric)}</span>'
+            f"{theme.ESC(comment)}</div>"
+            for metric, comment in analysis.ratio_comments
+        )
+        st.markdown(
+            f'<div class="report-card" style="--accent:{theme.BRAND}">'
+            f'<div class="rc-title"><span class="rc-ico">💬</span>تعليقات المؤشرات</div>'
+            f"{lines}</div>",
+            unsafe_allow_html=True,
         )
 
-    lines = "".join(
-        f'<div class="ratio-line"><span class="ratio-name">{theme.ESC(metric)}</span>'
-        f"{theme.ESC(comment)}</div>"
-        for metric, comment in analysis.ratio_comments
-    )
-    st.markdown(
-        f'<div class="report-card" style="--accent:{theme.BRAND}">'
-        f'<div class="rc-title"><span class="rc-ico">💬</span>تعليقات المؤشرات</div>'
-        f"{lines}</div>",
-        unsafe_allow_html=True,
-    )
+    if analysis.recommendations:
+        recs_title = "التوصيات" if REPORT_LANGUAGE == "ar" else "Recommendations"
+        items = "".join(
+            f"<li><span dir=\"auto\">{theme.ESC(action)}</span>"
+            + (f'<div class="rec-evidence" dir="auto">📎 {theme.ESC(evidence)}</div>' if evidence else "")
+            + "</li>"
+            for action, evidence in analysis.recommendations
+        )
+        st.markdown(
+            f'<div class="sw-card recs">'
+            f'<div class="rc-title"><span class="rc-ico">🧭</span>{theme.ESC(recs_title)}</div>'
+            f'<ol>{items}</ol>'
+            f'<div class="rec-evidence" dir="auto">📌 '
+            f'{"كل توصية مرفقة بدليلها الرقمي المحسوب في Python — لا توصية بلا دليل."
+              if REPORT_LANGUAGE == "ar" else
+              "Every recommendation carries its Python-computed numeric evidence — none without proof."}'
+            f'</div></div>',
+            unsafe_allow_html=True,
+        )
 
-    recs_title = "التوصيات" if REPORT_LANGUAGE == "ar" else "Recommendations"
-    items = "".join(
-        f"<li><span dir=\"auto\">{theme.ESC(action)}</span>"
-        + (f'<div class="rec-evidence" dir="auto">📎 {theme.ESC(evidence)}</div>' if evidence else "")
-        + "</li>"
-        for action, evidence in analysis.recommendations
-    )
-    st.markdown(
-        f'<div class="sw-card recs">'
-        f'<div class="rc-title"><span class="rc-ico">🧭</span>{theme.ESC(recs_title)}</div>'
-        f'<ol>{items}</ol>'
-        f'<div class="rec-evidence" dir="auto">📌 '
-        f'{"كل توصية مرفقة بدليلها الرقمي المحسوب في Python — لا توصية بلا دليل."
-          if REPORT_LANGUAGE == "ar" else
-          "Every recommendation carries its Python-computed numeric evidence — none without proof."}'
-        f'</div></div>',
-        unsafe_allow_html=True,
-    )
-
-    score = compute_health_score(r["curr_metrics"])
+    blocked = _sync_gate_metadata(r)
+    score = compute_health_score(r["curr_metrics"], blocked_fields=blocked)
     report = {
         "company": r["company"],
         "period": {"previous_year": r["prev_year"], "current_year": r["curr_year"]},
@@ -1457,9 +1530,13 @@ def ai_screen(r: dict, analysis: AIAnalysis) -> None:
             use_container_width=True,
         )
     with col_html:
+        html_key = (
+            f"html|{bool(getattr(analysis, 'ok', False))}|"
+            f"{len(getattr(analysis, 'ratio_comments', []) or [])}"
+        )
         st.download_button(
             "⬇️ تنزيل تقرير قابل للطباعة (HTML ← PDF)",
-            data=report_memo(r, "html",
+            data=report_memo(r, html_key,
                              lambda: build_html_report(r, analysis, score,
                                                        currency)),
             file_name=f"financial_report_{r['prev_year']}_{r['curr_year']}.html",
@@ -1538,8 +1615,13 @@ def comparison_screen() -> None:
     )
     records = load_records()
     if not records:
-        st.info(
-            "لا توجد شركات محفوظة بعد — ارفع قوائم أول شركة وستظهر هنا تلقائيًا."
+        from src.dashboard.components.chrome import render_empty_state
+
+        render_empty_state(
+            "مكتبة الشركات فارغة بعد",
+            "كل شركة تحلَّل بنجاح تُحفَظ هنا تلقائيًا لبناء جدول مقارنة الشركات.",
+            icon="🏢",
+            next_step="ارفع قوائم أول شركة من شاشة البداية وستظهر هنا تلقائيًا.",
         )
         return
 
@@ -1641,8 +1723,8 @@ def dashboard_screen() -> None:
             unsafe_allow_html=True,
         )
         st.markdown(
-            f'<span class="live-dot"></span>&nbsp;<span style="color:#64748b;font-size:.85rem;">'
-            f'التحليل جاهز — {r["file_name"]}</span>',
+            f'<span class="live-dot"></span>&nbsp;<span style="color:var(--fs-muted);font-size:.85rem;">'
+            f'التحليل جاهز — <bdi dir="auto">{theme.ESC(r.get("file_name") or "")}</bdi></span>',
             unsafe_allow_html=True,
         )
         st.caption(f"الموديل: {GEMINI_MODEL}")
@@ -1676,6 +1758,16 @@ def dashboard_screen() -> None:
                 f"نداءات ناجحة: {pool_status['total_ok_calls']} · "
                 f"أزواج مستنفدة: {pool_status['depleted_pairs']}"
             )
+            # ترتيب الموديلات بالأداء الحي — الترتيب الذي طلبه المستخدم
+            ranking = pool_status.get("model_ranking") or []
+            if ranking:
+                st.markdown("**🏆 ترتيب الموديلات (أداء حي)**")
+                for r_ in ranking:
+                    cool = " · ❄️ تبريد" if r_["cooling"] else ""
+                    avg = (f" · متوسط {r_['avg_s']}s" if r_["avg_s"] else "")
+                    st.markdown(
+                        f"• `{r_['model']}` — ✓ {r_['ok']} / ✗ {r_['fail']}"
+                        f"{avg}{cool}")
             for s in pool_status["states"]:
                 icon = "⛔" if s["dead"] else ("🟡" if s["depleted"] else "🟢")
                 line = f"{icon} `{s['masked']}` — {s['ok_calls']} نداء"
@@ -1692,19 +1784,44 @@ def dashboard_screen() -> None:
                 st.rerun()
 
         if st.button("🔄 تحليل جديد", use_container_width=True):
-            for key in ("results", "analysis"):
+            for key in (
+                "results",
+                "analysis",
+                "raw_bytes",
+                "ev_cell",
+                "live_queue",
+                "live_queue_key",
+                "_report_memo",
+                "_ev_img_cache",
+                "new_ui_currency_input",
+                "currency",
+                "stmt_gate_filter",
+                "stmt_search",
+                "metrics_cat_filter",
+                "metrics_verif_filter",
+                "metrics_search_query",
+                "confirm_clear_cache",
+                "confirm_clear_library",
+            ):
+                st.session_state.pop(key, None)
+            for key in [k for k in st.session_state if str(k).startswith("conf-")]:
                 st.session_state.pop(key, None)
             st.rerun()
 
         # v6: المفتاح معكوس الدلالة — الكلاسيكية هي الاستثناء الآن.
         # زر العودة في الجديدة يكتب ui_mode="new" ويطفئ هذه الويدجت
         # المخزنة (فخ دورة الحياة الموثق في اختبار v5).
+        if "ui_mode_classic_toggle" not in st.session_state:
+            st.session_state["ui_mode_classic_toggle"] = (
+                st.session_state.get("ui_mode") == "classic"
+            )
         if st.toggle("📜 الواجهة الكلاسيكية",
                      key="ui_mode_classic_toggle",
                      help="الواجهة الأصلية كاملة — التبديل لا يفقد النتائج."):
             st.session_state["ui_mode"] = "classic"
         else:
             st.session_state["ui_mode"] = "new"
+            st.session_state.pop("new_ui_currency_input", None)
             st.rerun()
 
         if st.button("🧹 مسح الكاش المحلي", use_container_width=True,
@@ -1753,12 +1870,28 @@ def dashboard_screen() -> None:
 
 def notes_screen(r) -> None:
     """تاب الإيضاحات المتممة: قراءة نصوص الإيضاحات + سؤال/جواب محلي (RAG)."""
-    st.subheader("📖 الإيضاحات المتممة — اقرأها واسألها")
+    from src.dashboard.components.chrome import render_empty_state
+
+    lang = st.session_state.get("ui_lang", "ar")
+    is_ar = lang != "en"
+    st.subheader(
+        "📖 الإيضاحات المتممة — اقرأها واسألها"
+        if is_ar
+        else "📖 Financial Notes — Browse & Ask (Local RAG)"
+    )
     notes_text = r.get("notes_text") or {}
     if not notes_text:
-        st.caption(
-            "لا توجد نصوص إيضاحات محفوظة لهذا الملف. أعد تحليل الملف (أو امسح "
-            "الكاش المحلي ثم أعد الرفع) لتلتقط قراءة محلية مجانية نصوص كل الصفحات."
+        render_empty_state(
+            "لا توجد نصوص إيضاحات محفوظة لهذا الملف"
+            if is_ar
+            else "No financial notes text saved",
+            "يلتقط المحرك نصوص الإيضاحات محليًا أثناء قراءة ملف PDF (مجانًا وبلا API)."
+            if is_ar
+            else "Notes text is captured locally during PDF analysis.",
+            icon="📖",
+            next_step="امسح الكاش المحلي من الشريط الجانبي ثم أعد تحليل الملف لالتقاط النصوص."
+            if is_ar
+            else "Clear local cache in the sidebar and re-analyze the PDF.",
         )
         return
     from src.analysis.notes_rag import NotesIndex, formulate_answer
@@ -1766,12 +1899,25 @@ def notes_screen(r) -> None:
     idx = NotesIndex.from_pages(notes_text)
     stt = idx.stats()
     if not stt["chunks"]:
-        st.caption("نصوص الإيضاحات فارغة.")
+        render_empty_state(
+            "نصوص الإيضاحات فارغة" if is_ar else "Notes text is empty",
+            "لم تتضمن الصفحات الملتقطة فقرات نصية صالحة للفهرسة."
+            if is_ar
+            else "No indexable text paragraphs were found in the captured notes.",
+            icon="📄",
+            next_step="جرّب توسيع نطاق الصفحات أو التحقق من جودة ملف PDF."
+            if is_ar
+            else "Try broadening the page range or verifying the PDF quality.",
+        )
         return
     st.caption(
-        f"مُفهرسة {stt['chunks']} مقطعًا من {len(stt['pages'])} صفحة إيضاحات "
-        f"(الصفحات: {', '.join(map(str, stt['pages']))}) — البحث محلي مجاني، "
-        "والإجابة تُصاغ من المقاطع مع ذكر الصفحة المصدر."
+        (
+            f"مُفهرسة {stt['chunks']} مقطعًا من {len(stt['pages'])} صفحة إيضاحات "
+            f"(الصفحات: {', '.join(map(str, stt['pages']))}) — البحث محلي مجاني، "
+            "والإجابة تُصاغ من المقاطع مع ذكر الصفحة المصدر."
+            if is_ar
+            else f"Indexed {stt['chunks']} chunks across {len(stt['pages'])} pages — local zero-API search with source page citations."
+        )
     )
 
     # ── حاكمية المصادر: من أي صفحة التُقط كل رقم ──
@@ -1780,7 +1926,11 @@ def notes_screen(r) -> None:
         ta_pages = set(fs.get("total_assets") or [])  # صفحات الميزانية المعروفة
         from src.analysis.comparison import LABELS_AR as _SRC_LBL
 
-        st.markdown("**🔍 حاكمية المصادر — من أي صفحة التُقط كل رقم:**")
+        st.markdown(
+            "**🔍 حاكمية المصادر — من أي صفحة التُقط كل رقم:**"
+            if is_ar
+            else "**🔍 Source provenance — page origin per captured figure:**"
+        )
         src_rows = []
         balance_only_notes = []
         for f in sorted(fs):
@@ -1795,7 +1945,11 @@ def notes_screen(r) -> None:
             else:
                 src = "—"
             src_rows.append(f"- **{lbl}** ({f}): صفحات {', '.join(map(str, pages))} — {src}")
-        with st.expander("أصل الأرقام الكامل (حاكمية المصادر)"):
+        with st.expander(
+            "أصل الأرقام الكامل (حاكمية المصادر)"
+            if is_ar
+            else "Full numeric provenance"
+        ):
             st.markdown("\n".join(src_rows))
         if balance_only_notes:
             st.warning(
@@ -1803,21 +1957,47 @@ def notes_screen(r) -> None:
                 "الميزانية) — تعامل معها كمؤشر استرشادي: " + "، ".join(balance_only_notes)
             )
 
-    q = st.text_input("اسأل سؤالًا عن الإيضاحات — مثال: ما سياسة الإهلاك المستخدمة؟")
+    q = st.text_input(
+        "اسأل سؤالًا عن الإيضاحات — مثال: ما سياسة الإهلاك المستخدمة؟"
+        if is_ar
+        else "Ask a question about the notes — e.g., what is the depreciation policy?"
+    )
     if not q.strip():
-        st.info("اكتب سؤالك أعلاه ليعمل البحث في نصوص الإيضاحات.")
+        render_empty_state(
+            "اسأل عن أي بند أو سياسة محاسبية" if is_ar else "Ask about any note or policy",
+            "ابحث داخل نصوص الإيضاحات المتممة محليًا مع إظهار رقم الصفحة المصدر لكل فقرة."
+            if is_ar
+            else "Search locally across the footnotes with exact source page numbers.",
+            icon="💬",
+            next_step="أمثلة: «سياسة الإهلاك»، «القروض والتسهيلات»، «رأس المال»."
+            if is_ar
+            else "Try: depreciation policy, credit facilities, or share capital.",
+        )
         return
     chunks = idx.search(q, top_k=5)
     if not chunks:
-        st.warning("لا توجد مقاطع مطابقة — جرّب كلمات مختلفة أو أقرب مصطلح محاسبي.")
+        render_empty_state(
+            "لا توجد مقاطع مطابقة للسؤال" if is_ar else "No matching note chunks",
+            "لم نعثر على فقرات تحتوي على الكلمات المفتاحية المطلوبة."
+            if is_ar
+            else "No paragraphs matched your query terms.",
+            icon="🔎",
+            next_step="جرّب كلمات مختلفة أو أقرب مصطلح محاسبي بالعربية أو الإنجليزية."
+            if is_ar
+            else "Try alternative accounting keywords in Arabic or English.",
+        )
         return
-    with st.spinner("جارٍ صياغة الإجابة من مقاطع الإيضاحات…"):
+    with st.spinner("جارٍ صياغة الإجابة من مقاطع الإيضاحات…" if is_ar else "Formulating answer..."):
         answer = formulate_answer(q, chunks, r.get("company", ""))
     if answer:
         st.markdown(answer)
-    st.markdown("**المقاطع المصدر (بالترتيب حسب التطابق):**")
+    st.markdown(
+        "**المقاطع المصدر (بالترتيب حسب التطابق):**"
+        if is_ar
+        else "**Source chunks (ranked by relevance):**"
+    )
     for c in chunks:
-        with st.expander(f"📄 صفحة {c.page} — درجة تطابق {c.score:.3f}"):
+        with st.expander(f"📄 صفحة {c.page} — درجة تطابق {c.score:.3f}" if is_ar else f"📄 Page {c.page} — score {c.score:.3f}"):
             st.markdown(c.text)
 
 

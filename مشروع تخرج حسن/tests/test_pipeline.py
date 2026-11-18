@@ -36,6 +36,20 @@ from src.extraction.normalizer import (
 )
 from src.pipeline import build_gemini_payload, run_pipeline
 
+
+import pytest
+@pytest.fixture(autouse=True)
+def _isolated_model_health(monkeypatch):
+    """عزل ملف الصحة الدائمة — الاختبارات لا تلوث cache/model_health.json
+    (الذي يحمله التشغيل الحي عبر التشغيلات) ولا تتلوث منه."""
+    from src.ai import key_pool as _kp
+
+    monkeypatch.setattr(_kp.APIKeyPool, "_save_model_health",
+                        lambda self: None, raising=False)
+    monkeypatch.setattr(_kp.APIKeyPool, "_load_model_health",
+                        lambda self: None, raising=False)
+
+
 SAMPLE_CSV = PROJECT_ROOT / "sample_data" / "sample_financials.csv"
 SAMPLE_XLSX = PROJECT_ROOT / "sample_data" / "sample_financials.xlsx"
 

@@ -9,10 +9,30 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.extraction.gemini_cell_reader import _validate, read_crop  # noqa: E402
-from src.extraction.spatial_cells import (  # noqa: E402
-    SpatialCell, enhance_variants, parse_date_tokens, parse_number_tokens,
+from src.extraction.gemini_cell_reader import (  # noqa: E402
+    _validate,
+    read_crop,
 )
+from src.extraction.spatial_cells import (  # noqa: E402
+    SpatialCell,
+    enhance_variants,
+    parse_date_tokens,
+    parse_number_tokens,
+)
+
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _isolated_model_health(monkeypatch):
+    """عزل ملف الصحة الدائمة — الاختبارات لا تلوث cache/model_health.json
+    (الذي يحمله التشغيل الحي عبر التشغيلات) ولا تتلوث منه."""
+    from src.ai import key_pool as _kp
+
+    monkeypatch.setattr(_kp.APIKeyPool, "_save_model_health",
+                        lambda self: None, raising=False)
+    monkeypatch.setattr(_kp.APIKeyPool, "_load_model_health",
+                        lambda self: None, raising=False)
 
 
 # ── Date validity (regex alone is not enough) ───────────────────────────────

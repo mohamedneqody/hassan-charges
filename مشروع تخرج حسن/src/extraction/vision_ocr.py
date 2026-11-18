@@ -450,6 +450,8 @@ def _call_with_rotation(
                 if call_stats is not None:
                     call_stats.append((model, time.time() - t0))
                 pool.reset_transient(model)
+                if call_stats is not None:
+                    pool.record_call(model, time.time() - t0)
                 return raw
             except Exception as exc:
                 kind = classify_gemini_error(exc)

@@ -15,10 +15,25 @@ import os
 import random
 import threading
 import time
+from pathlib import Path
 from dataclasses import dataclass, field
 
 DEPLETION_RESET_SECONDS = 24 * 60 * 60
 DEFAULT_MODELS = ["gemini-3.8-flash", "gemini-3.7-flash"]
+# ترتيب القوة/الأفضلية: رقم أعلى = يُجرَّب أولًا. الأحدث الحي (preview)
+# والflash العائلة أولًا — pro أقوى لكن أبطأ وحصة أقل فآخر الجدول.
+MODEL_RANK = {
+    "gemini-3-flash-preview": 100,
+    "gemini-3.6-flash": 90,
+    "gemini-3.5-flash": 85,
+    "gemini-3.8-flash": 80,
+    "gemini-3.7-flash": 78,
+    "gemini-flash-latest": 70,
+    "gemini-3.1-flash-image": 60,
+    "gemini-2.5-flash": 55,
+}
+MODEL_RANK_DEFAULT = 50   # موديل غير معروف — منتصف الجدول
+MODEL_HEALTH_FILE = "cache/model_health.json"
 # التبريد الناعم (تسريع 2026-11-13): 503 «high demand» عابرة لكن إعادة
 # الدوران على موديل معطل يهدر حتى 45 ثانية × كل محاولة pick — بعد فشلين
 # متتاليين يُستبعد الموديل من pick لمدة قصيرة تلقائيًا، والجولة تتقارب
@@ -57,6 +72,17 @@ class APIKeyPool:
         self._model_cooldown: dict[str, float] = {}  # model -> cooldown-until
         self.soft_cooldown_seconds = SOFT_COOLDOWN_SECONDS
         self.transient_threshold = TRANSIENT_THRESHOLD
+        # الترتيب بالرتبة: داخل نفس المفتاح تُجرَّب الموديلات الأقوى/الأحدث
+        # أولًا (الموديلات بلا لاحقة رقمية/معاينة تُرتب حسب الجدول)
+        self.models = sorted(
+            self.models,
+            key=lambda m: (-MODEL_RANK.get(m, MODEL_RANK_DEFAULT), m))
+        # إحصاء لكل موديل — الترتيب الذي يطلبه المستخدم (أقوى/أسرع/حالته)
+        self.model_stats: dict[str, dict] = {}
+        # ذاكرة صحة دائمة: حالة الموديلات الميتة تنجو من إعادة التشغيل
+        self._health_file = (Path(__file__).resolve().parents[2]
+                             / "cache" / "model_health.json")
+        self._load_model_health()
         # Random start: every process used to begin at pair 0, so repeated
         # short-lived runs (each Streamlit/script run) hammered the SAME first
         # pairs until they 429'd while the rest of the pool sat unused.
@@ -65,6 +91,77 @@ class APIKeyPool:
         self._lock = threading.Lock()  # pick/mark are called from worker threads
 
     # ------------------------------------------------------------------ pick
+
+    # ----------------------------------------- persistent model health
+
+    def _load_model_health(self) -> None:
+        """حالة الموديلات الميتة تنجو من إعادة التشغيل — التشغيل الجديد
+        يبدأ معرفًا بالمستنزف/المتبرّد (صفر اكتشاف مكلف 45 ثانية)."""
+        try:
+            import json
+            f = self._health_file
+            if not f.exists():
+                return
+            data = json.loads(f.read_text(encoding="utf-8"))
+            now = time.time()
+            # الصيغة: مفتاح التسجيل = masked|model — يُطبق على حالته
+            for rec_key, rec in (data.get("depleted") or {}).items():
+                masked, _, model = rec_key.partition("|")
+                state = next((s for s in self.states
+                              if s.masked == masked), None)
+                ts = float(rec.get("ts", 0))
+                if state is not None and model and now - ts < (
+                        self.depletion_reset_seconds):
+                    state.depleted[model] = ts
+            for rec_key, rec in (data.get("unavailable") or {}).items():
+                masked, _, model = rec_key.partition("|")
+                state = next((s for s in self.states
+                              if s.masked == masked), None)
+                if state is not None and model and now - float(
+                        rec.get("ts", 0)) < 6 * 3600:
+                    state.unavailable[model] = str(rec.get("reason", ""))[:120]
+            for model, until in (data.get("cooldown") or {}).items():
+                if float(until) > now:
+                    self._model_cooldown[model] = float(until)
+        except Exception:
+            pass  # الذاكرة الدائمة تحسين — فشلها لا يوقف المسبح
+
+    def _save_model_health(self) -> None:
+        try:
+            import json
+            f = self._health_file
+            f.parent.mkdir(parents=True, exist_ok=True)
+            now = time.time()
+            data = {
+                "ts": now,
+                "depleted": {
+                    f"{s.masked}|{m}": {"ts": ts}
+                    for s in self.states for m, ts in s.depleted.items()
+                    if now - ts < self.depletion_reset_seconds
+                },
+                "unavailable": {
+                    f"{s.masked}|{m}": {"reason": r}
+                    for s in self.states for m, r in s.unavailable.items()
+                },
+                "cooldown": {m: u for m, u in self._model_cooldown.items()
+                             if u > now},
+            }
+            f.write_text(json.dumps(data, ensure_ascii=False, indent=1),
+                         encoding="utf-8")
+        except Exception:
+            pass
+
+    def _bump_model_stats(self, model: str, seconds: float | None = None,
+                          failed: bool = False) -> None:
+        st = self.model_stats.setdefault(
+            model, {"ok": 0, "fail": 0, "lat_sum": 0.0, "lat_n": 0})
+        if failed:
+            st["fail"] += 1
+        else:
+            st["ok"] += 1
+            if seconds is not None:
+                st["lat_sum"] += seconds
+                st["lat_n"] += 1
 
     def _usable_model(self, state: KeyState, model: str) -> bool:
         if model in state.unavailable:
@@ -86,9 +183,11 @@ class APIKeyPool:
         with self._lock:
             n = self._transient_503.get(model, 0) + 1
             self._transient_503[model] = n
+            self._bump_model_stats(model, failed=True)   # كل فشل يُحصى
             if n >= self.transient_threshold:
                 self._model_cooldown[model] = (
-                    time.time() + self.soft_cooldown_seconds)
+                        time.time() + self.soft_cooldown_seconds)
+                self._save_model_health()   # حفظ عند بدء التبريد فقط
 
     def reset_transient(self, model: str) -> None:
         """نجاح = ومضة الـ503 السابقة لم تكن عطلًا — يفك العداد."""
@@ -104,8 +203,10 @@ class APIKeyPool:
         """Next available (key, model) pair.
 
         Walks the cartesian product linearly so usage spreads evenly over ALL
-        pairs — every key serves both models in turn (per-model quotas mean
-        alternating models doubles the free allowance per key).
+        pairs — the models list is RANK-sorted (strongest/freshest first per
+        key), so the rotation naturally tries the best model on each key
+        before falling to the weaker ones (per-model quotas mean alternating
+        models multiplies the free allowance per key).
         Thread-safe (vision extraction runs batches concurrently).
         """
         n_keys, n_models = len(self.states), len(self.models)
@@ -130,17 +231,29 @@ class APIKeyPool:
     def _find(self, key: str) -> KeyState | None:
         return next((s for s in self.states if s.key == key), None)
 
+    def record_call(self, model: str, seconds: float) -> None:
+        """إحصاء النداء الناجح لكل موديل — ورفع أي تبريد ساري فورًا:
+        نجاح حي يثبت أن الموديل عاد قبل انتهاء نافذته."""
+        with self._lock:
+            self._bump_model_stats(model, seconds)
+            self._transient_503.pop(model, None)
+            self._model_cooldown.pop(model, None)
+
     def mark_quota_exhausted(self, key: str, model: str) -> None:
         with self._lock:
             state = self._find(key)
             if state:
                 state.depleted[model] = time.time()
+            self._bump_model_stats(model, failed=True)
+            self._save_model_health()
 
     def mark_model_unavailable(self, key: str, model: str, reason: str) -> None:
         with self._lock:
             state = self._find(key)
             if state:
                 state.unavailable[model] = reason
+            self._bump_model_stats(model, failed=True)
+            self._save_model_health()
 
     def mark_dead(self, key: str, reason: str) -> None:
         with self._lock:
@@ -148,6 +261,7 @@ class APIKeyPool:
             if state:
                 state.dead = True
                 state.dead_reason = reason
+            self._save_model_health()
 
     def mark_success(self, key: str) -> None:
         with self._lock:
@@ -179,6 +293,23 @@ class APIKeyPool:
             "models": list(self.models),
             "depleted_pairs": depleted_pairs,
             "total_ok_calls": sum(s.ok_calls for s in self.states),
+            # ترتيب الموديلات بالأداء الحي: نجاحات/فشل/متوسط الاستجابة/تبريد
+            "model_ranking": sorted(
+                (
+                    {"model": m,
+                     "rank": MODEL_RANK.get(m, MODEL_RANK_DEFAULT),
+                     "ok": (self.model_stats.get(m) or {}).get("ok", 0),
+                     "fail": (self.model_stats.get(m) or {}).get("fail", 0),
+                     "avg_s": (
+                         round((self.model_stats.get(m) or {}).get("lat_sum", 0)
+                               / max(1, (self.model_stats.get(m) or {}).get("lat_n", 1)), 1)
+                         if (self.model_stats.get(m) or {}).get("lat_n")
+                         else None),
+                     "cooling": self.model_in_cooldown(m)}
+                    for m in self.models
+                ),
+                key=lambda x: (-x["ok"], x["avg_s"] if x["avg_s"] else 999),
+            ),
             "states": [
                 {
                     "masked": s.masked,

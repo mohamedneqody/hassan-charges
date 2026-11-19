@@ -9,7 +9,7 @@ pdfplumber>=0.11
 pypdfium2>=4.0
 opencv-python-headless>=4.9
 python-dotenv>=1.0
-google-genai>=1.0
+google-genai==2.28.0  # pin: 3.x flips default API to v1, breaking all preview models (404) in cloud
 
 # Optional local pre-layer (speeds up scanned PDFs, zero API cost):
 # pip install indra-ocr==1.1.2   -> set LOCAL_OCR_ENABLED=0 to disable

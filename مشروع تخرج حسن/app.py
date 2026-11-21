@@ -19,7 +19,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-_APP_BUILD_ID = "2026-11-21-v9.9"
+_APP_BUILD_ID = "2026-11-21-v9.10"
 if not __import__("os").environ.get("PYTEST_CURRENT_TEST"):
     if getattr(sys, "_finsight_build_id", None) != _APP_BUILD_ID:
         for _mod_name in [m for m in list(sys.modules) if m == "src" or m.startswith("src.")]:
@@ -93,15 +93,17 @@ def _pool_health_lines() -> list[str]:
     if not pool.states:
         return ["لا توجد مفاتيح API في ملف ‎.env — أضف GEMINI_API_KEYS لتفعيل قراءة الملفات الممسوحة."]
     st = pool.status()
-    total_pairs = len(pool.states) * len(pool.models)
+    total_pairs = st.get("total_pairs", len(pool.states) * len(pool.models))
+    usable_pairs = st.get("usable_pairs", total_pairs - st["depleted_pairs"])
+    est_daily = st.get("est_daily_quota", total_pairs * 20)
+    sw_txt = f" · سرعة التبديل: {st['last_switch_ms']}ms" if st.get("last_switch_ms") is not None else ""
     return [
         f"حالة المفاتيح: {st['active_keys']}/{st['total_keys']} نشط · "
-        f"أزواج مستنفدة: {st['depleted_pairs']}/{total_pairs} · "
-        f"موديلات: {', '.join(st['models'])}",
+        f"أزواج متاحة: {usable_pairs}/{total_pairs} (حصة ≈ {est_daily} طلب/يوم) · "
+        f"مستنفد يومي: {st['depleted_pairs']} · تبريد دقيقة: {st.get('rpm_cooling_pairs', 0)}{sw_txt}",
+        f"ترتيب الموديلات بالسرعة: {', '.join(st['models'])}",
         "الحصة المجانية ≈ 20 طلباً/يوم لكل مفتاح لكل موديل وتتجدد بعد منتصف "
-        "الليل بتوقيت غرب أمريكا؛ أو أضف مفاتيح جديدة في ملف ‎.env / فعّل "
-        "الفوترة في Google AI Studio. لملفات PDF الكبيرة استخدم خيار نطاق "
-        "الصفحات لتقليل عدد النداءات.",
+        "الليل بتوقيت غرب أمريكا؛ التبديل التلقائي عند انتهاء حصة أي زوج يتم في أقل من ثانية.",
     ]
 
 
@@ -1783,31 +1785,39 @@ def dashboard_screen() -> None:
 
         pool_status = get_pool().status()
         with st.expander(
-            f"🔑 مفاتيح API ({pool_status['active_keys']}/{pool_status['total_keys']} نشط)",
+            f"🔑 مفاتيح API ({pool_status['active_keys']}/{pool_status['total_keys']} نشط · {pool_status.get('usable_pairs', 0)}/{pool_status.get('total_pairs', 0)} زوج)",
             expanded=False,
         ):
-            st.caption(
-                f"Models: {' · '.join(pool_status['models'])}\n\n"
-                f"نداءات ناجحة: {pool_status['total_ok_calls']} · "
-                f"أزواج مستنفدة: {pool_status['depleted_pairs']}"
+            sw_part = (
+                f" · تبديل: {pool_status['last_switch_ms']}ms"
+                if pool_status.get("last_switch_ms") is not None
+                else ""
             )
-            # ترتيب الموديلات بالأداء الحي — الترتيب الذي طلبه المستخدم
+            st.caption(
+                f"الحصة اليومية المقدّرة: ~{pool_status.get('est_remaining_quota', 0)} / {pool_status.get('est_daily_quota', 0)} طلب/يوم\n\n"
+                f"نداءات ناجحة: {pool_status['total_ok_calls']} · "
+                f"مستنفد يومي: {pool_status['depleted_pairs']} · "
+                f"تبريد RPM: {pool_status.get('rpm_cooling_pairs', 0)}{sw_part}"
+            )
+            # ترتيب الموديلات بالأداء والسرعة الحية
             ranking = pool_status.get("model_ranking") or []
             if ranking:
-                st.markdown("**🏆 ترتيب الموديلات (أداء حي)**")
-                for r_ in ranking:
+                st.markdown("**⚡ ترتيب الموديلات (السرعة والأداء الحي)**")
+                for idx_m, r_ in enumerate(ranking, 1):
                     cool = " · ❄️ تبريد" if r_["cooling"] else ""
-                    avg = (f" · متوسط {r_['avg_s']}s" if r_["avg_s"] else "")
+                    avg = (f" · {r_['avg_s']}s" if r_["avg_s"] is not None else "")
                     st.markdown(
-                        f"• `{r_['model']}` — ✓ {r_['ok']} / ✗ {r_['fail']}"
+                        f"{idx_m}. `{r_['model']}` — ✓ {r_['ok']} / ✗ {r_['fail']}"
                         f"{avg}{cool}")
             for s in pool_status["states"]:
-                icon = "⛔" if s["dead"] else ("🟡" if s["depleted"] else "🟢")
+                icon = "⛔" if s["dead"] else ("🟡" if (s["depleted"] or s.get("rpm_cooling")) else "🟢")
                 line = f"{icon} `{s['masked']}` — {s['ok_calls']} نداء"
                 if s["dead"]:
                     line += f" · {s['dead_reason'][:40]}"
                 elif s["depleted"]:
-                    line += f" · حصة مستنفدة: {', '.join(s['depleted'])}"
+                    line += f" · مستنفد: {', '.join(s['depleted'])}"
+                elif s.get("rpm_cooling"):
+                    line += f" · تبريد دقيقة: {', '.join(s['rpm_cooling'])}"
                 st.markdown(line)
             if st.button("🔄 إعادة ضبط حالة المفاتيح", use_container_width=True):
                 from src.ai.gemini_agent import reset_pool

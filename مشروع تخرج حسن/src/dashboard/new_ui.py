@@ -1818,6 +1818,56 @@ def render(results: dict, analysis, raw: bytes | None) -> None:
         for n in vm["profile"][:2]:
             st.caption(note_ar(n) if is_ar else str(n))
         st.divider()
+        try:
+            from src.ai.gemini_agent import get_pool, reset_pool
+
+            _ps = get_pool().status()
+            _n_keys = _ps.get("active_keys", 0)
+            _tot_keys = _ps.get("total_keys", 0)
+            _u_pairs = _ps.get("usable_pairs", 0)
+            _t_pairs = _ps.get("total_pairs", 0)
+            _est_rem = _ps.get("est_remaining_quota", _u_pairs * 20)
+            _est_tot = _ps.get("est_daily_quota", _t_pairs * 20)
+            _exp_title = (
+                f"🔑 مسبح Gemini ({_n_keys}/{_tot_keys} · {_u_pairs}/{_t_pairs} زوج)"
+                if is_ar
+                else f"🔑 Gemini Pool ({_n_keys}/{_tot_keys} · {_u_pairs}/{_t_pairs} pairs)"
+            )
+            with st.expander(_exp_title, expanded=False):
+                _sw = _ps.get("last_switch_ms")
+                _sw_s = (
+                    (f" · ⚡ تبديل: {_sw}ms" if is_ar else f" · ⚡ switch: {_sw}ms")
+                    if _sw is not None
+                    else ""
+                )
+                st.caption(
+                    (
+                        f"الحصة المقدّرة: ~{_est_rem} / {_est_tot} طلب/يوم (20 × {_t_pairs} زوج)\n\n"
+                        f"ناجح: {_ps.get('total_ok_calls', 0)} · مستنفد يومي: {_ps.get('depleted_pairs', 0)} · "
+                        f"تبريد دقيقة: {_ps.get('rpm_cooling_pairs', 0)}{_sw_s}"
+                    )
+                    if is_ar
+                    else (
+                        f"Est. quota: ~{_est_rem} / {_est_tot} req/day (20 × {_t_pairs} pairs)\n\n"
+                        f"OK: {_ps.get('total_ok_calls', 0)} · Daily depleted: {_ps.get('depleted_pairs', 0)} · "
+                        f"RPM cooling: {_ps.get('rpm_cooling_pairs', 0)}{_sw_s}"
+                    )
+                )
+                for _idx_m, _rm in enumerate(_ps.get("model_ranking") or [], 1):
+                    _cool_tag = " ❄️" if _rm.get("cooling") else ""
+                    _lat_tag = f" · {_rm['avg_s']}s" if _rm.get("avg_s") is not None else ""
+                    st.caption(
+                        f"{_idx_m}. `{_rm['model']}` — ✓{_rm['ok']} / ✗{_rm['fail']}{_lat_tag}{_cool_tag}"
+                    )
+                if st.button(
+                    "🔄 إعادة ضبط مسبح المفاتيح" if is_ar else "🔄 Reset key pool",
+                    use_container_width=True,
+                    key="new_ui_reset_pool_btn",
+                ):
+                    reset_pool()
+                    st.rerun()
+        except Exception:
+            pass
         if st.button(_T["new_analysis"][lang], use_container_width=True):
             for k in (
                 "results",

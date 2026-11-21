@@ -61,15 +61,15 @@ def build_pairs(keys: list[str], models: list[str],
 
 
 def _model_list() -> list[str]:
-    """All configured models (GEMINI_MODELS), falling back to GEMINI_MODEL."""
+    """All configured models (GEMINI_MODELS) sorted by speed rank, falling back to DEFAULT_MODELS."""
     import os
 
     import src.config  # noqa: F401  (import runs load_dotenv)
-    from src.config import GEMINI_MODEL
+    from src.ai.key_pool import DEFAULT_MODELS, MODEL_RANK, MODEL_RANK_DEFAULT
 
     raw = os.environ.get("GEMINI_MODELS", "")
-    models = [m.strip() for m in raw.split(",") if m.strip()]
-    return models or [GEMINI_MODEL]
+    models = [m.strip() for m in raw.split(",") if m.strip()] or list(DEFAULT_MODELS)
+    return sorted(models, key=lambda m: (-MODEL_RANK.get(m, MODEL_RANK_DEFAULT), m))
 
 
 def read_crop(png: bytes, label: str, year: int | None, what: str,
@@ -104,6 +104,12 @@ def read_crop(png: bytes, label: str, year: int | None, what: str,
         from google import genai
         from google.genai import types
 
+        from src.ai.key_pool import (
+            adapt_config_for_model,
+            get_genai_client,
+            mark_thinking_budget_unsupported,
+        )
+
         content = [
             prompt,
             types.Part.from_bytes(data=png, mime_type="image/png"),
@@ -117,20 +123,33 @@ def read_crop(png: bytes, label: str, year: int | None, what: str,
         pairs = build_pairs(keys, _model_list(), preferred=model)
         failures: list[str] = []
         dead_keys: set[str] = set()
-        max_attempts = len(pairs) + 2
+        dead_models: set[str] = set()
         for key, model_name in pairs:
-            if key in dead_keys:
-                continue                      # auth-rejected key — skip fast
+            if key in dead_keys or model_name in dead_models:
+                continue                      # auth-rejected key or 404 model — skip fast
             result["attempts"] += 1
             t0 = time.perf_counter()
             try:
-                client = genai.Client(
-                    api_key=key,
-                    http_options=types.HttpOptions(timeout=60000),
-                )
-                resp = client.models.generate_content(
-                    model=model_name, contents=content, config=cfg,
-                )
+                client = get_genai_client(key, timeout_ms=20_000)
+                eff_cfg = adapt_config_for_model(cfg, model_name)
+                try:
+                    resp = client.models.generate_content(
+                        model=model_name, contents=content, config=eff_cfg,
+                    )
+                except Exception as exc_inner:
+                    low_i = str(exc_inner).lower()
+                    if (
+                        getattr(eff_cfg, "thinking_config", None) is not None
+                        and ("400" in low_i or "invalid_argument" in low_i)
+                    ):
+                        mark_thinking_budget_unsupported(model_name)
+                        resp = client.models.generate_content(
+                            model=model_name,
+                            contents=content,
+                            config=adapt_config_for_model(cfg, model_name),
+                        )
+                    else:
+                        raise
                 result["latency_ms"] = int((time.perf_counter() - t0) * 1000)
                 u = getattr(resp, "usage_metadata", None)
                 if u is not None:
@@ -144,18 +163,15 @@ def read_crop(png: bytes, label: str, year: int | None, what: str,
                 return _validate(result, resp.text or "", label, what)
             except Exception as exc:  # noqa: BLE001 — every failure recorded
                 kind = classify_gemini_error(exc)
-                transient = kind == "other" or "deadline" in str(exc).lower() \
-                    or "unavailable" in str(exc).lower() \
-                    or "getaddrinfo" in str(exc).lower()
                 failures.append(f"{model_name}/{kind}: {str(exc)[:120]}")
                 if kind == "auth":
                     dead_keys.add(key)        # this key is bad for EVERY model
                     continue
-                if kind == "quota":
-                    continue                  # per-MODEL quota — next model/key
-                if transient and result["attempts"] < max_attempts:
-                    time.sleep(2)
+                if kind == "model":
+                    dead_models.add(model_name)
                     continue
+                # quota (429) or transient (503/504): switch immediately (< 1s)
+                continue
         result["failure"] = "; ".join(failures) or "unknown"
         result["notes"] = "BLOCKED — recorded, not retried past the pool"
         return result

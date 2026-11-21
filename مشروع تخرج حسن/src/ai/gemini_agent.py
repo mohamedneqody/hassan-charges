@@ -12,11 +12,17 @@ import time
 import re
 from dataclasses import dataclass, field
 
-from src.ai.key_pool import APIKeyPool
+from src.ai.key_pool import (
+    APIKeyPool,
+    adapt_config_for_model,
+    classify_quota_scope,
+    get_genai_client,
+    mark_thinking_budget_unsupported,
+)
 from src.config import GEMINI_MODEL, REPORT_LANGUAGE
 
 # Fast-fail HTTP timeout (ms) — a hung key must not block the rotation.
-HTTP_TIMEOUT_MS = 30_000
+HTTP_TIMEOUT_MS = 22_000
 COMMENTARY_BUDGET = 75  # seconds — total commentary time before rule-based fallback
 # (التسريع 2026-11-13: 100 → 60 — قاعدة الاحتياط القائمة على القواعد تعوض
 # أي تعليق لم يُنتج، والرحلة النموذجية كانت تستهلك حتى دقيقتين في التعليق)
@@ -180,24 +186,28 @@ def _build_config():
     )
 
 
-_CLIENT_CACHE: dict[str, object] = {}
-
-
 def _call_model(key: str, model: str, prompt: str, config) -> str:
-    """One Gemini call. Clients are cached per key (reuse = faster)."""
-    client = _CLIENT_CACHE.get(key)
-    if client is None:
-        from google import genai
-        from google.genai import types
-
-        client = genai.Client(
-            api_key=key,
-            http_options=types.HttpOptions(timeout=HTTP_TIMEOUT_MS),
+    """One Gemini call with cached attempt=1 client (instant failover < 1s)."""
+    client = get_genai_client(key, timeout_ms=HTTP_TIMEOUT_MS)
+    eff_config = adapt_config_for_model(config, model)
+    try:
+        response = client.models.generate_content(
+            model=model, contents=prompt, config=eff_config
         )
-        _CLIENT_CACHE[key] = client
-    response = client.models.generate_content(
-        model=model, contents=prompt, config=config
-    )
+    except Exception as exc:
+        msg = str(exc).lower()
+        if (
+            eff_config is not None
+            and getattr(eff_config, "thinking_config", None) is not None
+            and ("400" in msg or "invalid_argument" in msg)
+        ):
+            mark_thinking_budget_unsupported(model)
+            retry_cfg = adapt_config_for_model(config, model)
+            response = client.models.generate_content(
+                model=model, contents=prompt, config=retry_cfg
+            )
+        else:
+            raise
     return (response.text or "").strip()
 
 
@@ -360,7 +370,7 @@ def _apply_post_generation_guardrail(
             mag = abs(neg)
             # أعد إشارة السالب للقيمة المذكورة موجبة
             for tok in __import__("re").findall(
-                    f"(?<![-.\d]){mag:g}(?![\d])", t):
+                    rf"(?<![-.\d]){mag:g}(?![\d])", t):
                 t = t.replace(tok, f"-{tok}", 1)
         fixed.append((metric, t))
     analysis.ratio_comments = fixed
@@ -573,16 +583,14 @@ def analyze_financials(
     )
     config = _build_config()
 
-    max_attempts = min(pool.total_pairs, 14)
+    # Traverse ALL (key, model) pairs (e.g. 7 keys × 7 models = 49 pairs).
+    # With HttpRetryOptions(attempts=1), each 429 skips in ~250 ms (< 1s).
+    max_attempts = max(pool.total_pairs, 1)
     last_error = "no attempt was made"
     started = time.time()
     # Two sweeps: if every pair failed with a TRANSIENT error (e.g. 503 high
-    # demand), wait briefly and try each pair once more. Quota/auth/model
-    # failures are marked immediately and not retried.
-    # v6 (تسريع بلا مساس بالدقة): الميزانية تحكم الجولتين معًا — سابقًا
-    # الجولة الأولى كانت تمشي 14 محاولة × مهلة شبكة 45 ثانية = ~10.5 دقيقة
-    # قبل الاستسلام حين تكون كل الحصص مستنفدة. النداء الجاري يكتمل دائمًا
-    # (الفحص بين المحاولات)، والفشل السريع يسلم للسرد الاحتمالي الموجود.
+    # demand), wait briefly and try once more. Quota/auth/model failures are
+    # marked immediately and rotated to the next pair in < 1 second.
     for sweep in range(2):
         if time.time() - started > COMMENTARY_BUDGET:
             break
@@ -594,6 +602,7 @@ def analyze_financials(
             if picked is None:
                 break
             state, model = picked
+            t_call = time.perf_counter()
             try:
                 raw_text = (
                     caller(state.key, model, user_prompt, config)
@@ -601,25 +610,40 @@ def analyze_financials(
                     else _call_model(state.key, model, user_prompt, config)
                 )
             except Exception as exc:
+                fail_ms = (time.perf_counter() - t_call) * 1000.0
                 kind = classify_gemini_error(exc)
                 if kind == "quota":
-                    pool.mark_quota_exhausted(state.key, model)
-                    last_error = f"free quota exhausted for {model} on {state.masked}"
+                    scope, cd_s = classify_quota_scope(exc)
+                    if scope == "rpm":
+                        pool.mark_rpm_limited(state.key, model, cd_s)
+                        last_error = f"RPM rate limit for {model} on {state.masked}"
+                    else:
+                        pool.mark_quota_exhausted(state.key, model)
+                        last_error = f"free quota exhausted for {model} on {state.masked}"
+                    pool.record_failover(fail_ms)
                     transient_only = False
                 elif kind == "auth":
                     pool.mark_dead(state.key, str(exc)[:200])
+                    pool.record_failover(fail_ms)
                     last_error = f"key {state.masked} rejected (invalid or forbidden)"
                     transient_only = False
                 elif kind == "model":
-                    pool.mark_model_unavailable(state.key, model, str(exc)[:200])
+                    low_exc = str(exc).lower()
+                    global_404 = "no longer available" in low_exc or "models/" in low_exc
+                    pool.mark_model_unavailable(
+                        state.key, model, str(exc)[:200], all_keys=global_404
+                    )
+                    pool.record_failover(fail_ms)
                     last_error = f"model {model} unavailable for {state.masked}"
                     transient_only = False
                 else:
                     last_error = str(exc)[:300]
+                    pool.record_failover(fail_ms)
                     if any(tok in last_error.lower() for tok in ("503", "504", "deadline", "unavailable", "timeout")):
                         pool.mark_transient_failure(model)
                 continue
 
+            elapsed_s = time.perf_counter() - t_call
             try:
                 analysis = parse_response(raw_text)
             except (json.JSONDecodeError, ValueError) as exc:
@@ -633,6 +657,7 @@ def analyze_financials(
             # يصلح % المُقحمة مكان x ويستعيد إشارة السالب من القيم الممررة
             analysis = _apply_post_generation_guardrail(analysis, payload)
             pool.mark_success(state.key)
+            pool.record_call(model, elapsed_s)
             analysis.model = model
             try:
                 analysis = _repair_comments(analysis, payload, state.key, model, config, caller)
@@ -641,8 +666,8 @@ def analyze_financials(
                 pass  # repair is best-effort; keep the first-pass analysis
             return analysis
 
-        if sweep == 0 and transient_only and pool.pick() is not None:
-            time.sleep(5)  # wait out the demand spike, retry every pair once
+        if sweep == 0 and transient_only and pool.has_usable_pairs():
+            time.sleep(1.5)  # brief pause on transient demand spike, then retry
         else:
             break
 

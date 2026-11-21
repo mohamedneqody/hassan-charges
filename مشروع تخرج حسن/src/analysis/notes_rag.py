@@ -20,8 +20,10 @@ works offline, zero extra model downloads.
 """
 from __future__ import annotations
 
+import json
 import math
 import re
+import time
 import unicodedata
 from dataclasses import dataclass, field
 
@@ -216,10 +218,16 @@ def formulate_answer(question: str, chunks: list[NotesChunk], company: str = "")
         return None
     try:
         import src.config  # noqa: F401  (loads .env keys)
-        from src.ai.key_pool import APIKeyPool
-        from src.extraction.vision_ocr import _call_with_rotation
+        from google.genai import types
+        from src.ai.gemini_agent import classify_gemini_error, get_pool
+        from src.ai.key_pool import (
+            adapt_config_for_model,
+            classify_quota_scope,
+            get_genai_client,
+            mark_thinking_budget_unsupported,
+        )
 
-        pool = APIKeyPool.from_env()
+        pool = get_pool()
         if not pool.has_usable_pairs():
             return None
         sources = "\n\n".join(f"[صفحة {c.page}]\n{c.text}" for c in chunks)
@@ -232,7 +240,71 @@ def formulate_answer(question: str, chunks: list[NotesChunk], company: str = "")
             + (f"الشركة: {company}\n" if company else "")
             + f"السؤال: {question}\n\nمقاطع الإيضاحات:\n{sources}"
         )
-        raw = _call_with_rotation(pool, prompt, [])
+        base_cfg = types.GenerateContentConfig(
+            temperature=0.2,
+            max_output_tokens=1024,
+            thinking_config=types.ThinkingConfig(thinking_budget=0),
+        )
+        raw = None
+        started = time.perf_counter()
+        max_attempts = max(pool.total_pairs, 1)
+        for _ in range(max_attempts):
+            if time.perf_counter() - started > 7.5:
+                break
+            picked = pool.pick()
+            if picked is None:
+                break
+            state, model = picked
+            t0 = time.perf_counter()
+            try:
+                client = get_genai_client(state.key, timeout_ms=10_000)
+                eff_cfg = adapt_config_for_model(base_cfg, model)
+                try:
+                    resp = client.models.generate_content(
+                        model=model, contents=prompt, config=eff_cfg
+                    )
+                except Exception as exc_inner:
+                    low_i = str(exc_inner).lower()
+                    if (
+                        getattr(eff_cfg, "thinking_config", None) is not None
+                        and ("400" in low_i or "invalid_argument" in low_i)
+                    ):
+                        mark_thinking_budget_unsupported(model)
+                        resp = client.models.generate_content(
+                            model=model,
+                            contents=prompt,
+                            config=adapt_config_for_model(base_cfg, model),
+                        )
+                    else:
+                        raise
+                elapsed = time.perf_counter() - t0
+                pool.mark_success(state.key)
+                pool.record_call(model, elapsed)
+                raw = (resp.text or "").strip()
+                break
+            except Exception as exc:
+                fail_ms = (time.perf_counter() - t0) * 1000.0
+                kind = classify_gemini_error(exc)
+                pool.record_failover(fail_ms)
+                if kind == "quota":
+                    scope, cd_s = classify_quota_scope(exc)
+                    if scope == "rpm":
+                        pool.mark_rpm_limited(state.key, model, cd_s)
+                    else:
+                        pool.mark_quota_exhausted(state.key, model)
+                elif kind == "auth":
+                    pool.mark_dead(state.key, str(exc)[:200])
+                elif kind == "model":
+                    low_e = str(exc).lower()
+                    pool.mark_model_unavailable(
+                        state.key,
+                        model,
+                        str(exc)[:200],
+                        all_keys=("no longer available" in low_e or "models/" in low_e),
+                    )
+                else:
+                    pool.mark_transient_failure(model)
+                continue
         if not raw:
             return None
         cleaned = raw.strip()

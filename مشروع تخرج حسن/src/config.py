@@ -63,7 +63,7 @@ if not os.getenv("PYTEST_CURRENT_TEST"):
         os.environ["REVIEW_LOG_PATH"] = str(Path(_tf_cfg.gettempdir()) / "finsight_human_reviews.json")
 
 # --- AI ---
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash").strip() or "gemini-3.8-flash"
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3-flash-preview").strip() or "gemini-3-flash-preview"
 
 # Language of the AI ratio commentary: "ar" (Modern Standard Arabic, default)
 # or "en". Metric names stay in English either way.

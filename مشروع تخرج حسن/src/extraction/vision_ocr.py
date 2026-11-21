@@ -376,24 +376,37 @@ def _enough_core(data: FinancialData) -> bool:
 
 def _call_vision(key: str, model: str, prompt: str, images: list[bytes]) -> str:
     from google.genai import types
+    from src.ai.key_pool import adapt_config_for_model, mark_thinking_budget_unsupported
 
     client = _get_client(key)
     parts = [prompt] + [
         types.Part.from_bytes(data=img, mime_type="image/jpeg") for img in images
     ]
-    response = client.models.generate_content(model=model, contents=parts, config=_vision_config())
+    base_cfg = _vision_config()
+    eff_cfg = adapt_config_for_model(base_cfg, model)
+    try:
+        response = client.models.generate_content(model=model, contents=parts, config=eff_cfg)
+    except Exception as exc:
+        msg = str(exc).lower()
+        if (
+            getattr(eff_cfg, "thinking_config", None) is not None
+            and ("400" in msg or "invalid_argument" in msg)
+        ):
+            mark_thinking_budget_unsupported(model)
+            response = client.models.generate_content(
+                model=model,
+                contents=parts,
+                config=adapt_config_for_model(base_cfg, model),
+            )
+        else:
+            raise
     return (response.text or "").strip()
 
 
 def _get_client(key: str):
-    from google import genai
-    from google.genai import types
+    from src.ai.key_pool import get_genai_client
 
-    cached = _CLIENTS.get(key)
-    if cached is None:
-        cached = genai.Client(api_key=key, http_options=types.HttpOptions(timeout=45_000))
-        _CLIENTS[key] = cached
-    return cached
+    return get_genai_client(key, timeout_ms=35_000)
 
 
 def _vision_config():
@@ -407,29 +420,23 @@ def _vision_config():
     )
 
 
-_CLIENTS: dict[str, object] = {}
-
-
 def _call_with_rotation(
     pool: APIKeyPool,
     prompt: str,
     images: list[bytes],
     call_stats: list | None = None,
 ) -> str:
-    """Vision call with the same key/model rotation as the commentary path,
-    plus one extra full sweep after a pause when every failure was transient
-    (e.g. 503 high demand) — mirroring analyze_financials.
+    """Vision call with full key/model rotation (ALL pairs, sub-second failover).
 
     Fail-fast: when every pair is already marked depleted/dead, raise
-    immediately instead of sweeping (a sweep against a dead pool only adds
-    latency to every batch and retry).
-
-    call_stats: قائمة مشتركة (thread-safe بالـappend) تُسجل (model, seconds)
-    لكل نداء ناجح — تشخيص صادق لتوزيع زمن النداءات أول مرة.
+    immediately instead of sweeping. With `HttpRetryOptions(attempts=1)`,
+    a 429 on one (key, model) returns in ~250ms and switches immediately to
+    the next pair across all `len(keys) * len(models)` pairs.
     """
     import time
 
     from src.ai.gemini_agent import classify_gemini_error
+    from src.ai.key_pool import classify_quota_scope
 
     if not pool.has_usable_pairs():
         raise RuntimeError(
@@ -437,47 +444,62 @@ def _call_with_rotation(
             "(daily free-tier quota resets after midnight US Pacific)."
         )
     last_error = "no attempt was made"
+    max_attempts = max(pool.total_pairs, 1)
     for sweep in range(2):
         transient_only = True
-        for _ in range(min(pool.total_pairs, 14)):
+        for _ in range(max_attempts):
             picked = pool.pick()
             if picked is None:
                 break
             state, model = picked
+            t0 = time.perf_counter()
             try:
-                t0 = time.time()
                 raw = _call_vision(state.key, model, prompt, images)
+                elapsed = time.perf_counter() - t0
                 if call_stats is not None:
-                    call_stats.append((model, time.time() - t0))
+                    call_stats.append((model, elapsed))
                 pool.reset_transient(model)
-                if call_stats is not None:
-                    pool.record_call(model, time.time() - t0)
+                pool.mark_success(state.key)
+                pool.record_call(model, elapsed)
                 return raw
             except Exception as exc:
+                fail_ms = (time.perf_counter() - t0) * 1000.0
                 kind = classify_gemini_error(exc)
                 if kind == "quota":
-                    pool.mark_quota_exhausted(state.key, model)
-                    last_error = f"quota exhausted for {model} on {state.masked}"
+                    scope, cd_s = classify_quota_scope(exc)
+                    if scope == "rpm":
+                        pool.mark_rpm_limited(state.key, model, cd_s)
+                        last_error = f"RPM rate limit for {model} on {state.masked}"
+                    else:
+                        pool.mark_quota_exhausted(state.key, model)
+                        last_error = f"quota exhausted for {model} on {state.masked}"
+                    pool.record_failover(fail_ms)
                     transient_only = False
                 elif kind == "auth":
                     pool.mark_dead(state.key, str(exc)[:200])
+                    pool.record_failover(fail_ms)
                     last_error = f"key {state.masked} rejected"
                     transient_only = False
                 elif kind == "model":
-                    pool.mark_model_unavailable(state.key, model, str(exc)[:200])
+                    low_exc = str(exc).lower()
+                    global_404 = "no longer available" in low_exc or "models/" in low_exc
+                    pool.mark_model_unavailable(
+                        state.key, model, str(exc)[:200], all_keys=global_404
+                    )
+                    pool.record_failover(fail_ms)
                     last_error = f"model {model} unavailable"
                     transient_only = False
                 else:
-                    # عابر (503 high demand وغيره): عدّاد التبريد الناعم —
-                    # بعد فشلين متتاليين يُستبعد الموديل مؤقتًا من pick
+                    # عابر (503 high demand / 504 timeout): تبريد ناعم سريع
                     pool.mark_transient_failure(model)
+                    pool.record_failover(fail_ms)
                     last_error = str(exc)[:250]
         if (
             sweep == 0
             and transient_only
             and pool.has_usable_pairs()
         ):
-            time.sleep(6)  # wait out the demand spike, then sweep again
+            time.sleep(1.5)  # brief pause on transient demand spike, then retry
         else:
             break
     # RuntimeError, not ExtractionError: the caller (batch handler) prefixes

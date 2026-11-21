@@ -16,8 +16,8 @@ from src.ai.key_pool import APIKeyPool
 from src.config import GEMINI_MODEL, REPORT_LANGUAGE
 
 # Fast-fail HTTP timeout (ms) — a hung key must not block the rotation.
-HTTP_TIMEOUT_MS = 45_000
-COMMENTARY_BUDGET = 60  # seconds — total commentary time before rule-based fallback
+HTTP_TIMEOUT_MS = 30_000
+COMMENTARY_BUDGET = 75  # seconds — total commentary time before rule-based fallback
 # (التسريع 2026-11-13: 100 → 60 — قاعدة الاحتياط القائمة على القواعد تعوض
 # أي تعليق لم يُنتج، والرحلة النموذجية كانت تستهلك حتى دقيقتين في التعليق)
 # Cap the response: 60 short comments + recommendations fit comfortably.
@@ -354,7 +354,7 @@ def _apply_post_generation_guardrail(
         if metric in ratio_names:
             # % مقحمة مكان x للمؤشرات متعددة المرات
             t = __import__("re").sub(
-                r"(-?\d+(?:\.\d+)?)\s*%", r"x", t)
+                r"(-?\d+(?:\.\d+)?)\s*%", r"\1x", t)
         if metric in neg_names:
             neg = neg_names[metric]
             mag = abs(neg)
@@ -616,6 +616,8 @@ def analyze_financials(
                     transient_only = False
                 else:
                     last_error = str(exc)[:300]
+                    if any(tok in last_error.lower() for tok in ("503", "504", "deadline", "unavailable", "timeout")):
+                        pool.mark_transient_failure(model)
                 continue
 
             try:

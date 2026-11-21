@@ -858,10 +858,10 @@ def sec_insights(vm: dict, analysis) -> None:
     lang = _lang()
     is_ar = lang != "en"
     st.subheader(_T["insights"][lang])
-    if vm["pending_count"]:
-        st.warning(_T["provisional"][lang])
 
     if analysis is None:
+        if vm["pending_count"]:
+            st.warning(_T["provisional"][lang])
         render_empty_state(
             "التعليق التحليلي مؤجل (الوضع السريع)"
             if is_ar
@@ -889,9 +889,15 @@ def sec_insights(vm: dict, analysis) -> None:
             from src.pipeline import build_gemini_payload
 
             results = st.session_state.get("results") or {}
-            results["verification_status"] = vm["verification"]
-            currency = st.session_state.get("currency", "$")
-            payload = build_gemini_payload(results, currency)
+            currency = results.get("currency_hint") or st.session_state.get("currency", "$")
+            payload = build_gemini_payload(
+                {**results, "verification_status": vm["verification"]}, currency
+            )
+            if len(payload.get("metrics") or []) < 4:
+                payload = build_gemini_payload(
+                    {k: v for k, v in results.items() if k != "verification_status"},
+                    currency,
+                )
             dkey = analysis_key(payload)
             cached_a = load_cached_analysis(dkey)
             if cached_a is not None:
@@ -982,45 +988,55 @@ def sec_insights(vm: dict, analysis) -> None:
         )
         return
 
+    notice_parts = []
+    if vm["pending_count"]:
+        notice_parts.append(_T["provisional"][lang])
     if not is_ai_ok:
         reason = str(getattr(analysis, "error", "") or "")
         low_r = reason.lower()
         if any(k in low_r for k in ("429", "resource_exhausted", "quota", "exhausted")):
             friendly = (
-                "انتهت حصة Gemini المجانية لهذا اليوم (تتجدد تلقائيًا بعد منتصف الليل بتوقيت غرب أمريكا، أو أضف مفتاح API جديدًا في Secrets)."
+                "انتهت حصة Gemini المجانية لهذا اليوم (أضف مفتاح API جديدًا في Secrets أو انتظر تجدد الحصة)"
                 if is_ar
-                else "Gemini free quota is exhausted for today (renews after midnight Pacific, or add a new API key in Secrets)."
+                else "Gemini free quota is exhausted for today"
             )
         elif any(k in low_r for k in ("504", "deadline", "timeout", "503", "unavailable")):
             friendly = (
-                "خدمة Gemini لم تستجب في الوقت المحدد (ضغط مؤقت على الخدمة)."
+                "تأخر استجابة خدمة Gemini مؤقتًا (504/503)"
                 if is_ar
-                else "Gemini did not respond in time (temporary service load)."
+                else "Gemini timed out temporarily (504/503)"
             )
         else:
-            friendly = (
-                "تعذّر الاتصال بـ Gemini." if is_ar else "Gemini is unavailable."
-            )
-        st.warning(
-            (
-                f"{friendly} يُعرض الآن التفسير القاعدي الحتمي المحسوب في Python — أرقامه صحيحة ومتتبعة، "
-                "لكنه ليس تعليقًا مولدًا بالذكاء الاصطناعي."
-                if is_ar
-                else f"{friendly} Showing the deterministic rule-based commentary computed in Python — numbers are exact and traceable, but it is not AI-generated."
-            )
+            friendly = "تعذّر الاتصال بـ Gemini" if is_ar else "Gemini is unavailable"
+        notice_parts.append(
+            f"{friendly} — يُعرض التفسير القاعدي الحتمي المحسوب في Python (كل رقم متتبع لأصله)."
+            if is_ar
+            else f"{friendly} — showing deterministic Python rule-based commentary."
         )
-    else:
+    if notice_parts:
+        st.warning(" · ".join(notice_parts))
+    if is_ai_ok:
         st.caption(
             f"model: {analysis.model} · {len(analysis.ratio_comments)} "
             + (
-                "تعليقًا — كل رقم متتبع لأصل محسوب في Python"
+                "تعليقًا من Gemini — كل رقم متتبع لأصل محسوب في Python"
                 if is_ar
-                else "comments — every number traces to a Python computation"
+                else "Gemini comments — every number traces to a Python computation"
             )
         )
 
     results_ctx = st.session_state.get("results") or {"rows": []}
     cats = categorized_insights(results_ctx, analysis)
+
+    st.markdown(
+        '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 12px 0;">'
+        f'<span class="fs-gate ok">● {esc(_T["strengths"][lang])}: {len(cats["strengths"])}</span>'
+        f'<span class="fs-gate bad">▲ {esc(_T["weaknesses"][lang])}: {len(cats["weaknesses"])}</span>'
+        f'<span class="fs-gate miss">◆ {esc(_T["neutral"][lang])}: {len(cats["neutral"])}</span>'
+        f'<span class="fs-gate ok">🧭 {esc(_T["recommendations"][lang])}: {len(cats["recommendations"])}</span>'
+        "</div>",
+        unsafe_allow_html=True,
+    )
 
     groups = [
         (_T["strengths"][lang], cats["strengths"], "is-pos", "ok", "●"),

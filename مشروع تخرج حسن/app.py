@@ -19,7 +19,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-_APP_BUILD_ID = "2026-11-21-v9.6"
+_APP_BUILD_ID = "2026-11-21-v9.7"
 if not __import__("os").environ.get("PYTEST_CURRENT_TEST"):
     if getattr(sys, "_finsight_build_id", None) != _APP_BUILD_ID:
         for _mod_name in [m for m in list(sys.modules) if m == "src" or m.startswith("src.")]:

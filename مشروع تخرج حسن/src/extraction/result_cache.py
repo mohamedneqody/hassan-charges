@@ -87,7 +87,17 @@ def store_extraction(key: str, payload: dict) -> None:
 
 
 def load_cached_analysis(key: str) -> dict | None:
-    return _read("analysis", key)
+    res = _read("analysis", key)
+    if CACHE_DIR == PROJECT_ROOT / "cache" and (res is None or not res.get("ok")):
+        seed_path = SEED_CACHE_DIR / "analysis" / f"{key.replace('|', '__')}.json"
+        if seed_path.exists():
+            try:
+                seed_data = json.loads(seed_path.read_text(encoding="utf-8"))
+                _write("analysis", key, seed_data)
+                return seed_data
+            except Exception:
+                pass
+    return res
 
 
 def store_analysis(key: str, payload: dict) -> None:

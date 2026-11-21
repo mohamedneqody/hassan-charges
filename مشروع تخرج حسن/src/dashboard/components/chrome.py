@@ -45,12 +45,12 @@ def esc(v) -> str:
 
 
 _BIDI_TOKEN_RE = re.compile(
-    r"(?<![&#\w])"
+    r"(?<![&#A-Za-z0-9_])"
     r"(?:"
     r"(?:&lt;=?|&gt;=?|[≤≥])\s*[+-]?\d+(?:[.,]\d+)*(?:[%xX]|pp|[KMB])?"
     r"|[+-]?(?:\$|€|£|EGP|SAR|USD|AED)?[+-]?\d+(?:[.,]\d+)*(?:[%xX]|pp|[KMB])?"
     r")"
-    r"(?![\w;])"
+    r"(?![A-Za-z0-9_;])"
 )
 
 
@@ -97,7 +97,11 @@ def render_header(
             else "FinSight AI — Financial Analyzer"
         )
     if subtitle is None:
-        subtitle = "Financial Intelligence · EAS"
+        subtitle = (
+            "ذكاء مالي وتحليل القوائم · معايير المحاسبة المصرية (EAS)"
+            if lang == "ar"
+            else "Financial Intelligence · EAS"
+        )
 
     analysis = st.session_state.get("analysis")
     results = st.session_state.get("results")
@@ -499,8 +503,19 @@ def build_health_html(hs, lang: str = "ar") -> str:
                 tone, g_cls, g_lbl = "tone-bad", "bad", ("ضعيف" if is_ar else "Weak")
             status_badge = f'<span class="fs-gate {g_cls}">● {esc(g_lbl)}</span>'
 
+        def _loc_detail(d: str) -> str:
+            if not is_ar:
+                return d
+            return (
+                str(d)
+                .replace("Quick Ratio", "السيولة السريعة")
+                .replace("Debt Ratio", "نسبة المديونية")
+                .replace("guideline ", "المعيار ")
+                .replace(": N/A", ": غير متاح")
+            )
+
         chips = "".join(
-            f'<span class="fs-detail-chip">{esc(d)}</span>' for d in (p.details or [])
+            f'<span class="fs-detail-chip">{esc(_loc_detail(d))}</span>' for d in (p.details or [])
         )
         details_html = f'<div class="fs-pillar-details">{chips}</div>' if chips else ""
         pillar_cards.append(

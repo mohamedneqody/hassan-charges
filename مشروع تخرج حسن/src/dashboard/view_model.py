@@ -266,10 +266,15 @@ def categorized_insights(results: dict, analysis) -> dict:
     if not (getattr(analysis, "ok", False) or comments or recs):
         return out
     trend_by_metric = {}
+    ar_by_metric = {}
     for r in list(results.get("rows", [])) + list(results.get("growth_rows", [])):
         name = r.label_ar or r.label
         trend_by_metric[name] = r.status
         trend_by_metric[r.label] = r.status
+        trend_by_metric[r.key] = r.status
+        ar_by_metric[r.label] = name
+        ar_by_metric[r.key] = name
+        ar_by_metric[name] = name
     eff_cur = (results.get("currency_hint") or "").strip()
 
     def _norm_cur(txt: str) -> str:
@@ -281,7 +286,8 @@ def categorized_insights(results: dict, analysis) -> dict:
 
     for metric, text in comments:
         status = trend_by_metric.get(metric)
-        item = {"metric": metric, "text": _norm_cur(text),
+        disp_metric = ar_by_metric.get(metric, metric)
+        item = {"metric": disp_metric, "metric_en": metric, "text": _norm_cur(text),
                 "status": status or "Neutral"}
         if status == "Positive":
             out["strengths"].append(item)

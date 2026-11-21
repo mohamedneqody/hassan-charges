@@ -286,7 +286,7 @@ def evidence_block(cell: dict, raw: bytes | None, doc_sha: str) -> None:
     col_page, col_crop = st.columns([3, 2])
     with col_page:
         if img:
-            st.image(img, caption=f"{_t('evidence')} — p{page_no}")
+            st.image(img, caption=f"{_t('evidence')} — {'صفحة' if is_ar else 'p'}{page_no}")
         else:
             render_empty_state(
                 "تعذّر عرض الصفحة" if is_ar else "Page render unavailable",
@@ -510,10 +510,15 @@ def sec_overview(vm: dict, results: dict) -> None:
     )
 
     if pending_cells:
-        names = ", ".join(sorted({e["field"] for e in vm["pending"]})[:8])
+        from src.analysis.comparison import LABELS_AR as _OV_LBL
+
+        raw_fields = sorted({e["field"] for e in vm["pending"]})
+        disp_fields = [_OV_LBL.get(f, f) if is_ar else f for f in raw_fields[:8]]
+        sep = "، " if is_ar else ", "
+        names = sep.join(disp_fields)
         st.warning(
             f"{_T['pending'][lang]}: {pending_cells} — {names}"
-            + (", ..." if pending_cells > 8 else "")
+            + ((sep + "…") if len(raw_fields) > 8 else "")
         )
 
 
@@ -763,24 +768,45 @@ def sec_metrics(vm: dict, results: dict | None = None) -> None:
 
         st.divider()
         st.subheader("🎓 " + ("النماذج الأكاديمية للإنذار المبكر" if is_ar else "Academic Early-Warning Models"))
+        from src.analysis.comparison import LABELS_AR as _ACAD_LBL
+
+        _comp_ar_map = {
+            "NetMargin": "هامش الصافي%",
+            "AssetTurnover": "دوران الأصول",
+            "EquityMultiplier": "مضاعف الملكية",
+            "ROE_rebuilt": "العائد على الملكية%",
+            "TaxBurden": "عبء الضريبة",
+            "InterestBurden": "عبء الفوائد",
+            "EBITMargin": "هامش التشغيل%",
+            "NI/TA": "صافي الربح/الأصول",
+            "TL/TA": "الالتزامات/الأصول",
+            "CL/CA": "خصوم/أصول متداولة",
+        }
         acad_rows = []
         for m in academic_models(curr_m):
             if m.value is not None:
-                comps = " · ".join(f"{k}={v:g}" for k, v in m.components.items())
+                comp_chips = "".join(
+                    f'<span class="fs-detail-chip">'
+                    f'{esc(_comp_ar_map.get(k, k) if is_ar else k)}: '
+                    f'<b><bdi dir="ltr">{v:g}</bdi></b></span>'
+                    for k, v in m.components.items()
+                )
                 acad_rows.append(
                     "<tr>"
                     f"<td><b>{esc(m.icon + ' ' + m.name)}</b></td>"
                     f"<td class='num'><b><bdi dir='ltr'>{m.value:g}</bdi></b></td>"
                     f"<td>{esc(m.verdict)}</td>"
-                    f"<td><bdi dir='ltr'>{esc(comps)}</bdi></td>"
+                    f"<td><div class='fs-pillar-details'>{comp_chips}</div></td>"
                     "</tr>"
                 )
             else:
+                miss_names = [_ACAD_LBL.get(f, f) if is_ar else f for f in m.missing]
+                sep_m = "، " if is_ar else ", "
                 acad_rows.append(
                     "<tr>"
                     f"<td><b>{esc(m.name)}</b></td>"
                     "<td class='num'>—</td>"
-                    f"<td>{'غير محسوب — بيانات ناقصة: ' if is_ar else 'Missing inputs: '}{esc(', '.join(m.missing))}</td>"
+                    f"<td>{'غير محسوب — بيانات ناقصة: ' if is_ar else 'Missing inputs: '}{esc(sep_m.join(miss_names))}</td>"
                     "<td>—</td>"
                     "</tr>"
                 )
@@ -1062,7 +1088,7 @@ def sec_insights(vm: dict, analysis) -> None:
         st.warning(" · ".join(notice_parts))
     if is_ai_ok:
         st.caption(
-            f"model: {analysis.model} · {len(analysis.ratio_comments)} "
+            (f"النموذج: {analysis.model} · {len(analysis.ratio_comments)} " if is_ar else f"model: {analysis.model} · {len(analysis.ratio_comments)} ")
             + (
                 "تعليقًا من Gemini — كل رقم متتبع لأصل محسوب في Python"
                 if is_ar
@@ -1102,10 +1128,11 @@ def sec_insights(vm: dict, analysis) -> None:
                 if is_ar
                 else st_raw
             )
+            disp_title = item["metric"] if is_ar else item.get("metric_en", item["metric"])
             cards_html.append(
                 f'<div class="fs-insight-card {card_cls}">'
                 f'<div class="fs-insight-head">'
-                f'<span class="fs-insight-title">{esc(item["metric"])}</span>'
+                f'<span class="fs-insight-title">{esc(disp_title)}</span>'
                 f'<span class="fs-gate {badge_cls}">{glyph} {esc(st_lbl)}</span>'
                 f"</div>"
                 f'<div class="fs-insight-body" dir="auto">{isolate_bidi_html(item["text"])}</div>'
@@ -1590,7 +1617,7 @@ def sec_review(vm: dict, results: dict, raw: bytes | None) -> None:
         "الخانة" if is_ar else "Cell",
         queue,
         format_func=lambda p: (
-            f"{_REV_LBL.get(p['field'], p['field'])} ({p['field']}) · {p['year']} · p{p['page']}"
+            f"{_REV_LBL.get(p['field'], p['field'])} · {p['year']} · صفحة {p['page']}"
             if is_ar
             else f"{p['field']} · {p['year']} · p{p['page']}"
         ),
@@ -1611,7 +1638,10 @@ def sec_review(vm: dict, results: dict, raw: bytes | None) -> None:
     col_a, col_b = st.columns(2)
     with col_a:
         if Path(pkt["page_image"]).exists():
-            st.image(pkt["page_image"], caption=f"page {pkt['page']}")
+            st.image(
+                pkt["page_image"],
+                caption=f"صفحة {pkt['page']}" if is_ar else f"page {pkt['page']}",
+            )
     with col_b:
         if pkt.get("date_header_image") and Path(pkt["date_header_image"]).exists():
             st.image(
@@ -1680,7 +1710,11 @@ def sec_review(vm: dict, results: dict, raw: bytes | None) -> None:
         "اسم المراجع" if is_ar else "Reviewer",
         saved_sess.get("reviewer", ""),
     )
-    credential = c2.text_input("PIN", type="password")
+    credential = c2.text_input(
+        "PIN",
+        type="password",
+        help="الرمز السري للمراجع" if is_ar else "Reviewer PIN",
+    )
     if saved_sess.get("token") and saved_sess.get("reviewer") == reviewer and not credential:
         st.caption(
             f"🔑 جلسة مراجع نشطة ({saved_sess['reviewer']}) — يمكنك الاعتماد مباشرة بدون إعادة إدخال PIN."
@@ -1754,7 +1788,7 @@ def sec_review(vm: dict, results: dict, raw: bytes | None) -> None:
                         st.session_state.pop("live_queue_key", None)
                         st.session_state.pop("_report_memo", None)
                         st.success(
-                            f"✅ تم اعتماد {pkt['field']} ({pkt['year']}) رسميًا في السلسلة الموقعة (seq={rec.get('seq')})."
+                            f"✅ تم اعتماد {_REV_LBL.get(pkt['field'], pkt['field'])} ({pkt['year']}) رسميًا في السلسلة الموقعة (رقم={rec.get('seq')})."
                             if is_ar
                             else f"✅ Approved {pkt['field']} ({pkt['year']}) in signed chain (seq={rec.get('seq')})."
                         )
@@ -1856,22 +1890,26 @@ def _build_portfolio_table_html(
         row_style = ' style="background:var(--fs-row-hover);font-weight:600;"' if is_active else ""
         rows_html.append(
             f"<tr{row_style}>"
-            f'<td><bdi dir="ltr">{idx}</bdi></td>'
+            f'<td class="num"><bdi dir="ltr">{idx}</bdi></td>'
             f"<td><b>{esc(r.company)}</b>{cur_badge}</td>"
-            f'<td><bdi dir="ltr">{esc(period_s)}</bdi></td>'
-            f'<td><bdi dir="ltr">{esc(rev_s)}</bdi></td>'
-            f'<td><bdi dir="ltr">{esc(ni_s)}</bdi></td>'
-            f'<td><bdi dir="ltr">{esc(nm_s)}</bdi></td>'
-            f'<td><bdi dir="ltr">{esc(roe_s)}</bdi></td>'
-            f'<td><bdi dir="ltr">{esc(cr_s)}</bdi></td>'
-            f'<td><bdi dir="ltr">{esc(de_s)}</bdi></td>'
+            f'<td class="num"><bdi dir="ltr">{esc(period_s)}</bdi></td>'
+            f'<td class="num"><bdi dir="ltr">{esc(rev_s)}</bdi></td>'
+            f'<td class="num"><bdi dir="ltr">{esc(ni_s)}</bdi></td>'
+            f'<td class="num"><bdi dir="ltr">{esc(nm_s)}</bdi></td>'
+            f'<td class="num"><bdi dir="ltr">{esc(roe_s)}</bdi></td>'
+            f'<td class="num"><bdi dir="ltr">{esc(cr_s)}</bdi></td>'
+            f'<td class="num"><bdi dir="ltr">{esc(de_s)}</bdi></td>'
             f"<td>{hl_cell}</td>"
             f"<td>{alt_cell}</td>"
             "</tr>"
         )
-    th_html = "".join(f"<th>{esc(h)}</th>" for h in headers)
+    num_idx = {0, 2, 3, 4, 5, 6, 7, 8}
+    th_html = "".join(
+        f'<th class="num">{esc(h)}</th>' if i in num_idx else f"<th>{esc(h)}</th>"
+        for i, h in enumerate(headers)
+    )
     return (
-        '<div class="fin-table-wrap">'
+        '<div class="table-wrap">'
         '<table class="fin-table">'
         f"<thead><tr>{th_html}</tr></thead>"
         f'<tbody>{"".join(rows_html)}</tbody>'
@@ -2223,14 +2261,6 @@ def render(results: dict, analysis, raw: bytes | None) -> None:
 
     with st.sidebar:
         st.markdown("### " + ("لوحة التحكم" if is_ar else "Control Panel"))
-        if st.button("English / عربي", use_container_width=True):
-            st.session_state["ui_lang"] = "en" if lang == "ar" else "ar"
-            st.rerun()
-        if st.button(_T["classic"][lang], use_container_width=True, type="primary"):
-            st.session_state["ui_mode"] = "classic"
-            st.session_state["ui_mode_classic_toggle"] = True
-            st.rerun()
-        st.divider()
         curr_val = st.text_input(
             "رمز العملة" if is_ar else "Currency symbol",
             value=st.session_state.get("currency", "$"),
@@ -2340,6 +2370,14 @@ def render(results: dict, analysis, raw: bytes | None) -> None:
             for k in ("results", "analysis", "raw_bytes", "ev_cell", "live_queue", "live_queue_key", "_report_memo", "_ev_img_cache"):
                 st.session_state.pop(k, None)
             st.rerun()
+        with st.expander("⚙️ خيارات العرض واللغة" if is_ar else "⚙️ View & Language", expanded=False):
+            if st.button(_T["classic"][lang], use_container_width=True, type="primary"):
+                st.session_state["ui_mode"] = "classic"
+                st.session_state["ui_mode_classic_toggle"] = True
+                st.rerun()
+            if st.button("English / عربي", use_container_width=True):
+                st.session_state["ui_lang"] = "en" if lang == "ar" else "ar"
+                st.rerun()
 
     render_header()
 

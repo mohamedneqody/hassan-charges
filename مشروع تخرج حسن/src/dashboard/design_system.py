@@ -1374,35 +1374,37 @@ html, body, .stApp {{
 }}
 
 /* == Financial Tables (RTL/LTR Sticky Headers & Isolated Numbers) == */
-.table-wrap {{
-  max-height: 540px;
+.table-wrap,
+.fin-table-wrap {{
+  max-height: 560px;
   width: 100%;
   overflow: auto;
   -webkit-overflow-scrolling: touch;
   border-radius: var(--fs-radius);
-  border: var(--fs-border);
+  border: var(--fs-border-accent);
   background: var(--fs-surface);
-  box-shadow: var(--fs-shadow-sm);
+  box-shadow: var(--fs-shadow-md);
+  margin: var(--fs-sp-2) 0;
 }}
 .fin-table {{
   width: 100%;
+  min-width: 640px;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: .88rem;
+  font-size: .92rem;
   direction: {direction};
 }}
 .fin-table thead th {{
   position: sticky;
   top: 0;
   z-index: 2;
-  background: var(--fs-surface2);
-  color: var(--fs-ink);
-  font-size: .76rem;
+  background: linear-gradient(90deg, var(--fs-primary), var(--fs-deep));
+  color: var(--fs-on-primary);
+  font-size: .84rem;
   font-weight: 800;
-  letter-spacing: .03em;
-  padding: var(--fs-sp-3) var(--fs-sp-3);
-  border-bottom: 1px solid var(--fs-line);
-  box-shadow: 0 1px 0 var(--fs-line);
+  letter-spacing: .02em;
+  padding: 12px 14px;
+  border-bottom: 2px solid var(--fs-primary-dark);
   text-align: start;
   white-space: nowrap;
 }}
@@ -1410,18 +1412,21 @@ html, body, .stApp {{
   text-align: end;
 }}
 .fin-table tbody td {{
-  padding: 10px var(--fs-sp-3);
+  padding: 12px 14px;
   border-top: 1px solid var(--fs-line);
-  color: var(--fs-ink-body);
-  font-weight: 500;
+  color: var(--fs-ink);
+  font-weight: 600;
+  line-height: 1.65;
   text-align: start;
   vertical-align: middle;
+  min-width: 105px;
 }}
 .fin-table tbody td.num {{
   text-align: end;
   font-family: 'Inter', 'IBM Plex Sans Arabic', sans-serif;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  min-width: 90px;
 }}
 .fin-table tbody td.num bdi {{
   direction: ltr;
@@ -1436,27 +1441,30 @@ bdi[dir="ltr"] {{
 .fin-table tbody tr {{
   transition: background .15s ease;
 }}
+.fin-table tbody tr:nth-child(even) {{
+  background: var(--fs-bg);
+}}
 .fin-table tbody tr:hover {{
   background: var(--fs-row-hover);
 }}
 .fin-table td.cat {{
-  color: var(--fs-muted);
-  font-size: .8rem;
-  font-weight: 700;
+  color: var(--fs-deep);
+  font-size: .82rem;
+  font-weight: 800;
   white-space: nowrap;
 }}
 .badge {{
   display: inline-block;
   padding: 3px var(--fs-sp-3);
   border-radius: var(--fs-radius-pill);
-  font-size: .74rem;
+  font-size: .75rem;
   font-weight: 700;
   white-space: nowrap;
 }}
-.badge.pos {{ color: var(--fs-success); background: var(--fs-success-bg); border: 1px solid var(--fs-success-border); }}
+.badge.pos, .badge-pass {{ color: var(--fs-success); background: var(--fs-success-bg); border: 1px solid var(--fs-success-border); }}
 .badge.neg {{ color: var(--fs-danger); background: var(--fs-danger-bg); border: 1px solid var(--fs-danger-border); }}
 .badge.neu {{ color: var(--fs-ink-body); background: var(--fs-neutral-bg); border: var(--fs-border); }}
-.badge.na  {{ color: var(--fs-muted); background: var(--fs-bg); border: var(--fs-border); }}
+.badge.na, .badge-warn {{ color: var(--fs-warning-text); background: var(--fs-warning-bg); border: 1px solid var(--fs-warning-border); }}
 .trend-up {{ color: var(--fs-success); font-weight: 700; white-space: nowrap; }}
 .trend-down {{ color: var(--fs-danger); font-weight: 700; white-space: nowrap; }}
 .trend-flat {{ color: var(--fs-muted); font-weight: 700; white-space: nowrap; }}
@@ -1524,6 +1532,22 @@ section[data-testid="stSidebar"] {{
   background: linear-gradient(180deg, var(--fs-surface), var(--fs-sidebar-bg-end)) !important;
   border-inline-start: none !important;
   border-inline-end: var(--fs-border) !important;
+}}
+section[data-testid="stSidebar"][aria-expanded="false"],
+section[data-testid="stSidebar"][aria-expanded="false"] > div,
+section[data-testid="stSidebar"][aria-expanded="false"] [data-testid="stSidebarContent"],
+section[data-testid="stSidebar"][aria-expanded="false"] [data-testid="stSidebarUserContent"] {{
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border-inline-end: none !important;
+  overflow: hidden !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  display: none !important;
 }}
 section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p,
 section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p,
@@ -1789,12 +1813,6 @@ section[data-testid="stSidebar"] .stButton > button[data-testid="stBaseButton-pr
   }}
 }}
 @media (max-width: 768px) {{
-  section[data-testid="stSidebar"] {{
-    position: fixed !important;
-    inset-block: 0 !important;
-    inset-inline-start: 0 !important;
-    z-index: 999991 !important;
-  }}
   section[data-testid="stSidebar"][aria-expanded="false"] {{
     width: 0 !important;
     min-width: 0 !important;
@@ -1802,12 +1820,18 @@ section[data-testid="stSidebar"] .stButton > button[data-testid="stBaseButton-pr
     border-inline-end: none !important;
     overflow: hidden !important;
     visibility: hidden !important;
+    opacity: 0 !important;
     pointer-events: none !important;
-    transform: none !important;
+    display: none !important;
   }}
   section[data-testid="stSidebar"][aria-expanded="true"] {{
+    position: fixed !important;
+    inset-block: 0 !important;
+    inset-inline-start: 0 !important;
+    z-index: 999991 !important;
     width: min(272px, 82vw) !important;
     min-width: min(272px, 82vw) !important;
+    max-width: min(272px, 82vw) !important;
     visibility: visible !important;
     box-shadow: var(--fs-shadow-lg) !important;
   }}

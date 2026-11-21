@@ -58,6 +58,7 @@ _T = {
     "chat": {"ar": "محادثة المستند", "en": "Document Chat"},
     "review": {"ar": "مراجعة بشرية", "en": "Human Review"},
     "reports": {"ar": "التقارير", "en": "Reports"},
+    "portfolio": {"ar": "مقارنة الشركات", "en": "Companies"},
     "new_analysis": {"ar": "تحليل جديد", "en": "New Analysis"},
     "classic": {"ar": "الواجهة الكلاسيكية", "en": "Classic UI"},
     "summary": {"ar": "الملخص التنفيذي", "en": "Executive Summary"},
@@ -1743,6 +1744,12 @@ def sec_review(vm: dict, results: dict, raw: bytes | None) -> None:
                         _apply_human_approval_to_results(
                             results, pkt["field"], int(pkt["year"]), float(parsed_v), rec
                         )
+                        try:
+                            from src.analysis.portfolio import record_from_results, save_record
+
+                            save_record(record_from_results(results))
+                        except Exception:
+                            pass
                         st.session_state.pop("live_queue", None)
                         st.session_state.pop("live_queue_key", None)
                         st.session_state.pop("_report_memo", None)
@@ -1783,6 +1790,429 @@ def sec_review(vm: dict, results: dict, raw: bytes | None) -> None:
                 st.caption(f"seq={rec.get('seq')} · hash={str(rec.get('record_hash'))[:16]}")
             except Exception as exc:
                 st.error(f"رفض السلسلة: {exc}" if is_ar else f"Chain refused: {exc}")
+
+
+# ---------------------------------------------------------------------------
+# Tab 9: سجل ومقارنة الشركات (مكتبة الدراسة التطبيقية — تراكمية لكل ملف يُرفع)
+# ---------------------------------------------------------------------------
+
+def _fmt_port_num(val: float | None, suffix: str = "", decimals: int = 1) -> str:
+    if val is None:
+        return "—"
+    return f"{val:,.{decimals}f}{suffix}"
+
+
+def _build_portfolio_table_html(
+    records: list,
+    active_company: str = "",
+    active_year: int | None = None,
+    lang: str = "ar",
+) -> str:
+    """RTL/LTR custom HTML comparison table across analyzed companies (no st.dataframe)."""
+    is_ar = lang != "en"
+    headers = (
+        [
+            "#", "الشركة", "الفترة", "الإيرادات", "صافي الربح",
+            "هامش صافي %", "ROE %", "النسبة الجارية", "الدين / الملكية",
+            "الدرجة الصحية", "Altman Z″",
+        ]
+        if is_ar
+        else [
+            "#", "Company", "Period", "Revenue", "Net Income",
+            "Net Margin %", "ROE %", "Current Ratio", "D/E",
+            "Health Score", "Altman Z″",
+        ]
+    )
+    rows_html: list[str] = []
+    for idx, r in enumerate(records, 1):
+        is_active = (
+            bool(active_company)
+            and r.company.strip().lower() == active_company.strip().lower()
+            and (active_year is None or r.curr_year == active_year)
+        )
+        cur_badge = (
+            f' <span class="badge badge-pass">{"الحالية" if is_ar else "Active"}</span>'
+            if is_active
+            else ""
+        )
+        rev_s = fmt_value(r.revenue, "currency", r.currency) if r.revenue is not None else "—"
+        ni_s = fmt_value(r.net_income, "currency", r.currency) if r.net_income is not None else "—"
+        nm_s = _fmt_port_num(r.net_margin_pct, "%", 1)
+        roe_s = _fmt_port_num(r.roe_pct, "%", 1)
+        cr_s = _fmt_port_num(r.current_ratio, "x", 2)
+        de_s = _fmt_port_num(r.debt_to_equity, "x", 2)
+        if r.health_total is not None:
+            hl_cell = f'<bdi dir="ltr"><b>{r.health_total:.0f}/100</b></bdi>'
+        else:
+            hl_cell = (
+                f'<span class="badge badge-warn">{"محجوبة" if is_ar else "Refused"}</span>'
+            )
+        if r.altman_score is not None:
+            zone_txt = f" {esc(r.altman_zone)}" if r.altman_zone else ""
+            alt_cell = f'<bdi dir="ltr">{r.altman_score:.2f}</bdi>{zone_txt}'
+        else:
+            alt_cell = "—"
+        period_s = f"{r.prev_year} → {r.curr_year}"
+        row_style = ' style="background:var(--fs-row-hover);font-weight:600;"' if is_active else ""
+        rows_html.append(
+            f"<tr{row_style}>"
+            f'<td><bdi dir="ltr">{idx}</bdi></td>'
+            f"<td><b>{esc(r.company)}</b>{cur_badge}</td>"
+            f'<td><bdi dir="ltr">{esc(period_s)}</bdi></td>'
+            f'<td><bdi dir="ltr">{esc(rev_s)}</bdi></td>'
+            f'<td><bdi dir="ltr">{esc(ni_s)}</bdi></td>'
+            f'<td><bdi dir="ltr">{esc(nm_s)}</bdi></td>'
+            f'<td><bdi dir="ltr">{esc(roe_s)}</bdi></td>'
+            f'<td><bdi dir="ltr">{esc(cr_s)}</bdi></td>'
+            f'<td><bdi dir="ltr">{esc(de_s)}</bdi></td>'
+            f"<td>{hl_cell}</td>"
+            f"<td>{alt_cell}</td>"
+            "</tr>"
+        )
+    th_html = "".join(f"<th>{esc(h)}</th>" for h in headers)
+    return (
+        '<div class="fin-table-wrap">'
+        '<table class="fin-table">'
+        f"<thead><tr>{th_html}</tr></thead>"
+        f'<tbody>{"".join(rows_html)}</tbody>'
+        "</table></div>"
+    )
+
+
+def _build_portfolio_excel(records: list, lang: str = "ar") -> bytes:
+    """Build a styled Excel (.xlsx) workbook comparing all saved companies."""
+    import openpyxl
+    from openpyxl.styles import Alignment, Font, PatternFill
+
+    is_ar = lang != "en"
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "مقارنة الشركات" if is_ar else "Companies Comparison"
+    if is_ar:
+        ws.views.sheetView[0].rightToLeft = True
+
+    headers = (
+        [
+            "الشركة", "السنة السابقة", "السنة الحالية", "العملة",
+            "الإيرادات", "صافي الربح", "هامش صافي الربح %",
+            "ROE %", "ROA %", "النسبة الجارية", "الدين / حقوق الملكية",
+            "دوران الأصول", "الدرجة الصحية (/100)", "التصنيف الصحي",
+            "Altman Z″", "منطقة Altman", "اسم الملف", "تاريخ الحفظ",
+        ]
+        if is_ar
+        else [
+            "Company", "Prev Year", "Curr Year", "Currency",
+            "Revenue", "Net Income", "Net Margin %",
+            "ROE %", "ROA %", "Current Ratio", "Debt / Equity",
+            "Asset Turnover", "Health Score (/100)", "Health Label",
+            "Altman Z″", "Altman Zone", "File Name", "Saved At",
+        ]
+    )
+    ws.append(headers)
+    head_fill = PatternFill(start_color="4F46E5", end_color="4F46E5", fill_type="solid")
+    head_font = Font(bold=True, color="FFFFFF")
+    for col_idx in range(1, len(headers) + 1):
+        cell = ws.cell(row=1, column=col_idx)
+        cell.fill = head_fill
+        cell.font = head_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    for r in records:
+        ws.append([
+            r.company, r.prev_year, r.curr_year, r.currency,
+            r.revenue, r.net_income, r.net_margin_pct,
+            r.roe_pct, r.roa_pct, r.current_ratio, r.debt_to_equity,
+            r.asset_turnover, r.health_total, r.health_label,
+            r.altman_score, r.altman_zone, r.file_name, r.saved_at,
+        ])
+
+    for col in ws.columns:
+        max_len = max((len(str(c.value or "")) for c in col), default=8)
+        ws.column_dimensions[col[0].column_letter].width = min(max(max_len + 4, 12), 34)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def sec_portfolio(vm: dict, results: dict) -> None:
+    """سجل ومقارنة الشركات: يحفظ كل ملف يُحلّل تلقائياً ويبني جدول مقارنة ورسماً وتقريراً مجمّعاً."""
+    import pandas as pd
+    import plotly.graph_objects as go
+
+    from src.analysis.portfolio import (
+        clear_library,
+        load_records,
+        record_from_results,
+        save_record,
+    )
+    from src.dashboard import design_system as DS
+    from src.dashboard.study_report import build_study_report
+
+    lang = st.session_state.get("ui_lang", "ar")
+    is_ar = lang != "en"
+
+    # Ensure the currently viewed company is persisted in the library
+    if results and results.get("curr_metrics") is not None:
+        try:
+            save_record(record_from_results(results))
+        except Exception:
+            pass
+
+    st.markdown(
+        '<div class="sec-h">'
+        + ("📚 سجل ومقارنة الشركات (مكتبة الدراسة)" if is_ar else "📚 Companies Portfolio & Comparison")
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "كل ملف تحلّله لوحده يُحفَظ هنا تلقائيًا (باسم الشركة وسنتها) — ارفع ملفات الشركات واحدًا تلو الآخر "
+        "لتبني جدول المقارنة والرسوم وتقرير الدراسة التطبيقية المجمّع تلقائيًا وبلا أي طلبات API إضافية."
+        if is_ar
+        else "Every analyzed file is saved here automatically (keyed by company + year). Upload companies one by one "
+             "to build the cross-company table, comparison charts, and unified study report with zero extra API calls."
+    )
+
+    records = load_records()
+    if not records:
+        render_empty_state(
+            "مكتبة الشركات فارغة بعد" if is_ar else "Companies library is empty",
+            "كل شركة تُحلّل بنجاح تُحفَظ هنا تلقائيًا لبناء جدول مقارنة الشركات."
+            if is_ar
+            else "Every successfully analyzed company is saved here automatically.",
+            icon="📚",
+            next_step="ارفع قوائم أول شركة وستظهر هنا تلقائيًا." if is_ar else "Analyze your first file to populate the library.",
+        )
+        return
+
+    if len(records) == 1:
+        st.info(
+            "📌 تم حفظ أول شركة في السجل! ارفع الملف التالي عبر «تحليل جديد» من الشريط الجانبي "
+            "وستُضاف الشركات تلقائياً جنباً إلى جنب للمقارنة (حتى 20+ شركة)."
+            if is_ar
+            else "📌 First company saved! Upload your next file via «New Analysis» in the sidebar to compare multiple companies side-by-side."
+        )
+
+    # Top KPI summary cards
+    health_vals = [r.health_total for r in records if r.health_total is not None]
+    avg_health = f"{sum(health_vals) / len(health_vals):.1f}/100" if health_vals else ("محجوبة" if is_ar else "Refused")
+    nm_recs = [r for r in records if r.net_margin_pct is not None]
+    best_nm = max(nm_recs, key=lambda x: x.net_margin_pct) if nm_recs else None
+    roe_recs = [r for r in records if r.roe_pct is not None]
+    best_roe = max(roe_recs, key=lambda x: x.roe_pct) if roe_recs else None
+
+    kpi_html = (
+        '<div class="kpi-grid">'
+        + stat_card(
+            "الشركات المحلّلة" if is_ar else "Analyzed Companies",
+            f"{len(records)}",
+            "تراكمي تلقائي لكل ملف" if is_ar else "Auto-accumulated per file",
+        )
+        + stat_card(
+            "متوسط الدرجة الصحية" if is_ar else "Avg. Health Score",
+            avg_health,
+            (
+                f"{len(health_vals)}/{len(records)} بدرجة رسمية"
+                if is_ar
+                else f"{len(health_vals)}/{len(records)} official"
+            ),
+        )
+        + stat_card(
+            "أعلى هامش صافي ربح" if is_ar else "Top Net Margin",
+            f"{best_nm.net_margin_pct:.1f}%" if best_nm else "—",
+            f"{best_nm.company} ({best_nm.curr_year})" if best_nm else "—",
+        )
+        + stat_card(
+            "أعلى عائد ملكية (ROE)" if is_ar else "Top ROE",
+            f"{best_roe.roe_pct:.1f}%" if best_roe else "—",
+            f"{best_roe.company} ({best_roe.curr_year})" if best_roe else "—",
+        )
+        + "</div>"
+    )
+    st.markdown(kpi_html, unsafe_allow_html=True)
+
+    # Sort + search controls
+    sort_options = (
+        {
+            "الاسم (أبجدي)": lambda r: (r.company.lower(), r.curr_year),
+            "الدرجة الصحية (الأعلى)": lambda r: (-(r.health_total if r.health_total is not None else -1e9), r.company),
+            "الإيرادات (الأعلى)": lambda r: (-(r.revenue if r.revenue is not None else -1e18), r.company),
+            "هامش صافي الربح (الأعلى)": lambda r: (-(r.net_margin_pct if r.net_margin_pct is not None else -1e9), r.company),
+            "العائد على الملكية ROE (الأعلى)": lambda r: (-(r.roe_pct if r.roe_pct is not None else -1e9), r.company),
+            "النسبة الجارية (الأعلى)": lambda r: (-(r.current_ratio if r.current_ratio is not None else -1e9), r.company),
+            "Altman Z″ (الأعلى)": lambda r: (-(r.altman_score if r.altman_score is not None else -1e9), r.company),
+        }
+        if is_ar
+        else {
+            "Name (A–Z)": lambda r: (r.company.lower(), r.curr_year),
+            "Health Score (High→Low)": lambda r: (-(r.health_total if r.health_total is not None else -1e9), r.company),
+            "Revenue (High→Low)": lambda r: (-(r.revenue if r.revenue is not None else -1e18), r.company),
+            "Net Margin (High→Low)": lambda r: (-(r.net_margin_pct if r.net_margin_pct is not None else -1e9), r.company),
+            "ROE (High→Low)": lambda r: (-(r.roe_pct if r.roe_pct is not None else -1e9), r.company),
+            "Current Ratio (High→Low)": lambda r: (-(r.current_ratio if r.current_ratio is not None else -1e9), r.company),
+            "Altman Z″ (High→Low)": lambda r: (-(r.altman_score if r.altman_score is not None else -1e9), r.company),
+        }
+    )
+    c_sort, c_search = st.columns([2, 2])
+    with c_sort:
+        sort_lbl = st.selectbox(
+            "الترتيب حسب" if is_ar else "Sort by",
+            list(sort_options.keys()),
+            key="portfolio_sort_by",
+        )
+    with c_search:
+        q_co = st.text_input(
+            "بحث باسم الشركة" if is_ar else "Filter by company",
+            value="",
+            key="portfolio_search_co",
+        ).strip().lower()
+
+    shown = [r for r in records if not q_co or q_co in r.company.lower() or q_co in r.file_name.lower()]
+    shown = sorted(shown, key=sort_options[sort_lbl])
+
+    active_co = str(vm.get("company") or results.get("company") or "")
+    active_yr = results.get("curr_year")
+    st.markdown(
+        _build_portfolio_table_html(shown, active_company=active_co, active_year=active_yr, lang=lang),
+        unsafe_allow_html=True,
+    )
+
+    # Interactive comparison chart
+    chart_metrics = (
+        {
+            "العائد على حقوق الملكية ROE (%)": ("roe_pct", "%"),
+            "هامش صافي الربح (%)": ("net_margin_pct", "%"),
+            "العائد على الأصول ROA (%)": ("roa_pct", "%"),
+            "الدرجة الصحية (/100)": ("health_total", ""),
+            "النسبة الجارية (x)": ("current_ratio", "x"),
+            "الدين إلى حقوق الملكية (x)": ("debt_to_equity", "x"),
+            "Altman Z″": ("altman_score", ""),
+        }
+        if is_ar
+        else {
+            "Return on Equity ROE (%)": ("roe_pct", "%"),
+            "Net Profit Margin (%)": ("net_margin_pct", "%"),
+            "Return on Assets ROA (%)": ("roa_pct", "%"),
+            "Health Score (/100)": ("health_total", ""),
+            "Current Ratio (x)": ("current_ratio", "x"),
+            "Debt to Equity (x)": ("debt_to_equity", "x"),
+            "Altman Z″": ("altman_score", ""),
+        }
+    )
+    chosen_metric_lbl = st.selectbox(
+        "📊 مؤشر الرسم البياني المقارن" if is_ar else "📊 Comparison Chart Metric",
+        list(chart_metrics.keys()),
+        key="portfolio_chart_metric",
+    )
+    attr_name, unit_sfx = chart_metrics[chosen_metric_lbl]
+    plotted = [r for r in shown if getattr(r, attr_name, None) is not None]
+    if plotted:
+        x_labels = [f"{r.company} ({r.curr_year})" for r in plotted]
+        y_vals = [float(getattr(r, attr_name)) for r in plotted]
+        bar_colors = [
+            DS.SUCCESS
+            if (active_co and r.company.strip().lower() == active_co.strip().lower() and r.curr_year == active_yr)
+            else DS.PRIMARY
+            for r in plotted
+        ]
+        fig = go.Figure(
+            go.Bar(
+                x=x_labels,
+                y=y_vals,
+                marker_color=bar_colors,
+                text=[f"{v:.2f}{unit_sfx}" if unit_sfx == "x" else f"{v:.1f}{unit_sfx}" for v in y_vals],
+                textposition="outside",
+            )
+        )
+        fig.update_layout(
+            title=chosen_metric_lbl,
+            xaxis_title="",
+            yaxis_title=unit_sfx or chosen_metric_lbl,
+            height=370,
+            margin=dict(l=16, r=16, t=50, b=24),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.caption(
+            "لا توجد قيم متاحة لهذا المؤشر بين الشركات المسجّلة بعد."
+            if is_ar
+            else "No values available for this metric across saved companies yet."
+        )
+
+    # Export row: Excel + CSV + HTML Study Report + Reset
+    df_csv = pd.DataFrame([
+        {
+            "الشركة": r.company,
+            "السنة السابقة": r.prev_year,
+            "السنة الحالية": r.curr_year,
+            "العملة": r.currency,
+            "الإيرادات": r.revenue,
+            "صافي الربح": r.net_income,
+            "هامش صافي %": r.net_margin_pct,
+            "ROE %": r.roe_pct,
+            "ROA %": r.roa_pct,
+            "النسبة الجارية": r.current_ratio,
+            "الدين/حقوق الملكية": r.debt_to_equity,
+            "دوران الأصول": r.asset_turnover,
+            "الدرجة الصحية": r.health_total,
+            "Altman Z": r.altman_score,
+            "منطقة Altman": r.altman_zone,
+            "الملف": r.file_name,
+        }
+        for r in shown
+    ])
+
+    col_xl, col_csv, col_html, col_clr = st.columns([2, 2, 2, 1.5])
+    with col_xl:
+        try:
+            xl_bytes = _build_portfolio_excel(shown, lang=lang)
+            st.download_button(
+                "📊 تصدير Excel مجمّع" if is_ar else "📊 Export Excel (.xlsx)",
+                data=xl_bytes,
+                file_name="companies_comparison.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+                key="dl_portfolio_xlsx",
+            )
+        except Exception:
+            pass
+    with col_csv:
+        st.download_button(
+            "⬇️ تصدير CSV" if is_ar else "⬇️ Export CSV",
+            data=df_csv.to_csv(index=False).encode("utf-8-sig"),
+            file_name="companies_comparison.csv",
+            mime="text/csv",
+            use_container_width=True,
+            key="dl_portfolio_csv",
+        )
+    with col_html:
+        st.download_button(
+            "📄 تقرير الدراسة (HTML ← PDF)" if is_ar else "📄 Study Report (HTML)",
+            data=build_study_report(shown),
+            file_name="study_report.html",
+            mime="text/html",
+            use_container_width=True,
+            key="dl_portfolio_html",
+        )
+    with col_clr:
+        if st.button(
+            "🗑️ مسح السجل" if is_ar else "🗑️ Clear Library",
+            use_container_width=True,
+            key="btn_clear_portfolio_new_ui",
+        ):
+            if st.session_state.get("confirm_clear_library"):
+                clear_library()
+                st.session_state["confirm_clear_library"] = False
+                st.rerun()
+            else:
+                st.session_state["confirm_clear_library"] = True
+                st.warning(
+                    "اضغط «مسح السجل» مرة ثانية للتأكيد."
+                    if is_ar
+                    else "Click Clear Library again to confirm."
+                )
 
 
 def render(results: dict, analysis, raw: bytes | None) -> None:
@@ -1859,6 +2289,18 @@ def render(results: dict, analysis, raw: bytes | None) -> None:
                     st.caption(
                         f"{_idx_m}. `{_rm['model']}` — ✓{_rm['ok']} / ✗{_rm['fail']}{_lat_tag}{_cool_tag}"
                     )
+                _active_models = _ps.get("models") or []
+                if len(_active_models) < 7 or "gemini-flash-lite-latest" not in _active_models:
+                    if st.button(
+                        "⚡ تفعيل أسرع 7 موديلات (980 طلب/يوم)" if is_ar else "⚡ Activate 7 fastest models",
+                        use_container_width=True,
+                        key="new_ui_activate_fast7_btn",
+                    ):
+                        from src.ai.key_pool import DEFAULT_MODELS
+
+                        os.environ["GEMINI_MODELS"] = ",".join(DEFAULT_MODELS)
+                        reset_pool()
+                        st.rerun()
                 if st.button(
                     "🔄 إعادة ضبط مسبح المفاتيح" if is_ar else "🔄 Reset key pool",
                     use_container_width=True,
@@ -1911,6 +2353,7 @@ def render(results: dict, analysis, raw: bytes | None) -> None:
             _T["chat"][lang],
             _T["review"][lang],
             _T["reports"][lang],
+            _T["portfolio"][lang],
         ]
     )
     with tabs[0]:
@@ -1931,3 +2374,5 @@ def render(results: dict, analysis, raw: bytes | None) -> None:
         sec_review(vm, results, raw)
     with tabs[7]:
         sec_reports(vm, results, analysis)
+    with tabs[8]:
+        sec_portfolio(vm, results)

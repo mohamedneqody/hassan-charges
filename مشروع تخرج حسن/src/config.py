@@ -10,6 +10,34 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 load_dotenv(PROJECT_ROOT / ".env")
 
+_FAST_LIVE_MODELS_STR = (
+    "gemini-flash-lite-latest,"
+    "gemini-3.1-flash-lite-preview,"
+    "gemini-3.5-flash-lite,"
+    "gemini-3-flash-preview,"
+    "gemini-3.1-flash-lite,"
+    "gemini-3.6-flash,"
+    "gemini-3.8-flash"
+)
+_FAST_TIER_SENTINELS = (
+    "gemini-flash-lite-latest",
+    "gemini-3.1-flash-lite-preview",
+    "gemini-3.5-flash-lite",
+)
+
+
+def _upgrade_legacy_cloud_models(raw: str) -> str:
+    """If Streamlit Cloud Secrets still holds the legacy slow 503/504 model list
+    (no fast lite tier models), auto-upgrade it to the 7 verified fast models."""
+    models = [m.strip() for m in str(raw or "").split(",") if m.strip()]
+    if not models:
+        return _FAST_LIVE_MODELS_STR
+    if any(m in _FAST_TIER_SENTINELS for m in models):
+        return ",".join(models)
+    # Legacy list detected (e.g. 3.6/3.5/3.8/3.7/flash-latest without fast tier)
+    return _FAST_LIVE_MODELS_STR
+
+
 # توافق السحابة (Streamlit Community Cloud): أسرار اللوحة تُقرأ عبر
 # st.secrets — نسحب المفتاحية إلى بيئة النظام كي يجدها مسبح المفاتيح
 # والمحللات. محمي بالكامل: محليًا .env يتحكم، والسحابة بلا أسرار تمرّ سالمًا.
@@ -25,9 +53,23 @@ try:
             try:
                 _v = _st.secrets.get(_key)
                 if _v:
-                    os.environ[_key] = str(_v)
+                    _val = str(_v)
+                    if _key == "GEMINI_MODELS" and not os.getenv("PYTEST_CURRENT_TEST"):
+                        _val = _upgrade_legacy_cloud_models(_val)
+                    os.environ[_key] = _val
             except Exception:
                 pass
+
+    # If a warm Streamlit Cloud container already loaded legacy GEMINI_MODELS
+    # before this hot-reload, upgrade it in-place once (never during pytest).
+    if not os.getenv("PYTEST_CURRENT_TEST") and os.getenv("GEMINI_MODELS"):
+        try:
+            if _st.secrets.get("GEMINI_MODELS"):
+                os.environ["GEMINI_MODELS"] = _upgrade_legacy_cloud_models(
+                    os.environ["GEMINI_MODELS"]
+                )
+        except Exception:
+            pass
 
     # سجل المراجعين على السحابة: JSON كامل في سر واحد (REVIEWERS_JSON) يُكتب
     # مرة واحدة لملف وقت التشغيل ويُضبط REVIEWERS_FILE عليه — الملف يحوي

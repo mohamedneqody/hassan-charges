@@ -269,6 +269,7 @@ class APIKeyPool:
         # ذاكرة صحة دائمة: حالة الموديلات المستنزفة/الميتة تنجو من إعادة التشغيل
         self._health_file = (Path(__file__).resolve().parents[2]
                              / "cache" / "model_health.json")
+        self._last_health_save: float = 0.0
         self._load_model_health()
         # Random key offset within the #1 fastest model tier: spreads fresh
         # runs across all 7 API keys while ALWAYS starting on the fastest model.
@@ -309,6 +310,14 @@ class APIKeyPool:
                     self._model_cooldown[model] = float(until)
         except Exception:
             pass  # الذاكرة الدائمة تحسين — فشلها لا يوقف المسبح
+
+    def _maybe_save_model_health(self) -> None:
+        """Debounced persist (<= 2 writes/sec) so rapid multi-key failover stays < 1ms."""
+        now = time.monotonic()
+        if now - self._last_health_save < 0.5:
+            return
+        self._last_health_save = now
+        self._save_model_health()
 
     def _save_model_health(self) -> None:
         try:
@@ -400,7 +409,7 @@ class APIKeyPool:
             if n >= self.transient_threshold:
                 self._model_cooldown[model] = (
                     time.time() + self.soft_cooldown_seconds)
-                self._save_model_health()
+                self._maybe_save_model_health()
 
     def reset_transient(self, model: str) -> None:
         """نجاح = ومضة الـ503 السابقة لم تكن عطلًا — يفك العداد."""
@@ -477,7 +486,7 @@ class APIKeyPool:
             if state:
                 state.depleted[model] = time.time()
             self._bump_model_stats(model, failed=True)
-            self._save_model_health()
+            self._maybe_save_model_health()
 
     def mark_model_unavailable(
         self, key: str, model: str, reason: str, all_keys: bool = False
@@ -490,7 +499,7 @@ class APIKeyPool:
                 state.unavailable[model] = reason
                 state.unavailable_ts[model] = now
             self._bump_model_stats(model, failed=True)
-            self._save_model_health()
+            self._maybe_save_model_health()
 
     def mark_dead(self, key: str, reason: str) -> None:
         with self._lock:
@@ -498,7 +507,7 @@ class APIKeyPool:
             if state:
                 state.dead = True
                 state.dead_reason = reason
-            self._save_model_health()
+            self._maybe_save_model_health()
 
     def mark_success(self, key: str) -> None:
         with self._lock:

@@ -951,3 +951,76 @@ def test_streamlit_classic_sidebar_xss_and_currency_reset(tmp_path, monkeypatch)
     assert "currency" not in at.session_state
 
 
+def test_portfolio_tab_table_and_excel_20_companies():
+    """Tab 9 (مقارنة الشركات): RTL .fin-table HTML + 20-company styled Excel export."""
+    import io
+    import openpyxl
+
+    from src.analysis.portfolio import CompanyRecord
+    from src.dashboard.new_ui import _build_portfolio_excel, _build_portfolio_table_html
+
+    records = [
+        CompanyRecord(
+            company=f"شركة تجريبية {i:02d}",
+            file_name=f"co_{i:02d}.pdf",
+            prev_year=2020,
+            curr_year=2021,
+            currency="ج.م",
+            saved_at="2026-11-21T19:00:00",
+            revenue=1_000_000_000.0 * i,
+            net_income=120_000_000.0 * i,
+            net_margin_pct=12.0,
+            roe_pct=15.0 + i * 0.5,
+            roa_pct=7.5,
+            current_ratio=1.5,
+            debt_to_equity=0.7,
+            asset_turnover=0.9,
+            health_total=None if i == 1 else float(50 + i),
+            health_label="" if i == 1 else "جيد",
+            altman_score=3.1,
+            altman_zone="🟢 منطقة آمنة",
+        )
+        for i in range(1, 21)
+    ]
+
+    html_ar = _build_portfolio_table_html(
+        records, active_company="شركة تجريبية 01", active_year=2021, lang="ar"
+    )
+    assert '<table class="fin-table">' in html_ar
+    assert '<bdi dir="ltr">' in html_ar
+    assert "الحالية" in html_ar
+    assert "محجوبة" in html_ar  # company 01 has refused health score
+    assert "شركة تجريبية 20" in html_ar
+
+    html_en = _build_portfolio_table_html(
+        records, active_company="شركة تجريبية 02", active_year=2021, lang="en"
+    )
+    assert "Active" in html_en
+    assert "Refused" in html_en
+
+    xlsx_bytes = _build_portfolio_excel(records, lang="ar")
+    wb = openpyxl.load_workbook(io.BytesIO(xlsx_bytes))
+    ws = wb.active
+    assert ws.max_row == 21  # header + 20 companies
+    assert ws.views.sheetView[0].rightToLeft is True
+    assert ws.cell(row=2, column=1).value == "شركة تجريبية 01"
+    assert ws.cell(row=21, column=1).value == "شركة تجريبية 20"
+
+
+def test_cloud_legacy_gemini_models_auto_upgrade():
+    """Legacy slow 6-model Streamlit Secrets list auto-upgrades to 7 fast live models."""
+    from src.config import _upgrade_legacy_cloud_models
+
+    legacy = "gemini-3-flash-preview,gemini-3.6-flash,gemini-3.5-flash,gemini-flash-latest,gemini-3.8-flash,gemini-3.7-flash"
+    upgraded = _upgrade_legacy_cloud_models(legacy).split(",")
+    assert len(upgraded) == 7
+    assert "gemini-flash-lite-latest" in upgraded
+    assert "gemini-3.1-flash-lite-preview" in upgraded
+    assert "gemini-3-flash-preview" in upgraded
+
+    # Custom list that already includes fast-tier models is preserved as-is
+    custom = "gemini-flash-lite-latest,gemini-3-flash-preview"
+    assert _upgrade_legacy_cloud_models(custom) == custom
+
+
+

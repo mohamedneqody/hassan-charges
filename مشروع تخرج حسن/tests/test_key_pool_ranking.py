@@ -124,6 +124,11 @@ def test_full_7x7_pool_traversal_no_14_cap(tmp_path):
         "extraction_notes": [],
         "analysis_period": {"previous_year": 2020, "current_year": 2021},
     }
+    # Pre-import google.genai so we measure failover loop speed, not cold SDK import
+    import google.genai  # noqa: F401
+    from src.ai.gemini_agent import _build_config
+    _build_config()
+
     t0 = _t.perf_counter()
     res = analyze_financials(payload, pool=pool, caller=exhaust_48_then_ok)
     elapsed = _t.perf_counter() - t0

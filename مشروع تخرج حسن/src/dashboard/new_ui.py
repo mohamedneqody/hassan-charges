@@ -113,7 +113,7 @@ def _extract_bbox_coords(
             return None
         if isinstance(bbox[0], dict):
             matched = [b for b in bbox if b.get("page") == page_no]
-            item = matched[-1] if matched else bbox[-1]
+            item = matched[0] if matched else bbox[0]
         elif isinstance(bbox[0], list):
             item = bbox[0]
 
@@ -821,6 +821,17 @@ def sec_metrics(vm: dict, results: dict | None = None) -> None:
                 )
 
 
+def _health_blocked_fields(vm: dict, results: dict) -> set[str]:
+    """Fields blocked for the current-year Official Health Score."""
+    curr_yr = results.get("curr_year")
+    return {
+        e["field"]
+        for e in (vm.get("pending") or [])
+        if e.get("field")
+        and (curr_yr is None or e.get("year") in (None, curr_yr) or str(e.get("year")) == str(curr_yr))
+    }
+
+
 def sec_health(vm: dict, results: dict) -> None:
     from src.analysis.score import compute_health_score
     from src.dashboard import charts
@@ -828,7 +839,7 @@ def sec_health(vm: dict, results: dict) -> None:
     lang = _lang()
     is_ar = lang != "en"
     st.subheader(_T["health"][lang])
-    blocked = {e["field"] for e in vm["pending"]}
+    blocked = _health_blocked_fields(vm, results)
     hs = compute_health_score(results["curr_metrics"], blocked_fields=blocked)
 
     if hs.total is not None:
@@ -1139,7 +1150,7 @@ def sec_reports(vm: dict, results: dict, analysis) -> None:
     lang = _lang()
     is_ar = lang != "en"
     st.subheader(_T["reports"][lang])
-    blocked = {e["field"] for e in vm["pending"]}
+    blocked = _health_blocked_fields(vm, results)
     results["verification_status"] = vm["verification"]
     results["blocked_fields"] = sorted(blocked)
     hs = compute_health_score(results["curr_metrics"], blocked_fields=blocked)
@@ -1273,9 +1284,10 @@ def _queue_signature(vm: dict, results: dict) -> str:
 def _build_live_queue(
     vm: dict, results: dict, raw: bytes, crops_dir: Path
 ) -> list[dict]:
-    """طابور مراجعة حي من سجل القرار — غير الحاسمة فقط، قصاصات من
-    بايتات المستند نفسه، بلا GT (مع التخزين المؤقت للجلسة)."""
+    """طابور مراجعة حي من سجل القرار — غير الحاسمة فقط، قصاصات + ترويسة
+    السنوات من بايتات المستند نفسه، بلا GT (مع التخزين المؤقت للجلسة)."""
     import pypdfium2 as pdfium
+    from src.analysis.comparison import LABELS_AR
     from src.extraction.human_review import EXTRACTION_VERSION, _sha256_file  # noqa: E402
 
     if not _is_pdf_bytes(raw):
@@ -1289,15 +1301,21 @@ def _build_live_queue(
     target_dir.mkdir(parents=True, exist_ok=True)
     doc_sha = hashlib.sha256(raw).hexdigest()
     queue = []
+    curr_yr = results.get("curr_year")
     _prio = (
-        "total_assets", "current_assets", "current_liabilities", "total_liabilities",
-        "equity", "revenue", "net_income", "total_debt", "long_term_debt",
-        "short_term_credit_facilities", "operating_cash_flow", "cash", "inventory",
+        "current_assets", "current_liabilities", "inventory",
+        "total_assets", "total_liabilities", "equity",
+        "net_income", "operating_cash_flow", "total_debt",
+        "revenue", "long_term_debt", "short_term_credit_facilities", "cash",
     )
     _rank = {f: i for i, f in enumerate(_prio)}
     pending_sorted = sorted(
         vm["pending"],
-        key=lambda e: (_rank.get(e["field"], 99), str(e.get("year"))),
+        key=lambda e: (
+            0 if (curr_yr is not None and str(e.get("year")) == str(curr_yr)) else 1,
+            _rank.get(e["field"], 99),
+            str(e.get("year")),
+        ),
     )
     try:
         for e in pending_sorted:
@@ -1315,15 +1333,28 @@ def _build_live_queue(
             if page_no < 1 or page_no > len(pdf):
                 continue
             page_png = target_dir / f"live_page_{page_no}.png"
-            if not page_png.exists():
-                pdf[page_no - 1].render(scale=2.0).to_pil().save(page_png, "PNG")
+            date_hdr_png = target_dir / f"live_date_header_{page_no}.png"
+            if not page_png.exists() or not date_hdr_png.exists():
+                page_pil = pdf[page_no - 1].render(scale=2.0).to_pil().convert("RGB")
+                if not page_png.exists():
+                    page_pil.save(page_png, "PNG")
+                if not date_hdr_png.exists():
+                    hdr_h = max(40, int(page_pil.height * 0.22))
+                    page_pil.crop((0, 0, page_pil.width, hdr_h)).save(date_hdr_png, "PNG")
             crop_png = None
+            bbox_rel = None
             if bbox:
                 try:
                     img = pdf[page_no - 1].render(scale=3.0).to_pil().convert("RGB")
                     coords = _extract_bbox_coords(bbox, page_no, img.width, img.height, 3.0)
                     if coords:
                         x0, y0, x1, y1 = coords
+                        bbox_rel = [
+                            round(x0 / max(img.width, 1), 4),
+                            round(y0 / max(img.height, 1), 4),
+                            round(x1 / max(img.width, 1), 4),
+                            round(y1 / max(img.height, 1), 4),
+                        ]
                         crop = img.crop(
                             (
                                 max(0, int(x0) - 6),
@@ -1338,6 +1369,12 @@ def _build_live_queue(
                         crop.save(crop_png, "PNG")
                 except Exception:
                     crop_png = None
+            raw_lbl = (results.get("candidate_labels") or {}).get(f"{field}|{year}")
+            if isinstance(raw_lbl, list) and raw_lbl:
+                raw_lbl = raw_lbl[0]
+            label_text = str(raw_lbl or LABELS_AR.get(field, field) or field)
+            hdr_ok = date_hdr_png.exists()
+            ctx_complete = bool(crop_png and hdr_ok and label_text)
             queue.append(
                 {
                     "packet_id": f"live|{field}|{page_no}|{year}",
@@ -1347,9 +1384,9 @@ def _build_live_queue(
                     "status": e.get("status"),
                     "crop_image": str(crop_png) if crop_png else None,
                     "page_image": str(page_png),
-                    "date_header_image": None,
-                    "label_text": e.get("source") or "",
-                    "bbox_rel": None,
+                    "date_header_image": str(date_hdr_png) if hdr_ok else None,
+                    "label_text": label_text,
+                    "bbox_rel": bbox_rel,
                     "machine_selected": e.get("final"),
                     "readings": {
                         "detection_line": (e.get("candidates") or [])[:4],
@@ -1362,9 +1399,9 @@ def _build_live_queue(
                     "crop_sha256": _sha256_file(crop_png) if crop_png else None,
                     "extraction_version": EXTRACTION_VERSION,
                     "context": {
-                        "year_header_available": False,
-                        "label_available": True,
-                        "context_complete": False,
+                        "year_header_available": hdr_ok,
+                        "label_available": bool(label_text),
+                        "context_complete": ctx_complete,
                     },
                     "confirmations": {
                         k: False for k in ("document", "field", "year", "position", "value")
@@ -1375,6 +1412,54 @@ def _build_live_queue(
     finally:
         pdf.close()
     return queue
+
+
+def _apply_human_approval_to_results(
+    results: dict, field: str, year: int, approved_value: float, rec: dict
+) -> None:
+    """Promote a human-attested cell inside session `results` and recompute
+    metrics/rows if the reviewer corrected the value."""
+    from src.analysis.calculator import compute_year_metrics
+    from src.analysis.comparison import build_comparison, growth_metrics
+
+    val_f = float(approved_value)
+    yr_i = int(year)
+    changed_val = False
+    for entry in results.get("decision_log") or []:
+        if entry.get("field") == field and str(entry.get("year")) == str(yr_i):
+            old_v = entry.get("final")
+            if old_v is None or abs(float(old_v) - val_f) > 1.0:
+                changed_val = True
+            entry["status"] = rec.get("status", "VERIFIED_HUMAN")
+            entry["final"] = val_f
+            entry["reason"] = (
+                f"إقرار بشري موثق — المراجع {rec.get('reviewer')} في {rec.get('timestamp')} "
+                f"(seq={rec.get('seq')} · HMAC-SHA256)"
+            )
+    hr = results.setdefault("human_reviews", {})
+    hr[f"{field}|{yr_i}"] = dict(rec)
+
+    if changed_val:
+        prev_y = results.get("prev_year")
+        curr_y = results.get("curr_year")
+        vals_map: dict[str, dict[int, float]] = {}
+        for entry in results.get("decision_log") or []:
+            f_e = entry.get("field")
+            y_e = entry.get("year")
+            v_e = entry.get("final")
+            if f_e and y_e is not None and v_e is not None:
+                vals_map.setdefault(f_e, {})[int(y_e)] = float(v_e)
+        vals_map.setdefault(field, {})[yr_i] = val_f
+        if prev_y is not None and curr_y is not None:
+            pm = compute_year_metrics(int(prev_y), vals_map, prev_year=None)
+            cm = compute_year_metrics(int(curr_y), vals_map, prev_year=int(prev_y))
+            rows = build_comparison(pm, cm)
+            g_rows = growth_metrics(pm, cm)
+            results["prev_metrics"] = pm
+            results["curr_metrics"] = cm
+            results["rows"] = rows
+            results["growth_rows"] = g_rows
+            results["rows_by_key"] = {x.key: x for x in rows}
 
 
 def sec_review(vm: dict, results: dict, raw: bytes | None) -> None:
@@ -1475,23 +1560,68 @@ def sec_review(vm: dict, results: dict, raw: bytes | None) -> None:
             else "Proceed to the Reports tab to export results.",
         )
         return
-    st.caption(
-        "سياق الخانة الحي بلا ترويسة سنة مقصوصة — سلسلة المراجعة تسمح بالرفض فقط هنا (قاعدة السياق الكامل، بلا تجاوز)."
-        if is_ar
-        else "Live context has no cropped year header — reject-only."
+    # Live Health Score Unlock Progress Tracker for current fiscal year
+    from src.analysis.comparison import LABELS_AR as _REV_LBL
+
+    curr_yr = results.get("curr_year")
+    _crit_fields = (
+        "current_assets", "current_liabilities", "inventory",
+        "total_assets", "total_liabilities", "equity",
+        "net_income", "operating_cash_flow",
     )
+    _blocked_curr = _health_blocked_fields(vm, results)
+    _crit_rem = [f for f in _crit_fields if f in _blocked_curr]
+    if _crit_rem and curr_yr is not None:
+        chips = "".join(
+            f'<span class="fs-gate {"ok" if f not in _blocked_curr else "pend"}" style="margin:2px;">'
+            f'{"✓" if f not in _blocked_curr else "◐"} {esc(_REV_LBL.get(f, f))}</span>'
+            for f in _crit_fields
+        )
+        st.markdown(
+            f'<div class="report-card" style="--accent:var(--fs-primary);margin-bottom:12px;">'
+            f'<div style="font-weight:700;margin-bottom:6px;">'
+            f'🔓 {("لفتح الدرجة الصحية الرسمية المعتمدة لعام " + str(curr_yr) + f" — متبقي {len(_crit_rem)} من {len(_crit_fields)} خانات حرجة:" if is_ar else f"Unlock Official {curr_yr} Health Score — {len(_crit_rem)} of {len(_crit_fields)} critical cells remaining:")}'
+            f'</div><div style="display:flex;flex-wrap:wrap;gap:6px;">{chips}</div></div>',
+            unsafe_allow_html=True,
+        )
+
     pkt = st.selectbox(
         "الخانة" if is_ar else "Cell",
         queue,
-        format_func=lambda p: f"{p['field']} · {p['year']} · p{p['page']}",
+        format_func=lambda p: (
+            f"{_REV_LBL.get(p['field'], p['field'])} ({p['field']}) · {p['year']} · p{p['page']}"
+            if is_ar
+            else f"{p['field']} · {p['year']} · p{p['page']}"
+        ),
     )
+    ctx_ok = bool((pkt.get("context") or {}).get("context_complete"))
+    if ctx_ok:
+        st.caption(
+            "سياق الخانة مكتمل (صورة الصفحة + ترويسة السنوات + قصاصة الخلية) — يمكنك الاعتماد (VERIFIED_HUMAN) بتوقيع HMAC-SHA256 أو الرفض."
+            if is_ar
+            else "Complete cell context (page + year header + cell crop) — both VERIFIED_HUMAN approval and rejection are enabled."
+        )
+    else:
+        st.caption(
+            "سياق الخانة الحي بلا قصاصة محددة — سلسلة المراجعة تسمح بالرفض فقط هنا (قاعدة السياق الكامل، بلا تجاوز)."
+            if is_ar
+            else "Live context incomplete (no cell crop) — reject-only."
+        )
     col_a, col_b = st.columns(2)
     with col_a:
         if Path(pkt["page_image"]).exists():
             st.image(pkt["page_image"], caption=f"page {pkt['page']}")
     with col_b:
+        if pkt.get("date_header_image") and Path(pkt["date_header_image"]).exists():
+            st.image(
+                pkt["date_header_image"],
+                caption="ترويسة السنوات والعملة (أعلى الصفحة)" if is_ar else "Year & currency header",
+            )
         if pkt["crop_image"] and Path(pkt["crop_image"]).exists():
-            st.image(pkt["crop_image"])
+            st.image(
+                pkt["crop_image"],
+                caption="قصاصة الخلية" if is_ar else "Focused cell crop",
+            )
         else:
             render_empty_state(
                 "لا قصاصة (بلا bbox)" if is_ar else "No crop (no bbox)",
@@ -1500,9 +1630,21 @@ def sec_review(vm: dict, results: dict, raw: bytes | None) -> None:
                 else "No bounding box crop recorded — reject-only mode.",
                 icon="🖼️",
             )
+        msel = pkt.get("machine_selected")
+        if msel is not None:
+            st.markdown(
+                f"**{('القيمة المستخرجة آليًا:' if is_ar else 'Machine value:')}** "
+                f"`{msel:,.0f}`"
+            )
     conf = {}
     st.markdown(
-        "**" + ("التأكيدات الأربعة للرفض" if is_ar else "The four reject confirmations") + "**"
+        "**"
+        + (
+            "التأكيدات المطلوبة قبل التوقيع"
+            if is_ar
+            else "Required confirmations before signing"
+        )
+        + "**"
     )
     for k in CONFIRMATION_KEYS:
         if k == "value":
@@ -1510,18 +1652,112 @@ def sec_review(vm: dict, results: dict, raw: bytes | None) -> None:
         conf[k] = st.checkbox(
             CONFIRMATION_LABELS_AR.get(k, k), key=f"conf-{doc_sha}-{pkt['packet_id']}-{k}"
         )
+    conf_val = False
+    val_str = ""
+    if ctx_ok:
+        conf_val = st.checkbox(
+            CONFIRMATION_LABELS_AR.get("value", "القيمة الرقمية الصحيحة"),
+            key=f"confval-{doc_sha}-{pkt['packet_id']}-value",
+        )
+        default_v = "" if pkt.get("machine_selected") is None else f"{pkt['machine_selected']:,.0f}"
+        val_str = st.text_input(
+            "القيمة المعتمدة (أبقها كما هي أو صحّحها من القصاصة)"
+            if is_ar
+            else "Approved value (keep or correct from crop)",
+            value=default_v,
+            key=f"val-{doc_sha}-{pkt['packet_id']}",
+        )
     reason = st.text_area(
-        "سبب الرفض (يسجل في السلسلة الموقعة)"
+        "سبب الرفض أو ملاحظة الاعتماد (يسجل في السلسلة الموقعة)"
         if is_ar
-        else "Reject reason (recorded in the signed chain)",
+        else "Reject reason or approval note (recorded in the signed chain)",
         "",
     )
+    saved_sess = st.session_state.get("review_session") or {}
     c1, c2 = st.columns(2)
-    reviewer = c1.text_input("اسم المراجع" if is_ar else "Reviewer", "")
+    reviewer = c1.text_input(
+        "اسم المراجع" if is_ar else "Reviewer",
+        saved_sess.get("reviewer", ""),
+    )
     credential = c2.text_input("PIN", type="password")
+    if saved_sess.get("token") and saved_sess.get("reviewer") == reviewer and not credential:
+        st.caption(
+            f"🔑 جلسة مراجع نشطة ({saved_sess['reviewer']}) — يمكنك الاعتماد مباشرة بدون إعادة إدخال PIN."
+            if is_ar
+            else f"🔑 Active reviewer session ({saved_sess['reviewer']}) — PIN not needed again."
+        )
+
+    def _auth_kwargs() -> dict:
+        if credential:
+            return {"reviewer": reviewer, "credential": credential}
+        if saved_sess.get("token") and saved_sess.get("reviewer") == reviewer:
+            return {"reviewer": reviewer, "session_token": saved_sess["token"]}
+        return {"reviewer": reviewer, "credential": credential}
+
+    if ctx_ok:
+        if st.button(
+            "✅ اعتماد القيمة رسميًا (VERIFIED_HUMAN)"
+            if is_ar
+            else "✅ Approve value (VERIFIED_HUMAN)",
+            type="primary",
+            use_container_width=True,
+            key=f"approve-btn-{doc_sha}-{pkt['packet_id']}",
+        ):
+            if not (all(conf[k] for k in conf) and conf_val):
+                st.error(
+                    "الاعتماد يتطلب تأكيد العناصر الخمسة جميعها أولًا."
+                    if is_ar
+                    else "Approval requires all five confirmations."
+                )
+            else:
+                from src.extraction.normalizer import parse_number
+
+                parsed_v = parse_number(val_str)
+                if parsed_v is None:
+                    st.error(
+                        "أدخل قيمة رقمية صالحة للاعتماد."
+                        if is_ar
+                        else "Enter a valid numeric value."
+                    )
+                else:
+                    try:
+                        rec = apply_review(
+                            queue,
+                            pkt["packet_id"],
+                            approved_value=float(parsed_v),
+                            log_path=log_path,
+                            decision_note=(reason.strip() or "اعتماد بشري موثق من القصاصة وترويسة السنوات"),
+                            confirmations={**conf, "value": True},
+                            **_auth_kwargs(),
+                        )
+                        if credential and reviewer:
+                            try:
+                                tok = human_review.authenticate(reviewer, credential)
+                                tok_str = tok["token"] if isinstance(tok, dict) else str(tok)
+                                st.session_state["review_session"] = {
+                                    "reviewer": reviewer,
+                                    "token": tok_str,
+                                }
+                            except Exception:
+                                pass
+                        _apply_human_approval_to_results(
+                            results, pkt["field"], int(pkt["year"]), float(parsed_v), rec
+                        )
+                        st.session_state.pop("live_queue", None)
+                        st.session_state.pop("live_queue_key", None)
+                        st.session_state.pop("_report_memo", None)
+                        st.success(
+                            f"✅ تم اعتماد {pkt['field']} ({pkt['year']}) رسميًا في السلسلة الموقعة (seq={rec.get('seq')})."
+                            if is_ar
+                            else f"✅ Approved {pkt['field']} ({pkt['year']}) in signed chain (seq={rec.get('seq')})."
+                        )
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"رفض السلسلة: {exc}" if is_ar else f"Chain refused: {exc}")
+
     if st.button(
         "تسجيل الرفض في السلسلة" if is_ar else "Record rejection",
-        type="primary",
+        type="secondary" if ctx_ok else "primary",
         use_container_width=True,
     ):
         if not all(conf[k] for k in conf):
@@ -1534,16 +1770,15 @@ def sec_review(vm: dict, results: dict, raw: bytes | None) -> None:
                     queue,
                     pkt["packet_id"],
                     approved_value=None,
-                    reviewer=reviewer,
-                    credential=credential,
                     log_path=log_path,
                     decision_note=reason.strip(),
                     confirmations={**conf, "value": False},
+                    **_auth_kwargs(),
                 )
                 st.success(
-                    "سُجل الرفض في السلسلة الموقعة — حساب المراجع ليس مراجعة إنتاجية."
+                    "سُجل الرفض في السلسلة الموقعة."
                     if is_ar
-                    else "Rejection recorded — not a production review."
+                    else "Rejection recorded in signed chain."
                 )
                 st.caption(f"seq={rec.get('seq')} · hash={str(rec.get('record_hash'))[:16]}")
             except Exception as exc:

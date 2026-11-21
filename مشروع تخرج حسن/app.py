@@ -19,7 +19,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-_APP_BUILD_ID = "2026-11-21-v9.8"
+_APP_BUILD_ID = "2026-11-21-v9.9"
 if not __import__("os").environ.get("PYTEST_CURRENT_TEST"):
     if getattr(sys, "_finsight_build_id", None) != _APP_BUILD_ID:
         for _mod_name in [m for m in list(sys.modules) if m == "src" or m.startswith("src.")]:
@@ -602,14 +602,21 @@ def _blocked_fields(r: dict) -> set[str]:
     from src.analysis.financial_gate import decide
 
     dl = r.get("decision_log") or []
+    curr_yr = r.get("curr_year")
     from_log = {
         e["field"]
         for e in dl
-        if e.get("field") and decide(e.get("status", "MISSING")) not in ("use", "use_disclosed")
+        if e.get("field")
+        and (curr_yr is None or e.get("year") in (None, curr_yr) or str(e.get("year")) == str(curr_yr))
+        and decide(e.get("status", "MISSING")) not in ("use", "use_disclosed")
     }
     if not dl:
         return set(r.get("blocked_fields") or [])
-    dl_fields = {e["field"] for e in dl if e.get("field")}
+    dl_fields = {
+        e["field"] for e in dl
+        if e.get("field")
+        and (curr_yr is None or e.get("year") in (None, curr_yr) or str(e.get("year")) == str(curr_yr))
+    }
     extra_blocked = set(r.get("blocked_fields") or []) - dl_fields
     return from_log | extra_blocked
 

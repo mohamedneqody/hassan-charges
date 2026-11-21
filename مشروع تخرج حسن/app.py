@@ -2008,7 +2008,7 @@ def _render_review_tab_guarded() -> None:
 
     if not (os.environ.get("REVIEWERS_FILE") or os.environ.get("REVIEWERS")):
         st.info("تبويب المراجعة البشرية معطل — يتطلب إعداد سجل مراجعين "
-                "(REVIEWERS_FILE) ومفتاح توقيع (REVIEW_HMAC_KEY) في .env.")
+                "(REVIEWERS_FILE) ومفتاح توقيع (REVIEW_HMAC_KEY) في ‎.env أو Streamlit Secrets.")
         return
     from pathlib import Path
 

@@ -60,13 +60,34 @@ _MODES: dict[str, str] = {}  # chat_id → "fast" | "precise"
 _LOCK = PROJECT_ROOT / "bot.lock"
 
 
+def _pid_alive(pid_str: str) -> bool:
+    """هل العملية بالـPID القديم ما زالت حية؟ — ويندوز عبر tasklist، لينكس عبر os.kill(0)"""
+    if not pid_str.isdigit():
+        return False
+    pid = int(pid_str)
+    if os.name == "nt":
+        import subprocess
+        try:
+            r = subprocess.run(["tasklist", "/FI", f"PID eq {pid}"],
+                               capture_output=True, text=True, timeout=10)
+            return pid_str in r.stdout
+        except (OSError, subprocess.SubprocessError):
+            return False  # تعذر الفحص — اعتبرها ميتة حتى لا يعلق البوت
+    try:
+        os.kill(pid, 0)  # على لينكس: إشارة 0 = فحص حياة فقط
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True  # حية لكن لا نملك إشارة إليها
+    except OSError:
+        return False
+
+
 def _single_instance() -> bool:
     if _LOCK.exists():
         old_pid = _LOCK.read_text(encoding="utf-8").strip()
-        import subprocess
-        r = subprocess.run(["tasklist", "/FI", f"PID eq {old_pid}"],
-                           capture_output=True, text=True)
-        if old_pid.isdigit() and old_pid in r.stdout:
+        if _pid_alive(old_pid):
             return False
         _LOCK.unlink(missing_ok=True)  # العملية القديمة ماتت — القفل باقي
     _LOCK.write_text(str(os.getpid()), encoding="utf-8")

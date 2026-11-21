@@ -11,8 +11,11 @@ opencv-python-headless>=4.9
 python-dotenv>=1.0
 google-genai==2.28.0  # pin: 3.x flips default API to v1, breaking all preview models (404) in cloud
 
-# Optional local pre-layer (speeds up scanned PDFs, zero API cost):
-# pip install indra-ocr==1.1.2   -> set LOCAL_OCR_ENABLED=0 to disable
+# Local OCR pre-layer (Indra) — the second attestation layer for scanned
+# PDFs: local reads + vision reads -> winner_layers >= 2 -> decisive values
+# -> health score computable. Also builds notes_text (document chat).
+# LOCAL_OCR_ENABLED=0 disables; LOCAL_OCR_WORKERS tunes RAM (set 1 on cloud).
+indra-ocr==1.1.2
 
 # ENV PIN (2026-11-01): streamlit 1.65 vendored middleware imports
 # DEFAULT_EXCLUDED_CONTENT_TYPES from starlette.middleware.gzip — removed in

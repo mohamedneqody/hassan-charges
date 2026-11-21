@@ -15,6 +15,7 @@ pipeline behaves exactly as before.
 """
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass
 
@@ -55,7 +56,18 @@ def _digits_from_markdown(md: str) -> set[str]:
     return out
 
 
-def read_pages(pngs: dict[int, bytes], workers: int = 4) -> dict[int, LocalPageRead] | None:
+def _default_workers() -> int:
+    """LOCAL_OCR_WORKERS env override (default 4). Each worker holds its own
+    ONNX converter ≈ 500-800MB RAM — hosted single-process environments
+    (Streamlit Community Cloud ≈ 2.7GB) set LOCAL_OCR_WORKERS=1 to stay
+    within budget; 4 workers peak ≈ 2.3GB for OCR alone."""
+    try:
+        return max(1, int(os.getenv("LOCAL_OCR_WORKERS", "4")))
+    except (TypeError, ValueError):
+        return 4
+
+
+def read_pages(pngs: dict[int, bytes], workers: int | None = None) -> dict[int, LocalPageRead] | None:
     """OCR rendered page PNGs locally, in parallel. Returns {page: LocalPageRead}
     or None on ANY failure (missing package, model error, timeout) — caller
     treats None as 'no local layer' and proceeds Gemini-only.
@@ -67,6 +79,8 @@ def read_pages(pngs: dict[int, bytes], workers: int = 4) -> dict[int, LocalPageR
     """
     if not pngs or not indra_available():
         return None
+    if workers is None:
+        workers = _default_workers()
     try:
         import threading
         from concurrent.futures import ThreadPoolExecutor
@@ -131,7 +145,7 @@ def confirms(reads: dict[int, LocalPageRead] | None, page: int, value: float) ->
     return f"{abs(value):.0f}" in lr.digits
 
 
-def capture_notes_text(raw: bytes, workers: int = 4) -> dict[int, str] | None:
+def capture_notes_text(raw: bytes, workers: int | None = None) -> dict[int, str] | None:
     """Read every page's TEXT locally with Indra (free) — feeds the notes RAG.
 
     Called AFTER the vision sweep so it never competes for quota: pure local
@@ -141,6 +155,8 @@ def capture_notes_text(raw: bytes, workers: int = 4) -> dict[int, str] | None:
     """
     if not indra_available():
         return None
+    if workers is None:
+        workers = _default_workers()
     try:
         import io
         import threading

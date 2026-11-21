@@ -6,7 +6,7 @@ from src.ai.key_pool import APIKeyPool, MODEL_RANK
 def _pool(tmp_path):
     p = APIKeyPool(["k1", "k2"],
                    ["gemini-3-flash-preview", "gemini-2.5-flash"])
-    p._key_counter = 0   # حتمية الاختبار — البداية عشوائية في الإنتاج
+    p._counter = 0   # حتمية الاختبار — البداية عشوائية في الإنتاج (key_pool.py:90)
     # الذاكرة الدائمة تشير لمسار مؤقت — لا تلوث الكاش الحقيقي
     p._health_file = tmp_path / "model_health.json"
     return p

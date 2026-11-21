@@ -7,6 +7,8 @@ notes-RAG demo, provenance, limitations) → LibreOffice → PDF.
 from __future__ import annotations
 
 import json
+import os
+import shutil
 import subprocess
 import sys
 import time
@@ -224,8 +226,9 @@ def main() -> int:
     HTML_OUT.write_text(html, encoding="utf-8")
     print(f"HTML written: {HTML_OUT.name} ({HTML_OUT.stat().st_size // 1024} KB)")
 
+    soffice = os.environ.get("SOFFICE_PATH") or shutil.which("soffice") or r"C:\Program Files\LibreOffice\program\soffice.exe"
     subprocess.run(
-        [r"C:\Program Files\LibreOffice\program\soffice.exe", "--headless", "--convert-to", "pdf", "--outdir", str(PROJ), str(HTML_OUT)],
+        [soffice, "--headless", "--convert-to", "pdf", "--outdir", str(PROJ), str(HTML_OUT)],
         check=False, capture_output=True,
     )
     if PDF_OUT.exists():

@@ -232,7 +232,8 @@ html, body, .stApp {{
 }}
 .block-container > div {{ scroll-margin-top: 80px; }}
 @media (min-width: 1025px) {{
-  section[data-testid="stSidebar"][aria-expanded="true"] {{
+  section[data-testid="stSidebar"][aria-expanded="true"],
+  section[data-testid="stSidebar"][data-collapsed="false"] {{
     width: 272px !important;
   }}
 }}
@@ -1621,9 +1622,13 @@ section[data-testid="stSidebar"] {{
   border-inline-end: var(--fs-border) !important;
 }}
 section[data-testid="stSidebar"][aria-expanded="false"],
+section[data-testid="stSidebar"][data-collapsed="true"],
 section[data-testid="stSidebar"][aria-expanded="false"] > div,
+section[data-testid="stSidebar"][data-collapsed="true"] > div,
 section[data-testid="stSidebar"][aria-expanded="false"] [data-testid="stSidebarContent"],
-section[data-testid="stSidebar"][aria-expanded="false"] [data-testid="stSidebarUserContent"] {{
+section[data-testid="stSidebar"][data-collapsed="true"] [data-testid="stSidebarContent"],
+section[data-testid="stSidebar"][aria-expanded="false"] [data-testid="stSidebarUserContent"],
+section[data-testid="stSidebar"][data-collapsed="true"] [data-testid="stSidebarUserContent"] {{
   width: 0 !important;
   min-width: 0 !important;
   max-width: 0 !important;
@@ -1894,13 +1899,15 @@ section[data-testid="stSidebar"] .stButton > button[data-testid="stBaseButton-pr
   .stTabs [aria-selected="true"] {{ padding-inline: 12px !important; }}
 }}
 @media (max-width: 1024px) and (min-width: 769px) {{
-  section[data-testid="stSidebar"][aria-expanded="true"] {{
+  section[data-testid="stSidebar"][aria-expanded="true"],
+  section[data-testid="stSidebar"][data-collapsed="false"] {{
     width: 236px !important;
     min-width: 236px !important;
   }}
 }}
 @media (max-width: 768px) {{
-  section[data-testid="stSidebar"][aria-expanded="false"] {{
+  section[data-testid="stSidebar"][aria-expanded="false"],
+  section[data-testid="stSidebar"][data-collapsed="true"] {{
     width: 0 !important;
     min-width: 0 !important;
     max-width: 0 !important;
@@ -1911,7 +1918,8 @@ section[data-testid="stSidebar"] .stButton > button[data-testid="stBaseButton-pr
     pointer-events: none !important;
     display: none !important;
   }}
-  section[data-testid="stSidebar"][aria-expanded="true"] {{
+  section[data-testid="stSidebar"][aria-expanded="true"],
+  section[data-testid="stSidebar"][data-collapsed="false"] {{
     position: fixed !important;
     inset-block: 0 !important;
     inset-inline-start: 0 !important;
@@ -1920,6 +1928,8 @@ section[data-testid="stSidebar"] .stButton > button[data-testid="stBaseButton-pr
     min-width: min(272px, 82vw) !important;
     max-width: min(272px, 82vw) !important;
     visibility: visible !important;
+    opacity: 1 !important;
+    display: flex !important;
     box-shadow: var(--fs-shadow-lg) !important;
   }}
 }}

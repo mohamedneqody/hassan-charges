@@ -212,6 +212,7 @@ LABELS_AR: dict[str, str] = {
     "non_current_liabilities": "إجمالي الالتزامات غير المتداولة",
     "total_liabilities": "إجمالي الالتزامات",
     "total_debt": "إجمالي المديونية",
+    "borrowings_excl_leases": "القروض والتسهيلات (باستثناء التأجير)",
     "capital": "رأس المال المدفوع",
     "retained_earnings": "الأرباح المرحلة / المحتجزة",
     "equity": "إجمالي حقوق الملكية",

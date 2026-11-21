@@ -330,24 +330,36 @@ def health_gauge(score, lang: str = "ar") -> go.Figure:
         if is_ar
         else f"Financial Health Score — {lbl}"
     )
+    val = float(score.total) if score.total is not None else 0.0
+    bar_color = SUCCESS if val >= 60 else (WARNING if val >= 40 else (PRIMARY if val >= 25 else NEG_COLOR))
     fig = go.Figure(
         go.Indicator(
             mode="gauge+number",
-            value=score.total if score.total is not None else 0,
+            value=val,
+            domain=dict(x=[0.08, 0.92], y=[0.14, 0.86]),
             number=dict(
-                font=dict(size=42, family="'IBM Plex Sans Arabic', Inter, sans-serif", color=INK),
+                suffix="/100",
+                font=dict(size=36, family="'IBM Plex Sans Arabic', Inter, sans-serif", color=INK),
                 valueformat=".0f",
             ),
             gauge=dict(
-                axis=dict(range=[0, 100], tickwidth=1, tickcolor="#CBD5E1"),
-                bar=dict(color=PRIMARY, thickness=0.28),
+                axis=dict(
+                    range=[0, 100],
+                    tickwidth=1,
+                    tickcolor="#CBD5E1",
+                    tickvals=[0, 20, 40, 60, 80, 100],
+                ),
+                bar=dict(color=bar_color, thickness=0.32),
+                bgcolor="#F8FAFC",
+                borderwidth=1,
+                bordercolor=LINE,
                 steps=[
                     dict(range=[0, 40], color=DANGER_SOFT),
                     dict(range=[40, 60], color="#FEF3C7"),
                     dict(range=[60, 80], color="#D1FAE5"),
                     dict(range=[80, 100], color="#A7F3D0"),
                 ],
-                threshold=dict(line=dict(color=INK, width=2), value=80),
+                threshold=dict(line=dict(color=INK, width=2), thickness=0.75, value=80),
             ),
         )
     )
@@ -362,8 +374,8 @@ def health_gauge(score, lang: str = "ar") -> go.Figure:
         font=_FONT,
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        margin=dict(t=60, b=10, l=25, r=25),
-        height=230,
+        margin=dict(t=55, b=25, l=30, r=30),
+        height=300,
     )
     return fig
 

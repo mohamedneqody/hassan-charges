@@ -1270,54 +1270,70 @@ html, body, .stApp {{
   margin: var(--fs-sp-3) 0;
 }}
 .fs-pillar-card {{
-  background: var(--fs-surface);
+  background: linear-gradient(180deg, var(--fs-surface), var(--fs-bg));
   border: var(--fs-border);
-  border-radius: var(--fs-radius);
-  padding: var(--fs-sp-4);
-  box-shadow: var(--fs-shadow-sm);
+  border-inline-start: 5px solid var(--fs-primary);
+  border-radius: var(--fs-radius-lg);
+  padding: var(--fs-sp-4) var(--fs-sp-4);
+  box-shadow: var(--fs-shadow-md);
   display: flex;
   flex-direction: column;
-  gap: var(--fs-sp-2);
+  gap: var(--fs-sp-3);
+  transition: transform .2s ease, box-shadow .2s ease;
 }}
+.fs-pillar-card:hover {{
+  transform: translateY(-2px);
+  box-shadow: var(--fs-shadow-lg);
+}}
+.fs-pillar-card.tone-ok   {{ border-inline-start-color: var(--fs-success); }}
+.fs-pillar-card.tone-mid  {{ border-inline-start-color: var(--fs-secondary); }}
+.fs-pillar-card.tone-warn {{ border-inline-start-color: var(--fs-warning); }}
+.fs-pillar-card.tone-bad  {{ border-inline-start-color: var(--fs-danger); }}
+.fs-pillar-card.tone-miss {{ border-inline-start-color: var(--fs-disabled-ink); }}
 .fs-pillar-head {{
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--fs-sp-2);
+  padding-bottom: var(--fs-sp-2);
+  border-bottom: 1px dashed var(--fs-line);
 }}
 .fs-pillar-name {{
-  font-size: 1rem;
+  font-size: 1.06rem;
   font-weight: 800;
   color: var(--fs-ink);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }}
 .fs-pillar-weight {{
-  font-size: .74rem;
-  font-weight: 700;
+  font-size: .76rem;
+  font-weight: 800;
   color: var(--fs-deep);
   background: var(--fs-soft-purple);
   border: var(--fs-border-accent);
   border-radius: var(--fs-radius-pill);
-  padding: 2px var(--fs-sp-3);
+  padding: 3px var(--fs-sp-3);
   white-space: nowrap;
 }}
 .fs-pillar-score-row {{
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: var(--fs-sp-2);
 }}
 .fs-pillar-score {{
   font-family: 'Inter', 'IBM Plex Sans Arabic', sans-serif;
   font-variant-numeric: tabular-nums;
-  font-size: 1.35rem;
+  font-size: 1.55rem;
   font-weight: 800;
   color: var(--fs-ink);
 }}
 .fs-pillar-track {{
   width: 100%;
-  height: 10px;
+  height: 12px;
   border-radius: var(--fs-radius-pill);
-  background: var(--fs-surface2);
+  background: var(--fs-track-bg);
   border: var(--fs-border);
   overflow: hidden;
 }}
@@ -1327,24 +1343,81 @@ html, body, .stApp {{
   transition: width .45s ease;
 }}
 .fs-pillar-fill.tone-ok   {{ background: linear-gradient(90deg, var(--fs-success-light), var(--fs-success)); }}
-.fs-pillar-fill.tone-mid  {{ background: linear-gradient(90deg, var(--fs-primary), var(--fs-secondary)); }}
+.fs-pillar-fill.tone-mid  {{ background: linear-gradient(90deg, var(--fs-primary-mid), var(--fs-secondary), var(--fs-cyan)); }}
 .fs-pillar-fill.tone-warn {{ background: linear-gradient(90deg, var(--fs-warning-light), var(--fs-warning)); }}
 .fs-pillar-fill.tone-bad  {{ background: linear-gradient(90deg, var(--fs-danger-light), var(--fs-danger)); }}
 .fs-pillar-fill.tone-miss {{ background: var(--fs-line); }}
 .fs-pillar-details {{
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: var(--fs-sp-1);
+  gap: 8px;
+  margin-top: 2px;
 }}
 .fs-detail-chip {{
-  font-size: .74rem;
-  color: var(--fs-ink-body);
-  background: var(--fs-bg);
-  border: var(--fs-border);
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--fs-ink);
+  background: var(--fs-surface2);
+  border: var(--fs-border-accent);
+  border-radius: 9px;
+  padding: 4px 10px;
+  line-height: 1.5;
+}}
+
+/* == Statement Cell Row Cards (القوائم والخانات) == */
+.fs-stmt-row {{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--fs-sp-3);
+  padding: var(--fs-sp-2) var(--fs-sp-3);
+  border-radius: var(--fs-radius);
+  background: linear-gradient(90deg, var(--fs-surface), var(--fs-bg));
+  border-inline-start: 4px solid var(--fs-primary);
+}}
+.fs-stmt-row.is-ok   {{ border-inline-start-color: var(--fs-success); }}
+.fs-stmt-row.is-pend {{ border-inline-start-color: var(--fs-warning); }}
+.fs-stmt-row.is-miss {{ border-inline-start-color: var(--fs-disabled-ink); }}
+.fs-stmt-title {{
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 1.02rem;
+  font-weight: 800;
+  color: var(--fs-ink);
+}}
+.fs-stmt-year {{
+  font-size: .76rem;
+  font-weight: 800;
+  color: var(--fs-deep);
+  background: var(--fs-soft-purple);
+  border: var(--fs-border-accent);
+  border-radius: var(--fs-radius-pill);
+  padding: 2px 10px;
+}}
+.fs-stmt-val {{
+  font-family: 'Inter', 'IBM Plex Sans Arabic', sans-serif;
+  font-variant-numeric: tabular-nums;
+  font-size: 1.12rem;
+  font-weight: 800;
+  color: var(--fs-deep);
+  background: var(--fs-surface2);
+  border: var(--fs-border-accent);
+  border-radius: 10px;
+  padding: 4px 14px;
+}}
+.fs-stmt-reason {{
+  margin-top: 6px;
+  padding: 5px 10px;
   border-radius: 8px;
-  padding: 3px var(--fs-sp-2);
-  line-height: 1.45;
+  background: var(--fs-warning-bg);
+  border: 1px solid var(--fs-warning-border);
+  color: var(--fs-ink-body);
+  font-size: .8rem;
+  font-weight: 600;
+  line-height: 1.55;
 }}
 
 /* == Insights Cards == */

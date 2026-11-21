@@ -623,44 +623,70 @@ def sec_statements(vm: dict, raw: bytes | None) -> None:
 
     for c in visible:
         with st.container(border=True):
-            col1, col2, col3, col4 = st.columns([2.0, 1.3, 2.0, 0.9])
+            col_main, col_btn = st.columns([5.2, 1.0])
             disp_lbl = c["label"] if is_ar else c.get("label_en", c["label"])
-            with col1:
-                st.markdown(f"**{esc(disp_lbl)}** · {esc(c['year'])}")
-                if c["raw_label"] and c["raw_label"] != c["label"]:
-                    st.caption(
-                        ("كما قُرئت: " if is_ar else "as read: ")
-                        + str(c["raw_label"])
-                    )
-            with col2:
-                val_txt = (
-                    cell_value_display(c["value"], vm["unit_scale"], vm["currency"])
-                    if is_ar
-                    else (
-                        "N/A"
-                        if c["value"] is None
-                        else f"{vm['currency']}{humanize(c['value'], vm['unit_scale'])}"
-                    )
+            val_txt = (
+                cell_value_display(c["value"], vm["unit_scale"], vm["currency"])
+                if is_ar
+                else (
+                    "N/A"
+                    if c["value"] is None
+                    else f"{vm['currency']}{humanize(c['value'], vm['unit_scale'])}"
                 )
+            )
+            gate_lbl = (
+                c["gate_label"]
+                if is_ar
+                else _GATE_EN.get(c["gate"], c["gate_label"])
+            )
+            row_tone = (
+                "is-ok"
+                if c["gate"] in ("use", "use_disclosed")
+                else ("is-miss" if c["gate"] == "missing" else "is-pend")
+            )
+            rev_tag = (
+                f' <span class="fs-gate ok">✓ {"موثق بشريًا" if is_ar else "human-attested"}</span>'
+                if c["reviewed"]
+                else ""
+            )
+            raw_sub = (
+                f' <span style="font-size:.78rem;color:var(--fs-muted);font-weight:500;">'
+                f'({("كما قُرئت: " if is_ar else "as read: ") + esc(str(c["raw_label"]))})</span>'
+                if (c["raw_label"] and c["raw_label"] != c["label"])
+                else ""
+            )
+            reason_html = ""
+            if c["reason"] and c["gate"] != "use":
+                clean_reason = (
+                    str(c["reason"])
+                    .replace("(['vision'])", "(طبقة الرؤية الذكية)")
+                    .replace("['vision']", "طبقة الرؤية الذكية")
+                    .replace("(['local_ocr'])", "(طبقة القراءة المحلية)")
+                    .replace("['local_ocr']", "طبقة القراءة المحلية")
+                )
+                reason_html = (
+                    f'<div class="fs-stmt-reason">'
+                    f'ℹ️ <b>{"السبب:" if is_ar else "Reason:"}</b> {esc(clean_reason)}'
+                    f"</div>"
+                )
+            with col_main:
                 st.markdown(
-                    f'<span class="fs-num"><bdi dir="ltr">{esc(val_txt)}</bdi></span>',
+                    f'<div class="fs-stmt-row {row_tone}">'
+                    f'<div class="fs-stmt-title">'
+                    f'<span>{esc(disp_lbl)}</span>'
+                    f'<span class="fs-stmt-year"><bdi dir="ltr">{esc(c["year"])}</bdi></span>'
+                    f"{raw_sub}"
+                    f"</div>"
+                    f'<div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;">'
+                    f'<span class="fs-stmt-val"><bdi dir="ltr">{esc(val_txt)}</bdi></span>'
+                    f"{rev_tag}"
+                    f'{gate_badge(c["gate"], gate_lbl)}'
+                    f"</div>"
+                    f"</div>"
+                    f"{reason_html}",
                     unsafe_allow_html=True,
                 )
-            with col3:
-                if c["reviewed"]:
-                    st.markdown(
-                        "✓ " + ("موثق بشريًا" if is_ar else "human-attested")
-                    )
-                gate_lbl = (
-                    c["gate_label"]
-                    if is_ar
-                    else _GATE_EN.get(c["gate"], c["gate_label"])
-                )
-                st.markdown(
-                    gate_badge(c["gate"], gate_lbl),
-                    unsafe_allow_html=True,
-                )
-            with col4:
+            with col_btn:
                 if st.button(
                     _T["open_evidence"][lang],
                     key=f"ev-{c['field']}-{c['year']}",
@@ -668,10 +694,6 @@ def sec_statements(vm: dict, raw: bytes | None) -> None:
                 ):
                     st.session_state["ev_cell"] = c
                     st.rerun()
-            if c["reason"] and c["gate"] != "use":
-                st.caption(
-                    ("السبب: " if is_ar else "reason: ") + str(c["reason"])
-                )
 
 
 def sec_metrics(vm: dict, results: dict | None = None) -> None:

@@ -67,7 +67,7 @@ def note_ar(note: str) -> str:
     """ملاحظة عربية إن طابق النص نمطًا معروفًا؛ وإلا فالأصل كما هو."""
     text = str(note).strip()
     for pattern, template in _PATTERNS:
-        m = re.match(pattern + r"\s*$", text, re.IGNORECASE | re.DOTALL)
+        m = re.match(pattern + r"\.?\s*$", text, re.IGNORECASE | re.DOTALL)
         if m:
             groups = [g.strip() for g in m.groups()]
             try:

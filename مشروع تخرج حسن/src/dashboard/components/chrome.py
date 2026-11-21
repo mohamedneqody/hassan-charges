@@ -479,8 +479,15 @@ def build_health_html(hs, lang: str = "ar") -> str:
             ref_title, ref_body, icon="🛡️", next_step=ref_next, tone="error"
         )
 
+    _pillar_icons = {
+        "liquidity": "💧",
+        "leverage": "⚖️",
+        "profitability": "📈",
+        "cash": "💵",
+    }
     pillar_cards = []
     for p in hs.pillars:
+        p_ico = _pillar_icons.get(getattr(p, "key", ""), "📊")
         p_name = p.name_ar if is_ar else p.name_en
         w_txt = f"الوزن {p.weight:.0f}%" if is_ar else f"Weight {p.weight:.0f}%"
         if p.score is None:
@@ -492,7 +499,7 @@ def build_health_html(hs, lang: str = "ar") -> str:
             )
         else:
             score_txt = f"{p.score:.0f}/100"
-            pct = max(0.0, min(100.0, float(p.score)))
+            pct = max(4.0, min(100.0, float(p.score)))
             if p.score >= 75:
                 tone, g_cls, g_lbl = "tone-ok", "ok", ("قوي" if is_ar else "Strong")
             elif p.score >= 50:
@@ -519,9 +526,9 @@ def build_health_html(hs, lang: str = "ar") -> str:
         )
         details_html = f'<div class="fs-pillar-details">{chips}</div>' if chips else ""
         pillar_cards.append(
-            '<div class="fs-pillar-card">'
+            f'<div class="fs-pillar-card {tone}">'
             '<div class="fs-pillar-head">'
-            f'<span class="fs-pillar-name">{esc(p_name)}</span>'
+            f'<span class="fs-pillar-name">{p_ico} {esc(p_name)}</span>'
             f'<span class="fs-pillar-weight">{esc(w_txt)}</span>'
             "</div>"
             '<div class="fs-pillar-score-row">'

@@ -831,9 +831,8 @@ def sec_health(vm: dict, results: dict) -> None:
     blocked = {e["field"] for e in vm["pending"]}
     hs = compute_health_score(results["curr_metrics"], blocked_fields=blocked)
 
-    st.markdown(build_health_html(hs, lang=lang), unsafe_allow_html=True)
-
     if hs.total is not None:
+        st.markdown(build_health_html(hs, lang=lang), unsafe_allow_html=True)
         with st.expander(
             "عرض المقياس البصري (Gauge) وسياسة التغطية"
             if is_ar
@@ -843,13 +842,47 @@ def sec_health(vm: dict, results: dict) -> None:
             st.plotly_chart(charts.health_gauge(hs, lang=lang), use_container_width=True)
             if getattr(hs, "policy", ""):
                 st.caption(hs.policy)
+        return
+
+    hs_est = compute_health_score(results["curr_metrics"], blocked_fields=None)
+    if hs_est.total is not None:
+        st.warning(
+            "🛡️ **الدرجة الصحية الرسمية محجوبة وفق سياسة تغطية البيانات** (مدخلات السيولة/المديونية بانتظار المراجعة البشرية — لا تُصدَّر كدرجة معتمدة في التقارير النهائية). "
+            "يُعرض أدناه **تقدير استكشافي تجريبي غير معتمد** محسوب من القيم الأولية الملتقطة لفهم الصورة المبدئية فقط؛ "
+            "ولاعتماد الدرجة الرسمية راجع الخانات الحرجة في تبويب «مراجعة بشرية»."
+            if is_ar
+            else "🛡️ **Official Health Score is refused under the data-coverage policy** (critical liquidity/leverage inputs are pending human review and are not exported as an approved score). "
+            "Below is an **unofficial exploratory estimate** computed from preliminary extracted values for preview only; verify critical cells in Human Review to unlock the official score."
+        )
+        st.markdown(build_health_html(hs_est, lang=lang), unsafe_allow_html=True)
+        with st.expander(
+            "عرض المقياس البصري الاستكشافي (Gauge)"
+            if is_ar
+            else "Show exploratory visual gauge",
+            expanded=False,
+        ):
+            st.plotly_chart(
+                charts.health_gauge(hs_est, lang=lang),
+                use_container_width=True,
+                key="health_gauge_exploratory",
+            )
+        with st.expander(
+            "🛡️ عرض تفاصيل حجب الدرجة الرسمية وفق بوابة الصدق"
+            if is_ar
+            else "🛡️ Official Honesty-Gate refusal details",
+            expanded=False,
+        ):
+            st.markdown(build_health_html(hs, lang=lang), unsafe_allow_html=True)
+            if getattr(hs, "policy", ""):
+                st.caption(hs.policy)
     else:
+        st.markdown(build_health_html(hs, lang=lang), unsafe_allow_html=True)
         if getattr(hs, "policy", ""):
             st.caption(hs.policy)
         st.caption(
-            "قيم هذه الأركان تحمل حالة «يحتاج مراجعة» أو «غير متوفر» في تبويب القوائم — لا تُحسب درجة إجمالية من مدخلات غير موثقة."
+            "قيم هذه الأركان غير متوفرة في المستند — لا تُحسب درجة إجمالية."
             if is_ar
-            else "Critical pillar inputs are unverified or missing — no total score is issued."
+            else "Critical pillar inputs are missing — no total score can be computed."
         )
 
 

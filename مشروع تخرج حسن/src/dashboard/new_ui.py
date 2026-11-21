@@ -806,6 +806,8 @@ def sec_insights(vm: dict, analysis) -> None:
                     error=str(cached_a.get("error") or ""),
                     model=str(cached_a.get("model") or ""),
                 )
+                if not analysis.ratio_comments:
+                    analysis = build_fallback_narrative(results, analysis)
             else:
                 with st.spinner(
                     "جارٍ توليد التعليق التحليلي…"
@@ -813,16 +815,24 @@ def sec_insights(vm: dict, analysis) -> None:
                     else "Generating analytical commentary..."
                 ):
                     analysis = analyze_financials(payload)
-                    if not analysis.ok:
+                    if not analysis.ok or not analysis.ratio_comments:
                         analysis = build_fallback_narrative(results, analysis)
-                    elif len(analysis.recommendations) < 3:
-                        existing = {a for a, _ in analysis.recommendations}
-                        for action, evidence in build_recommendations(results):
-                            if len(analysis.recommendations) >= 5:
-                                break
-                            if action not in existing:
-                                analysis.recommendations.append((action, evidence))
-                                existing.add(action)
+                    else:
+                        if len(analysis.ratio_comments) < 6:
+                            fb = build_fallback_narrative(results, analysis)
+                            seen_m = {m for m, _ in analysis.ratio_comments}
+                            for m, c in fb.ratio_comments:
+                                if m not in seen_m:
+                                    analysis.ratio_comments.append((m, c))
+                                    seen_m.add(m)
+                        if len(analysis.recommendations) < 3:
+                            existing = {a for a, _ in analysis.recommendations}
+                            for action, evidence in build_recommendations(results):
+                                if len(analysis.recommendations) >= 5:
+                                    break
+                                if action not in existing:
+                                    analysis.recommendations.append((action, evidence))
+                                    existing.add(action)
                     if analysis.ok:
                         store_analysis(
                             dkey,
@@ -837,6 +847,28 @@ def sec_insights(vm: dict, analysis) -> None:
             st.session_state["analysis"] = analysis
             st.rerun()
         return
+
+    results_ctx = st.session_state.get("results") or {"rows": []}
+    if results_ctx.get("rows") and len(getattr(analysis, "ratio_comments", None) or []) < 4:
+        from src.analysis.narrative import build_fallback_narrative, build_recommendations
+
+        fb = build_fallback_narrative(results_ctx, analysis)
+        if not getattr(analysis, "ratio_comments", None):
+            analysis = fb
+        else:
+            seen_m = {m for m, _ in analysis.ratio_comments}
+            for m, c in fb.ratio_comments:
+                if m not in seen_m:
+                    analysis.ratio_comments.append((m, c))
+                    seen_m.add(m)
+            if len(getattr(analysis, "recommendations", None) or []) < 3:
+                existing = {a for a, _ in (analysis.recommendations or [])}
+                for action, evidence in build_recommendations(results_ctx):
+                    if len(analysis.recommendations) >= 5:
+                        break
+                    if action not in existing:
+                        analysis.recommendations.append((action, evidence))
+                        existing.add(action)
 
     is_ai_ok = bool(getattr(analysis, "ok", False))
     has_comments = bool(getattr(analysis, "ratio_comments", []))

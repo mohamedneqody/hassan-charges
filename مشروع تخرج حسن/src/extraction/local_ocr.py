@@ -19,10 +19,10 @@ import os
 import re
 from dataclasses import dataclass
 
-AR_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
+AR_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
 
 # digit groups with separators, e.g. "١٦,٦٦٥,٩١٩,٨٧٨" / "1,171,231,651"
-_NUM_RUN = re.compile(r"[\d٠-٩][\d٠-٩,\.\u066c\s]*[\d٠-٩]")
+_NUM_RUN = re.compile(r"[\d٠-٩۰-۹][\d٠-٩۰-۹,\.\u066b\u066c\u060c\s]*[\d٠-٩۰-۹]")
 _MIN_DIGITS = 4  # ignore note refs like (11), years, small ints
 
 
@@ -48,11 +48,17 @@ def indra_available() -> bool:
 
 
 def _digits_from_markdown(md: str) -> set[str]:
+    from src.extraction.ocr_sanitizer import ocr_digit_sanitizer
+
     out = set()
     for tok in _NUM_RUN.findall(md or ""):
         d = re.sub(r"\D", "", tok.translate(AR_DIGITS))
         if len(d) >= _MIN_DIGITS:
             out.add(d)
+        for v in ocr_digit_sanitizer(tok):
+            s = f"{abs(v):.0f}"
+            if len(s) >= _MIN_DIGITS:
+                out.add(s)
     return out
 
 

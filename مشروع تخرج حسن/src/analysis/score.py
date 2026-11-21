@@ -116,29 +116,55 @@ def compute_health_score(curr: YearMetrics,
     pillars.append(_pillar("cash", "Cash Generation", "التدفق النقدي", 20, cash_subs))
 
     if blocked:
+        required = {
+            "current_ratio": ["current_assets", "current_liabilities"],
+            "quick_ratio": ["current_assets", "current_liabilities", "inventory"],
+            "debt_to_equity": ["total_debt", "total_liabilities", "equity"],
+            "debt_ratio": ["total_liabilities", "total_assets"],
+            "net_margin": ["net_income", "revenue"],
+            "roe": ["net_income", "equity"],
+            "roa": ["net_income", "total_assets"],
+            "cfo_to_net_income": ["operating_cash_flow", "net_income"],
+            "cfo_margin": ["operating_cash_flow", "revenue"],
+        }
+        pillar_subs = {
+            "liquidity": (
+                ("current_ratio", _vs_target(curr.current_ratio, 2.0), "نسبة التداول", "2.00x"),
+                ("quick_ratio", _vs_target(curr.quick_ratio, 1.0), "Quick Ratio", "1.00x"),
+            ),
+            "leverage": (
+                ("debt_to_equity", _lower_better(curr.debt_to_equity, 2.0), "الدين إلى حقوق الملكية", "< 1.00x"),
+                ("debt_ratio", _lower_better(curr.debt_ratio, 1.0), "Debt Ratio", "< 0.50x"),
+            ),
+            "profitability": (
+                ("net_margin", _vs_target(curr.net_margin, 15.0), "هامش صافي الربح", "15%"),
+                ("roe", _vs_target(curr.roe, 15.0), "العائد على حقوق الملكية", "15%"),
+                ("roa", _vs_target(curr.roa, 7.5), "العائد على الأصول", "7.5%"),
+            ),
+            "cash": (
+                ("cfo_to_net_income", _vs_target(curr.cfo_to_net_income, 1.0), "التدفق التشغيلي ÷ صافي الربح", "1.00x"),
+                ("cfo_margin", _vs_target(curr.cfo_margin, 15.0), "هامش التدفق التشغيلي", "15%"),
+            ),
+        }
         for p in pillars:
-            key_inputs = {
-                "liquidity": ("current_ratio", "quick_ratio"),
-                "leverage": ("debt_to_equity", "debt_ratio"),
-                "profitability": ("net_margin", "roe", "roa"),
-                "cash": ("cfo_to_net_income", "cfo_margin"),
-            }.get(p.key, ())
-            # a pillar whose inputs ALL depend on blocked fields is dropped
-            required = {"current_ratio": ["current_assets", "current_liabilities"],
-                        "quick_ratio": ["current_assets", "current_liabilities", "inventory"],
-                        "debt_to_equity": ["total_liabilities", "equity"],
-                        "debt_ratio": ["total_liabilities", "total_assets"],
-                        "net_margin": ["net_income", "revenue"],
-                        "roe": ["net_income", "equity"],
-                        "roa": ["net_income", "total_assets"],
-                        "cfo_to_net_income": ["operating_cash_flow", "net_income"],
-                        "cfo_margin": ["operating_cash_flow", "revenue"]}
-            if key_inputs and all(
-                any(f in blocked for f in required.get(k, []))
-                for k in key_inputs
-            ):
+            subs_spec = pillar_subs.get(p.key, ())
+            valid_scores = []
+            new_details = []
+            for k, s, label, target in subs_spec:
+                is_sub_blocked = any(f in blocked for f in required.get(k, []))
+                if is_sub_blocked:
+                    new_details.append(f"{label}: محجوب (مدخل غير حاسم — guideline {target})")
+                elif s is None:
+                    new_details.append(f"{label}: N/A (guideline {target})")
+                else:
+                    valid_scores.append(s)
+                    new_details.append(f"{label}: {s:.0f}/100 (guideline {target})")
+            if valid_scores:
+                p.score = round(_mean(valid_scores), 1)
+                p.details = new_details
+            else:
                 p.score = None
-                p.details.append("(محجوب: مدخلاته غير حاسمة — لن تُطبع كدرجة)")
+                p.details = new_details + ["(محجوب: مدخلاته غير حاسمة — لن تُطبع كدرجة)"]
     weighted = [(p.score, p.weight) for p in pillars if p.score is not None]
     total = (
         sum(s * w for s, w in weighted) / sum(w for _, w in weighted)

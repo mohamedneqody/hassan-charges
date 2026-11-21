@@ -18,7 +18,7 @@ PROJ = Path(__file__).resolve().parents[1]
 if str(PROJ) not in sys.path:
     sys.path.insert(0, str(PROJ))
 
-from src.analysis.comparison import LABELS_AR  # noqa: E402
+from src.analysis.comparison import CATEGORY_AR, LABELS_AR  # noqa: E402
 from src.analysis.financial_gate import decide, verification_labels  # noqa: E402
 
 # قرار البوابة → (التسمية العربية، الصنف اللوني)
@@ -60,6 +60,7 @@ def cell_rows(results: dict) -> list[dict]:
         rows.append({
             "field": field,
             "label": label,
+            "label_en": field.replace("_", " ").title(),
             "raw_label": raw_label,
             "year": year,
             "value": e.get("final"),
@@ -90,7 +91,12 @@ def build_view_model(results: dict, currency: str = "$") -> dict:
     metric_rows = []
     for r in results.get("rows", []):
         metric_rows.append({
-            "key": r.key, "label": r.label_ar or r.label, "kind": r.kind,
+            "key": r.key,
+            "label": r.label_ar or r.label,
+            "label_en": r.label,
+            "category": r.category,
+            "category_ar": CATEGORY_AR.get(r.category, r.category),
+            "kind": r.kind,
             "prev": r.previous, "curr": r.current, "change": r.change,
             "change_pct": r.change_pct, "status": r.status,
             "trend": r.trend_symbol,
@@ -130,94 +136,141 @@ def cell_value_display(value: float | None, unit_scale: int,
     return fmt_value_ar(value, "currency", currency, unit_scale)
 
 
-def executive_summary(results: dict, vm: dict) -> list[str]:
+def executive_summary(results: dict, vm: dict, lang: str = "ar") -> list[str]:
     """الملخص التنفيذي — حقائق محسوبة فقط من نتائج التشغيل الحي.
     لا استنتاج ولا قيمة مفقودة تُختلق؛ غير المتاح يُعلن."""
     from src.analysis.score import compute_health_score
+    from src.dashboard.charts import humanize
 
     facts: list[str] = []
+    is_ar = lang != "en"
     curr_year = vm["curr_year"]
     prev_year = vm["prev_year"]
     sc = vm["unit_scale"]
+    cur = vm["currency"]
     curr = results["curr_metrics"]
+
+    def _cur_txt(val: float) -> str:
+        return cell_value_display(val, sc, cur) if is_ar else f"{cur}{humanize(val, sc)}"
 
     # 1) تغطية البوابة
     total = vm["cell_count"]
     dec = vm["decisive_count"]
     if total:
+        pct_cov = round(dec / total * 100)
         facts.append(
             f"تغطية التوثيق: {dec} من {total} خانة حاسمة "
-            f"({round(dec / total * 100)}%) — الباقي يحتاج مراجعة بشرية "
-            "قبل الاعتماد النهائي.")
+            f"({pct_cov}%) — الباقي يحتاج مراجعة بشرية قبل الاعتماد النهائي."
+            if is_ar
+            else f"Verification coverage: {dec} of {total} decisive cells "
+            f"({pct_cov}%) — remaining cells require human review before final sign-off."
+        )
 
     # 2) الإيراد والربح (إن توفرا)
     rows = {r.key: r for r in results.get("rows", [])}
     rev = rows.get("revenue")
     if rev and rev.current is not None:
-        direction = "ارتفاع" if (rev.change or 0) > 0 else "انخفاض"
         pct = f" ({rev.change_pct:+.1f}%)" if rev.change_pct is not None else ""
-        facts.append(
-            f"الإيرادات {curr_year}: "
-            f"{cell_value_display(rev.current, sc, vm['currency'])} — "
-            f"{direction} عن {prev_year}{pct}.")
+        if rev.change is None:
+            facts.append(
+                f"الإيرادات {curr_year}: {_cur_txt(rev.current)}."
+                if is_ar
+                else f"Revenue {curr_year}: {_cur_txt(rev.current)}."
+            )
+        elif is_ar:
+            direction = "ارتفاع" if rev.change > 0 else ("انخفاض" if rev.change < 0 else "استقرار")
+            facts.append(f"الإيرادات {curr_year}: {_cur_txt(rev.current)} — {direction} عن {prev_year}{pct}.")
+        else:
+            direction = "up" if rev.change > 0 else ("down" if rev.change < 0 else "unchanged")
+            facts.append(f"Revenue {curr_year}: {_cur_txt(rev.current)} — {direction} vs {prev_year}{pct}.")
     ni = rows.get("net_income")
     if ni and ni.current is not None:
-        direction = "ارتفاع" if (ni.change or 0) > 0 else "انخفاض"
         pct = f" ({ni.change_pct:+.1f}%)" if ni.change_pct is not None else ""
-        facts.append(
-            f"صافي الربح {curr_year}: "
-            f"{cell_value_display(ni.current, sc, vm['currency'])} — "
-            f"{direction}{pct}.")
+        if ni.change is None:
+            facts.append(
+                f"صافي الربح {curr_year}: {_cur_txt(ni.current)}."
+                if is_ar
+                else f"Net income {curr_year}: {_cur_txt(ni.current)}."
+            )
+        elif is_ar:
+            direction = "ارتفاع" if ni.change > 0 else ("انخفاض" if ni.change < 0 else "استقرار")
+            facts.append(f"صافي الربح {curr_year}: {_cur_txt(ni.current)} — {direction}{pct}.")
+        else:
+            direction = "up" if ni.change > 0 else ("down" if ni.change < 0 else "unchanged")
+            facts.append(f"Net income {curr_year}: {_cur_txt(ni.current)} — {direction}{pct}.")
 
     # 3) السيولة والمديونية مقابل المعايير العامة
     if curr.current_ratio is not None:
-        state = ("أعلى من" if curr.current_ratio >= 2.0 else
-                 "أدنى من" if curr.current_ratio < 1.0 else "قريبة من")
-        facts.append(
-            f"نسبة التداول {curr.current_ratio:.2f}x — {state} الحد "
-            "الإرشادي العام (2.00x).")
+        if is_ar:
+            state = ("أعلى من" if curr.current_ratio >= 2.0 else
+                     "أدنى من" if curr.current_ratio < 1.0 else "قريبة من")
+            facts.append(f"نسبة التداول {curr.current_ratio:.2f}x — {state} الحد الإرشادي العام (2.00x).")
+        else:
+            state = ("above" if curr.current_ratio >= 2.0 else
+                     "below" if curr.current_ratio < 1.0 else "near")
+            facts.append(f"Current ratio {curr.current_ratio:.2f}x — {state} the 2.00x general guideline.")
     if curr.debt_ratio is not None:
-        state = ("داخل" if curr.debt_ratio < 0.5 else "أعلى من")
-        facts.append(
-            f"نسبة الدين {curr.debt_ratio:.2f} — {state} الحد الإرشادي "
-            "العام (< 0.50).")
+        if is_ar:
+            state = "داخل" if curr.debt_ratio < 0.5 else "أعلى من"
+            facts.append(f"نسبة الدين {curr.debt_ratio:.2f} — {state} الحد الإرشادي العام (< 0.50).")
+        else:
+            state = "within" if curr.debt_ratio < 0.5 else "above"
+            facts.append(f"Debt ratio {curr.debt_ratio:.2f} — {state} the < 0.50 general guideline.")
 
     # 4) الدرجة الصحية أو سبب الحجب
     blocked = {e["field"] for e in vm["pending"]}
     hs = compute_health_score(curr, blocked_fields=blocked)
     if hs.total is not None:
-        facts.append(f"الدرجة الصحية: {hs.total:.0f}/100 ({hs.label}).")
-    else:
-        blocked_names = "، ".join(p.name for p in hs.pillars
-                                  if p.score is None) or "—"
+        lbl = hs.label_ar if is_ar else hs.label_en
         facts.append(
-            "الدرجة الصحية محجوبة وفق سياسة تغطية البيانات — أركان ناقصة: "
-            f"{blocked_names}.")
+            f"الدرجة الصحية: {hs.total:.0f}/100 ({lbl})."
+            if is_ar
+            else f"Health score: {hs.total:.0f}/100 ({lbl})."
+        )
+    else:
+        sep = "، " if is_ar else ", "
+        blocked_names = sep.join((p.name_ar if is_ar else p.name_en) for p in hs.pillars if p.score is None) or "—"
+        facts.append(
+            f"الدرجة الصحية محجوبة وفق سياسة تغطية البيانات — أركان ناقصة: {blocked_names}."
+            if is_ar
+            else f"Health score refused under data-coverage policy — missing pillars: {blocked_names}."
+        )
 
     # 5) المؤشرات غير القابلة للحساب — معلنة
-    na = [r.label_ar or r.label for r in rows.values()
+    na = [(r.label_ar or r.label) if is_ar else r.label for r in rows.values()
           if r.previous is None and r.current is None]
     if na:
-        facts.append(
-            f"مؤشرات غير قابلة للحساب لعدم توفر مدخلاتها ({len(na)}): "
-            + "، ".join(na[:8]) + ("، …" if len(na) > 8 else "") + ".")
+        if is_ar:
+            facts.append(
+                f"مؤشرات غير قابلة للحساب لعدم توفر مدخلاتها ({len(na)}): "
+                + "، ".join(na[:8]) + ("، …" if len(na) > 8 else "") + "."
+            )
+        else:
+            facts.append(
+                f"Metrics unavailable due to missing inputs ({len(na)}): "
+                + ", ".join(na[:8]) + (", …" if len(na) > 8 else "") + "."
+            )
     return facts
 
 
 def categorized_insights(results: dict, analysis) -> dict:
-    """تصنيف تعليقات Gemini من اتجاه المؤشر المحسوب — تصنيف من البيانات
+    """تصنيف تعليقات التحليل من اتجاه المؤشر المحسوب — تصنيف من البيانات
     لا من نبرة النص: تحسّن → نقاط قوة، تراجع → نقاط ضعف، والتوصيات
-    قائمة بذاتها. الذكاء الاصطناعي يُميَّز عن المحسوب دائمًا."""
+    قائمة بذاتها. يعمل لنتائج Gemini وللتعليق القاعدي الحتمي عند غياب API."""
     out = {"strengths": [], "weaknesses": [], "neutral": [],
            "recommendations": []}
-    if not (analysis is not None and getattr(analysis, "ok", False)):
+    if analysis is None:
+        return out
+    comments = getattr(analysis, "ratio_comments", None) or []
+    recs = getattr(analysis, "recommendations", None) or []
+    if not (getattr(analysis, "ok", False) or comments or recs):
         return out
     trend_by_metric = {}
-    for r in results.get("rows", []):
+    for r in list(results.get("rows", [])) + list(results.get("growth_rows", [])):
         name = r.label_ar or r.label
         trend_by_metric[name] = r.status
         trend_by_metric[r.label] = r.status
-    for metric, text in analysis.ratio_comments:
+    for metric, text in comments:
         status = trend_by_metric.get(metric)
         item = {"metric": metric, "text": text,
                 "status": status or "Neutral"}
@@ -227,18 +280,31 @@ def categorized_insights(results: dict, analysis) -> dict:
             out["weaknesses"].append(item)
         else:
             out["neutral"].append(item)
-    for action, text in analysis.recommendations:
+    for action, text in recs:
         out["recommendations"].append({"metric": action, "text": text})
     return out
 
 
 def report_memo(results: dict, key: str, builder):
-    """تقارير تُبنى مرة واحدة لكل مستند — كانت تُبنى على كل إعادة رسم
-    للداشبورد (Excel/HTML على زر التنزيل في كل rerun). المفتاح =
-    هاش المستند + نوع التقرير."""
+    """تقارير تُبنى مرة واحدة لكل مستند وحالة تحقق وعملة.
+
+    المفتاح يربط هاش المستند + عدد المراجعات البشرية + الحقول المحجوبة + العملة + نوع التقرير
+    حتى لا تتسرب تقارير مستند سابق أو عملة سابقة أو حالة بوابة قديمة عند رفع ملف جديد.
+    """
+    import hashlib
     import streamlit as st
 
+    doc_id = (
+        results.get("document_sha256_16")
+        or f"{results.get('file_name', '')}|{results.get('company', '')}|{results.get('curr_year', '')}"
+    )
+    reviews_n = len(results.get("human_reviews") or {})
+    blocked_sig = hashlib.sha1(
+        "|".join(sorted(str(x) for x in (results.get("blocked_fields") or []))).encode("utf-8")
+    ).hexdigest()[:8]
+    currency = st.session_state.get("currency", results.get("currency_hint") or "$")
+    memo_key = f"{doc_id}|{reviews_n}|{blocked_sig}|{currency}|{key}"
     memo = st.session_state.setdefault("_report_memo", {})
-    if key not in memo:
-        memo[key] = builder()
-    return memo[key]
+    if memo_key not in memo:
+        memo[memo_key] = builder()
+    return memo[memo_key]

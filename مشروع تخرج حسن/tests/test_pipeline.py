@@ -1477,8 +1477,9 @@ def test_beneish_m_score():
     bn = beneish_m_score(prev, curr)
     assert bn.m_score is not None
     # hand-computed: DSRI 2.0, GMI 1.5, AQI 1.0, SGI 1.1, DEPI 1.2267,
-    # SGAI 1.0, LVGI 0.9091, TATA 0.08 → M ≈ −0.777 → above the −1.78 line
-    assert abs(bn.m_score - (-0.7767)) < 0.01
+    # SGAI 1.0, LVGI 1.1000 (0.44 / 0.40), TATA 0.08 → M ≈ −0.839 → above the −1.78 line
+    assert abs(bn.components["LVGI"] - 1.1) < 1e-4
+    assert abs(bn.m_score - (-0.8391)) < 0.01
     assert bn.zone == "grey_above"
     assert set(bn.components) == {"DSRI", "GMI", "AQI", "SGI", "DEPI", "SGAI", "LVGI", "TATA"}
 

@@ -170,7 +170,7 @@ def beneish_m_score(prev, curr) -> BeneishResult:
         sgai = (p.selling_expenses / p.revenue) / (c.selling_expenses / c.revenue)
     lvgi = None
     if c.total_liabilities is not None and c.total_assets and p.total_liabilities is not None and p.total_assets:
-        lvgi = (p.total_liabilities / p.total_assets) / (c.total_liabilities / c.total_assets)
+        lvgi = (c.total_liabilities / c.total_assets) / (p.total_liabilities / p.total_assets)
     tata = None
     if c.net_income is not None and c.operating_cash_flow is not None and c.total_assets:
         tata = (c.net_income - c.operating_cash_flow) / c.total_assets

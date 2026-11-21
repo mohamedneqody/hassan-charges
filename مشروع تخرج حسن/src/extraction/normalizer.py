@@ -809,10 +809,14 @@ def reconcile(data: FinancialData) -> None:
     for target, comps in _IDENTITY_GROUPS:
         group_fields = (target,) + tuple(c[0] for c in comps)
         for year in list(data.years):
-            cand_lists = {
-                f: data.candidates.get(f, {}).get(year, [])[:_MAX_CANDIDATES]
-                for f in group_fields
-            }
+            cand_lists = {}
+            for f in group_fields:
+                base_cands = list(data.candidates.get(f, {}).get(year, [])[:_MAX_CANDIDATES])
+                vote_f = (getattr(data, "vote_outcomes", {}) or {}).get((f, year)) or {}
+                for idx_d, d_val in enumerate(vote_f.get("dissent") or [], start=1):
+                    if d_val is not None and not any(_digit_close(d_val, bv) for bv, _ in base_cands):
+                        base_cands.append((d_val, 100 + idx_d))
+                cand_lists[f] = base_cands[:_MAX_CANDIDATES]
             if not cand_lists[target]:
                 continue  # nothing captured for the target field this year
             best_assignment: dict[str, float] | None = None
@@ -888,45 +892,56 @@ def reconcile(data: FinancialData) -> None:
             for f, value in best_assignment.items():
                 if data.values.get(f, {}).get(year) != value:
                     if data.values.get(f, {}).get(year) is not None:
+                        _vf = (getattr(data, "vote_outcomes", {}) or {}).get((f, year)) or {}
                         # the REPLACED capture is preserved and surfaced in the
                         # decision log — the original OCR error is never hidden
                         data.replaced_values = getattr(data, "replaced_values", {})
                         data.replaced_values.setdefault((f, year), []).append(
                             data.values.get(f, {}).get(year))
-                        data.notes.append(
-                            f"Reconciled '{f}' in {year} to {value:,.0f} using the "
-                            f"accounting identity ({target} = "
-                            + " + ".join(c for c, _ in comps) + ")."
-                        )
-                        # Decision Log: a value rewritten by reconciliation is
-                        # DERIVED, never silently presented as a direct capture
-                        data.derived[(f, year)] = (
-                            f"identity ({target} = "
-                            + " + ".join(c for c, _ in comps) + ")"
-                        )
-                        # المهمة: المشتق لا يرقّى بمدخلات غير موثوقة — when the
-                        # identity's INPUT values are backed by ONE layer on an
-                        # UNTRUSTED document, the derived value is flagged
-                        # derived_uncertain → UNVERIFIED in the decision log
-                        _profile_untrusted = not (
-                            getattr(data, "document_profile", {}) or {}
-                        ).get("text_layer_trusted", True)
-                        if _profile_untrusted:
-                            _input_layers = set()
-                            for _cf, _s in comps:
-                                _v = (getattr(data, "vote_outcomes", {})
-                                      or {}).get((_cf, year)) or {}
-                                _input_layers.update(
-                                    _v.get("winner_layers") or [])
-                                _input_layers.update(
-                                    l for l in
-                                    ((getattr(data, "candidate_layers", {})
-                                      or {}).get(_cf, {}).get(year) or [])
-                                    if l)
-                            if len(_input_layers) < 2:
-                                data.derived_uncertain = getattr(
-                                    data, "derived_uncertain", set())
-                                data.derived_uncertain.add((f, year))
+                        if (_vf.get("contested")
+                                and _vf.get("replaced") is not None
+                                and _digit_close(value, _vf["replaced"])):
+                            data.notes.append(
+                                f"Accounting identity confirmed primary capture for '{f}' in {year} "
+                                f"({value:,.0f}) over conflicting note-table majority "
+                                f"({data.values.get(f, {}).get(year):,.0f})."
+                            )
+                            (getattr(data, "vote_outcomes", {}) or {}).pop((f, year), None)
+                        else:
+                            data.notes.append(
+                                f"Reconciled '{f}' in {year} to {value:,.0f} using the "
+                                f"accounting identity ({target} = "
+                                + " + ".join(c for c, _ in comps) + ")."
+                            )
+                            # Decision Log: a value rewritten by reconciliation is
+                            # DERIVED, never silently presented as a direct capture
+                            data.derived[(f, year)] = (
+                                f"identity ({target} = "
+                                + " + ".join(c for c, _ in comps) + ")"
+                            )
+                            # المهمة: المشتق لا يرقّى بمدخلات غير موثوقة — when the
+                            # identity's INPUT values are backed by ONE layer on an
+                            # UNTRUSTED document, the derived value is flagged
+                            # derived_uncertain → UNVERIFIED in the decision log
+                            _profile_untrusted = not (
+                                getattr(data, "document_profile", {}) or {}
+                            ).get("text_layer_trusted", True)
+                            if _profile_untrusted:
+                                _input_layers = set()
+                                for _cf, _s in comps:
+                                    _v = (getattr(data, "vote_outcomes", {})
+                                          or {}).get((_cf, year)) or {}
+                                    _input_layers.update(
+                                        _v.get("winner_layers") or [])
+                                    _input_layers.update(
+                                        l for l in
+                                        ((getattr(data, "candidate_layers", {})
+                                          or {}).get(_cf, {}).get(year) or [])
+                                        if l)
+                                if len(_input_layers) < 2:
+                                    data.derived_uncertain = getattr(
+                                        data, "derived_uncertain", set())
+                                    data.derived_uncertain.add((f, year))
                     data.values.setdefault(f, {})[year] = value
                 # downstream groups should see the reconciled value only
                 data.candidates[f][year] = [(value, 0)]
@@ -966,14 +981,26 @@ def reconcile(data: FinancialData) -> None:
                 year, []).append((derived, 0))
 
             def _input_verified(f_: str, y_: int) -> bool:
-                """مدخل المشتق موثوق عند: تصويت مستقل ≥2، أو خلية رقمية
-                بفحص المصدر الكامل (VERIFIED_SOURCE_EXACT) — بديل الفحص
-                الوحيد بالـconfidence الذي ظلم مسار xlsx الرقمي."""
-                if (getattr(data, "confidence", {}).get(f_, {}).get(y_, 0)
-                        >= 2):
-                    return True
+                """مدخل المشتق موثوق عند: تصويت مستقل ≥2 (مع طبقتين على
+                مستند مصنّف غير موثوق)، أو خلية رقمية بفحص المصدر الكامل
+                (VERIFIED_SOURCE_EXACT)."""
                 ok, _ev, _fails = _source_exact(data, f_, y_)
-                return ok
+                if ok:
+                    return True
+                if (getattr(data, "confidence", {}).get(f_, {}).get(y_, 0) < 2):
+                    return False
+                _prof = getattr(data, "document_profile", {}) or {}
+                if not _prof.get("text_layer_trusted", True) and _prof.get("kind") != "NATIVE_SPREADSHEET":
+                    _vo = (getattr(data, "vote_outcomes", {}) or {}).get((f_, y_)) or {}
+                    _wl = set(_vo.get("winner_layers") or [])
+                    if not _wl:
+                        _wl = {
+                            l for l in ((getattr(data, "candidate_layers", {}) or {}).get(f_, {}).get(y_) or [])
+                            if l
+                        }
+                    if len(_wl) < 2:
+                        return False
+                return True
 
             _pending_inputs = any(
                 not _input_verified(c, year) for c, _s in comps)
@@ -1016,28 +1043,35 @@ def reconcile(data: FinancialData) -> None:
         st_d = data.get("short_term_debt", year)
         cp = data.get("current_portion_lt_debt", year)
         lt_d = data.get("long_term_debt", year)
-        if st_d is not None and lt_d is not None:
+        st_cf = data.get("short_term_credit_facilities", year)
+        ovd = data.get("bank_overdraft", year)
+        has_short = (st_d is not None or st_cf is not None or ovd is not None)
+        if has_short and lt_d is not None:
             # A directly captured total-debt row (e.g. «إجمالي القروض والتسهيلات»)
             # that disagrees with the component sum is a CONFLICT — logged, and
             # the COMPONENT SUM wins per the mandate (items beat opaque totals),
             # with the direct row preserved in the decision log.
+            borrowings = (
+                (st_d or 0.0) + (st_cf or 0.0) + (ovd or 0.0)
+                + (cp or 0.0) + lt_d
+            )
             direct_total = data.get("direct_total_debt", year)
-            if direct_total is not None and abs(direct_total - (st_d + (cp or 0.0) + lt_d)) > max(1.0, 0.005 * direct_total):
+            if direct_total is not None and abs(direct_total - borrowings) > max(1.0, 0.005 * direct_total):
                 data.notes.append(
                     f"⚠ CONFLICT: direct total-debt row ({direct_total:,.0f}) disagrees with "
-                    f"the component sum ({st_d + (cp or 0.0) + lt_d:,.0f}) in {year} — "
+                    f"the component sum ({borrowings:,.0f}) in {year} — "
                     "components used; verify the source row.")
-            borrowings = st_d + (cp or 0.0) + lt_d
             data.values.setdefault("borrowings_excl_leases", {})[year] = borrowings
             data.derived[("borrowings_excl_leases", year)] = (
-                "تسهيلات بنكية + أقساط قروض متداولة + قروض غير متداولة")
+                "تسهيلات بنكية/ائتمانية + سحب على المكشوف + أقساط قروض متداولة + قروض غير متداولة")
             # المهمة: نفس قاعدة انتشار عدم اليقين — single-layer inputs on an
             # untrusted document keep the derived debt mapping UNVERIFIED
             _prof_untrusted = not (getattr(data, "document_profile", {})
                                    or {}).get("text_layer_trusted", True)
             if _prof_untrusted:
                 _in_layers = set()
-                for _cf in ("short_term_debt", "current_portion_lt_debt",
+                for _cf in ("short_term_debt", "short_term_credit_facilities",
+                            "bank_overdraft", "current_portion_lt_debt",
                             "long_term_debt"):
                     _in_layers.update(
                         l for l in
@@ -1392,26 +1426,30 @@ def _identity_anchor_upgrade(log: list[dict], data) -> list[dict]:
     assets = (data.values.get("total_assets") or {})
     liabs = (data.values.get("total_liabilities") or {})
     equity_v = (data.values.get("equity") or {})
-    identity_holds = False
+    identity_years: set = set()
     for y, a in assets.items():
         l = liabs.get(y)
         e = equity_v.get(y)
         if a and l and e:
             if abs(a - (l + e)) <= max(1.0, 1e-6 * max(abs(a), abs(l + e))):
-                identity_holds = True
-                break
-    if not identity_holds:
+                identity_years.add(y)
+    if not identity_years:
         return log
     changed = 0
     for e in log:
         if e["field"] not in PRIMARY_FIELDS or e["final"] is None:
             continue
+        if e.get("year") not in identity_years:
+            continue
         if e["status"] in ("CONFLICT", "MULTI_ROW", "UNVERIFIED") and                 decide(e["status"]) == "not_decisive":
             reason_l = (e.get("reason") or "")
-            # الحجب سببه تعارض قراءات/تكرار — لا إشارة ولا غياب
+            # الحجب سببه تعارض قراءات/تكرار فقط (وليس قراءة مفردة أو صدى طبقة واحدة أو تعارض إشارة)
             if ("تعارض الإشارة" not in reason_l
+                    and "طبقة واحدة" not in reason_l
+                    and "قراءة واحدة" not in reason_l
                     and e.get("identity_ok") is not False
                     and ("majority" in reason_l or "تعارض قراءات" in reason_l
+                         or "قراءات متضاربة" in reason_l
                          or "2-of-3" in reason_l or "أغلبية" in reason_l)):
                 e["status"] = "CONFLICT_UPGRADED_IDENTITY"
                 e["identity_anchored"] = True

@@ -57,7 +57,8 @@ def record_from_results(results: dict) -> CompanyRecord:
     from src.analysis.score import compute_health_score
 
     m = results["curr_metrics"]
-    score = compute_health_score(m)
+    blocked = set(results.get("blocked_fields") or [])
+    score = compute_health_score(m, blocked_fields=blocked)
     try:
         az = altman_z(m)
         alt_score, alt_zone = az.score, az.zone_ar

@@ -240,17 +240,23 @@ def formulate_answer(question: str, chunks: list[NotesChunk], company: str = "")
             cleaned = cleaned.split("```")[-2] if cleaned.count("```") >= 2 else cleaned[3:]
             cleaned = cleaned[4:] if cleaned.startswith("json") else cleaned
             cleaned = cleaned.strip()
-        # The flash model often wraps even prose in a JSON object — flatten it:
+        # The flash model often wraps even prose in a JSON object or list — flatten it:
         # collect every string value recursively and join as paragraphs.
-        if cleaned.startswith("{"):
+        if cleaned.startswith(("{", "[")):
             try:
                 obj = json.loads(cleaned)
+                if isinstance(obj, dict) and set(obj.keys()) == {"error"}:
+                    return None
+                if isinstance(obj, list) and all(
+                    isinstance(x, dict) and set(x.keys()) == {"error"} for x in obj
+                ):
+                    return None
 
                 def _strings(o):
                     if isinstance(o, str):
                         return [o]
                     if isinstance(o, dict):
-                        return [s for v in o.values() for s in _strings(v)]
+                        return [s for k, v in o.items() if k != "error" for s in _strings(v)]
                     if isinstance(o, list):
                         return [s for v in o for s in _strings(v)]
                     return []

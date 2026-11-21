@@ -215,8 +215,14 @@ def build_result_summary(results: dict, currency: str = "ج.م") -> str:
 
     # تقييم الصحة — نفس منطق الواجهة (مرفوض يظهر مرفوضًا بسببه)
     try:
+        from src.analysis.financial_gate import decide
         from src.analysis.score import compute_health_score
-        hs = compute_health_score(m)
+        dl = results.get("decision_log") or []
+        blocked = {
+            e["field"] for e in dl
+            if e.get("field") and decide(e.get("status", "MISSING")) not in ("use", "use_disclosed")
+        }
+        hs = compute_health_score(m, blocked_fields=blocked)
         if hs.total is not None:
             lines.append(f"🏥 تقييم الصحة المالية: {hs.total:.0f}/100")
         else:
@@ -321,7 +327,13 @@ def build_full_report_messages(results: dict, currency: str = "ج.م",
 
     # الصحة بأركانها
     try:
-        hs = compute_health_score(m)
+        from src.analysis.financial_gate import decide
+        dl = results.get("decision_log") or []
+        blocked = {
+            e["field"] for e in dl
+            if e.get("field") and decide(e.get("status", "MISSING")) not in ("use", "use_disclosed")
+        }
+        hs = compute_health_score(m, blocked_fields=blocked)
         cur.append("")
         if hs.total is not None:
             cur.append(f"🏥 الصحة المالية: {hs.total:.0f}/100 — {hs.label}")
@@ -413,9 +425,19 @@ def build_full_report_messages(results: dict, currency: str = "ج.م",
 def analyze_document(file_name: str, raw: bytes,
                      mode: str) -> tuple[dict, bytes | None, bytes | None]:
     """شغّل المحرك على الملف وأعد (results، Excel bytes، HTML bytes)."""
+    from src.analysis.financial_gate import decide, verification_labels
+
     fast = mode == "fast"
     results = run_pipeline(file_name, raw, company="",
                            fast_mode=fast)
+    dl = results.get("decision_log") or []
+    blocked = {
+        e["field"] for e in dl
+        if e.get("field") and decide(e.get("status", "MISSING")) not in ("use", "use_disclosed")
+    }
+    if dl:
+        results["blocked_fields"] = sorted(blocked)
+        results["verification_status"] = verification_labels(dl)
     xlsx = build_excel_report(results)
 
     # تقرير HTML بالسرد الاحتياطي الحتمي (بلا نداء تعليق — سرعة البوت)
@@ -424,7 +446,7 @@ def analyze_document(file_name: str, raw: bytes,
                   "recommendations": [], "model": "fallback"}))
     html = build_html_report(
         results, analysis,
-        score=compute_health_score(results.get("curr_metrics")),
+        score=compute_health_score(results.get("curr_metrics"), blocked_fields=blocked),
         currency=results.get("currency_hint") or "ج.م")
     return results, xlsx, html.encode("utf-8")
 
@@ -547,15 +569,14 @@ def handle_update(update: dict) -> None:
             return
         if not magic_matches(ext, raw[:16]):
             _tg("sendMessage", {"chat_id": chat, "text":
-                                f"❌ الملف اللي وصل تالف أو مش {ext} فعلًا "
-                                f"(أول البايتات: {raw[:12]!r}) — أرسله كـ "
-                                "Document من مصدره الأصلي، مش مُعاد تسميته."})
+                                f"❌ الملف اللي وصل تالف أو مش {ext} فعلًا — "
+                                "أرسله كـ Document من مصدره الأصلي، مش مُعاد تسميته."})
             return
-        inbox = INBOX / chat
+        safe_fname = Path(fname).name or "document"
+        inbox = INBOX / Path(chat).name
         inbox.mkdir(parents=True, exist_ok=True)
-        (inbox / fname).write_bytes(raw)
-        _LAST_DOC[chat] = (fname, raw)  # لـ/reanalyze
-        _LAST_DOC[chat] = (fname, raw)  # لـ/reanalyze
+        (inbox / safe_fname).write_bytes(raw)
+        _LAST_DOC[chat] = (safe_fname, raw)  # لـ/reanalyze
 
         try:
             results, xlsx, html = analyze_document(fname, raw,
@@ -600,19 +621,24 @@ def handle_update(update: dict) -> None:
                                     io.BytesIO(html))}, timeout=300)
         return
 
-    # المسار المحلي (الحل المضمون): نقطة /file/ بتليجرام ترجع 404
-    # جانبيًا على بعض الشبكات — والملف المرسل من تليجرام ديسكتوب موجود
-    # على نفس الجهاز أصلًا. رسالة نصية تحمل مسارًا موجودًا ⇒ تحليل مباشر
-    # من القرص بلا أي تنزيل.
-    if text and not text.startswith("/"):
+    # المسار المحلي (الحل المضمون للمالك المحلي فقط): مقيد بـ ALLOW_LOCAL_PATHS=1
+    # أو وجود المستخدم ضمن ALLOWED_IDS المحددة صراحةً، مع منع تسريب البايتات الخام.
+    local_paths_allowed = (
+        os.getenv("ALLOW_LOCAL_PATHS", "0").strip() == "1"
+        or (bool(ALLOWED_IDS) and chat in ALLOWED_IDS)
+    )
+    if text and not text.startswith("/") and local_paths_allowed:
         candidate = Path(text.strip().strip('"').strip("'")).expanduser()
         if candidate.is_file():
-            raw = candidate.read_bytes()
             ext = candidate.suffix.lower()
-            if ext not in ALLOWED_EXTS or not magic_matches(ext, raw[:16]):
+            if ext not in ALLOWED_EXTS:
                 _tg("sendMessage", {"chat_id": chat, "text":
-                                    f"❌ {candidate.name}: امتداد غير مدعوم "
-                                    f"أو الملف تالف (أول البايتات: {raw[:12]!r})."})
+                                    f"❌ {candidate.name}: امتداد غير مدعوم."})
+                return
+            raw = candidate.read_bytes()
+            if not magic_matches(ext, raw[:16]):
+                _tg("sendMessage", {"chat_id": chat, "text":
+                                    f"❌ {candidate.name}: محتوى الملف لا يطابق الامتداد."})
                 return
             _tg("sendMessage", {"chat_id": chat, "text":
                                 f"📂 قرأت الملف محليًا: {candidate.name} — "
@@ -649,8 +675,12 @@ def handle_update(update: dict) -> None:
                                         io.BytesIO(html))}, timeout=300)
             return
         if len(text) > 3 and (":" in text or text.startswith("\\")):
-            _tg("sendMessage", {"chat_id": chat, "text":
-                                f"❌ المسار غير موجود على الجهاز: {text[:80]}"})
+            if local_paths_allowed:
+                _tg("sendMessage", {"chat_id": chat, "text":
+                                    f"❌ المسار غير موجود على الجهاز: {text[:80]}"})
+            else:
+                _tg("sendMessage", {"chat_id": chat, "text":
+                                    "🔒 قراءة المسارات المحلية معطلة — أرسل الملف كـ Document في المحادثة."})
             return
 
     if text:

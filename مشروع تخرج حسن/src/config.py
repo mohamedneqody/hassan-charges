@@ -19,7 +19,8 @@ try:
     for _key in ("GEMINI_API_KEYS", "GEMINI_MODELS", "GEMINI_MODEL",
                  "REPORT_LANGUAGE", "TELEGRAM_BOT_TOKEN", "TELEGRAM_ALLOWED_IDS",
                  "LOCAL_OCR_ENABLED", "LOCAL_OCR_WORKERS", "FOCUSED_LOCAL_VERIFY",
-                 "REVIEW_HMAC_KEY", "REVIEW_LOG_PATH", "REVIEWER_NAME"):
+                 "VISION_SEMANTIC", "REVIEW_HMAC_KEY", "REVIEW_LOG_PATH",
+                 "REVIEWER_NAME"):
         if not os.getenv(_key):
             try:
                 _v = _st.secrets.get(_key)
@@ -41,6 +42,10 @@ try:
             if isinstance(_parsed, dict) and _parsed.get("reviewers"):
                 _rp = Path(_tempfile.gettempdir()) / "finsight_reviewers.json"
                 _rp.write_text(_json.dumps(_parsed, ensure_ascii=False), encoding="utf-8")
+                try:
+                    os.chmod(_rp, 0o600)
+                except OSError:
+                    pass
                 os.environ["REVIEWERS_FILE"] = str(_rp)
     except Exception:
         pass

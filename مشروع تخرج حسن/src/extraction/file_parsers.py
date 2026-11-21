@@ -448,8 +448,9 @@ def load_financial_data(file_name: str, raw: bytes, progress_cb=None, page_range
         pdf_profile = _profile_pdf_bytes(raw)
     elif ext == ".csv":
         frames, notes = _load_csv(raw)
-        named_frames = [("", f) for f in frames]
-        evidence_bundle: dict | None = None
+        named_frames = [("CSV", f) for f in frames]
+        from src.extraction.provenance import file_sha256 as _sha
+        evidence_bundle: dict | None = {"file_sha256": _sha(raw), "cell_meta": {}}
     else:
         named_frames, notes, evidence_bundle = _load_excel_with_evidence(raw, ext)
         frames = [f for _name, f in named_frames]

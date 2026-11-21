@@ -22,6 +22,8 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]  # src/extraction/… → project root
 CACHE_DIR = PROJECT_ROOT / "cache"
+SEED_CACHE_DIR = PROJECT_ROOT / "data" / "seed_cache"
+CACHE_SCHEMA_VERSION = 2
 
 _LOCK = threading.Lock()
 
@@ -59,10 +61,22 @@ def _write(cache_sub: str, key: str, payload: dict) -> None:
 
 
 def load_cached_extraction(key: str) -> dict | None:
-    return _read("extraction", key)
+    res = _read("extraction", key)
+    if CACHE_DIR == PROJECT_ROOT / "cache":
+        seed_path = SEED_CACHE_DIR / f"{key.replace('|', '__')}.json"
+        if seed_path.exists() and (res is None or int(res.get("cache_schema") or 0) < CACHE_SCHEMA_VERSION):
+            try:
+                seed_data = json.loads(seed_path.read_text(encoding="utf-8"))
+                _write("extraction", key, seed_data)
+                return seed_data
+            except Exception:
+                pass
+    return res
 
 
 def store_extraction(key: str, payload: dict) -> None:
+    if isinstance(payload, dict) and "cache_schema" not in payload:
+        payload = {**payload, "cache_schema": CACHE_SCHEMA_VERSION}
     _write("extraction", key, payload)
 
 

@@ -1503,6 +1503,44 @@ def extract_via_vision(
             f"📋 سجل الفجوات: {len(uniq)} بندًا بقراءات لم تُطابق أي حقل "
             f"معروف — {(_frag + (" …" if len(uniq) > 8 else ""))}. "
             "تُراجع لتوسيع مفردات المطابقة.")
+    # Provenance: which page each field was captured from — surfaces in the
+    # UI and lets the pipeline flag balance fields sourced from notes pages.
+    data.field_sources = field_sources
+    # Source-aware honesty (المهمة 1 — سد الاستثناء غير الآمن): a pure scan
+    # has NO trusted text layer — every value here came from ONE model layer
+    # (vision). The profile marks that BEFORE reconcile() runs, so the
+    # decision log's correlated-source gate and reconcile's derived_uncertain
+    # checks treat same-layer agreement as an echo, and only a SECOND
+    # independent layer (local_ocr) can attest.
+    from src.extraction.document_profiler import KIND_SCANNED_NO_TEXT
+
+    data.document_profile = {
+        "kind": KIND_SCANNED_NO_TEXT,
+        "text_layer_trusted": False,
+        "note": "pure scan — every value read by the vision model layer; "
+                "same-layer agreement is an echo until an independent layer "
+                "(local OCR) confirms",
+    }
+    # Second-layer attestation from the free local Indra OCR sweep: when
+    # local_reads on a field's source page digit-confirms a captured value,
+    # record it as an independent local_ocr candidate BEFORE reconcile().
+    if local_reads:
+        from src.extraction.local_ocr import confirms as _local_confirms
+
+        _sel_set = set(selected)
+        _order_l = max((o for cands in data.candidates.values()
+                        for ys in cands.values() for _v, o in ys), default=0) + 1
+        for _f, _by_year in list(data.values.items()):
+            _src_pages = [p for p in field_sources.get(_f, []) if p in _sel_set]
+            for _y, _v in list(_by_year.items()):
+                if _v is None:
+                    continue
+                if any(_local_confirms(local_reads, p, _v) for p in _src_pages):
+                    data.candidates.setdefault(_f, {}).setdefault(_y, []).append((_v, _order_l))
+                    data.candidate_labels.setdefault(_f, {}).setdefault(_y, []).append(f"local_ocr:{_f}")
+                    data.candidate_layers.setdefault(_f, {}).setdefault(_y, []).append("local_ocr")
+                    data.bump_confidence(_f, _y, 2)
+                    _order_l += 1
     # Confidence must reach reconcile BEFORE it runs: the tax bridge anchors
     # on a multiply-verified net income, which is only known here.
     for (field_name, year), level in confidence.items():
@@ -1520,23 +1558,6 @@ def extract_via_vision(
             ),
             encoding="utf-8",
         )
-    # Provenance: which page each field was captured from — surfaces in the
-    # UI and lets the pipeline flag balance fields sourced from notes pages.
-    data.field_sources = field_sources
-    # Source-aware honesty (المهمة 1 — سد الاستثناء غير الآمن): a pure scan
-    # has NO trusted text layer — every value here came from ONE model layer
-    # (vision). The profile marks that, so the decision log's correlated-
-    # source gate treats same-layer agreement as an echo, and only a SECOND
-    # independent layer (local_ocr) can attest.
-    from src.extraction.document_profiler import KIND_SCANNED_NO_TEXT
-
-    data.document_profile = {
-        "kind": KIND_SCANNED_NO_TEXT,
-        "text_layer_trusted": False,
-        "note": "pure scan — every value read by the vision model layer; "
-                "same-layer agreement is an echo until an independent layer "
-                "(local OCR) confirms",
-    }
     # Focused local cell verification (المهمة 3/4 — استعادة الأدلة): free
     # local row-band reads of the non-decisive cells. Candidates only —
     # cross-layer agreement attests through the normal vote, conflicts stay
@@ -1643,6 +1664,7 @@ def _focused_local_cell_verification(data, raw, field_sources, doc_years,
     disables; reader injectable for tests.
     """
     import os
+    import re
     import time as _time
 
     if os.getenv("FOCUSED_LOCAL_VERIFY", "1") != "1":
@@ -1739,18 +1761,49 @@ def _focused_local_cell_verification(data, raw, field_sources, doc_years,
                 self.conf = getattr(sg, "conf", None)
 
         segs = [_Seg(x) for x in segs]
+        page_has_arabic_indic = any(
+            re.search(r"[\u0660-\u0669\u06f0-\u06f9]", s.text or "") for s in segs
+        )
         # year COLUMNS from the printed year-header segments — every header
         # segment is a column (a statement may print FOUR: 6-month and
         # 3-month periods side by side, years repeating); column ranges are
         # the midpoints between adjacent header centers
         header_cols: list[tuple[int, float]] = []
+        note_cxs: list[float] = []
         for seg in segs:
-            y = _extract_year_token(seg.text or "")
+            stxt = (seg.text or "").strip()
+            if not stxt:
+                continue
+            if len(stxt) <= 16 and ("إيضاح" in stxt or "ايضاح" in stxt):
+                note_cxs.append(_cx(seg))
+            if len(stxt) > 36 or any(bw in stxt for bw in ("القوائم", "القواذم", "القوانم", "المنتهية", "تعتبر")):
+                continue
+            y = _extract_year_token(stxt)
             if y in years:
                 header_cols.append((y, _cx(seg)))
+        if len(header_cols) < 2 and len(years) >= 2:
+            curr_hdrs = [
+                seg for seg in segs
+                if len((seg.text or "").strip()) <= 24
+                and any(cw in (seg.text or "").lower() for cw in ("جنيه", "جنیه", "جئيه", "مصري", "مصرى"))
+            ]
+            paired_hdrs: list = []
+            for i_h, h1 in enumerate(curr_hdrs):
+                row_mates = [h1] + [
+                    h2 for j_h, h2 in enumerate(curr_hdrs)
+                    if j_h != i_h and abs(_cy(h1) - _cy(h2)) <= 15.0 and abs(_cx(h1) - _cx(h2)) >= 60.0
+                ]
+                if len(row_mates) == 2:
+                    paired_hdrs = sorted(row_mates, key=lambda s: _cx(s))
+                    break
+            if len(paired_hdrs) == 2:
+                y_old, y_new = min(years), max(years)
+                header_cols = [(y_old, _cx(paired_hdrs[0])), (y_new, _cx(paired_hdrs[1]))]
         if not header_cols:
             continue
         header_cols.sort(key=lambda t: t[1])
+        max_hdr_cx = max(c[1] for c in header_cols)
+        note_cxs = [ncx for ncx in note_cxs if ncx > max_hdr_cx + 35.0]
         bounds = [(-1e18, None)]
         for i in range(1, len(header_cols)):
             mid = (header_cols[i - 1][1] + header_cols[i][1]) / 2.0
@@ -1762,6 +1815,9 @@ def _focused_local_cell_verification(data, raw, field_sources, doc_years,
                 if lo <= cx < (hi if hi is not None else 1e18):
                     return i
             return len(bounds) - 1
+
+        def _in_note_col(cx: float) -> bool:
+            return any(abs(cx - ncx) <= 42.0 for ncx in note_cxs)
 
         # Statement-section context (المهمة 1): the SAME generic rules the
         # text parser uses — section-header segments («Current Liabilities»,
@@ -1799,15 +1855,20 @@ def _focused_local_cell_verification(data, raw, field_sources, doc_years,
             return cur
 
         # label segments for the page's target fields
+        from src.extraction.normalizer import match_field as _match_fld
         for seg in segs:
             text = (seg.text or "").strip()
             if not text or _is_number_text(text):
                 continue
-            fld = next((f for f in page_fields
-                        if any(kw in text.lower()
-                               for kw in (k.lower() for k in
-                                          FIELD_ALIASES.get(f, [])[:3]
-                                          if len(k) >= 4))), None)
+            matched_fld = _match_fld(text)
+            if matched_fld in page_fields:
+                fld = matched_fld
+            else:
+                fld = next((f for f in page_fields
+                            if any(kw in text.lower()
+                                   for kw in (k.lower() for k in
+                                              FIELD_ALIASES.get(f, [])
+                                              if len(k) >= 4))), None)
             if fld is None:
                 continue
             row_section = _section_at(_cy(seg))
@@ -1819,9 +1880,35 @@ def _focused_local_cell_verification(data, raw, field_sources, doc_years,
             # tight ROW bounds (المهمة: حدود الصف): the label's own printed
             # line only — a ±1.5×h band swallowed NEIGHBORING rows on the
             # ~20px-pitch TE scan and mixed their numbers into the chain
-            row_nums = [sg for sg in segs
-                        if sg is not seg and _is_number_text(sg.text or "")
-                        and abs(_cy(sg) - band_cy) <= band_h * 0.75 + 3.0]
+            row_band_segs = [
+                sg for sg in segs
+                if sg is not seg and not _in_note_col(_cx(sg))
+                and abs(_cy(sg) - band_cy) <= band_h * 0.75 + 3.0
+            ]
+            # Geometric cell bounding boxes for RTL value columns (even if CRNN
+            # garbled Arabic-Indic digits into Latin letters, the detector box
+            # is the exact physical cell crop on the page)
+            if _cx(seg) > max_hdr_cx + 40.0:
+                col_cell_segs: dict[int, list] = {}
+                for sg in row_band_segs:
+                    st_sg = (sg.text or "").strip()
+                    if (st_sg and sg.box[2] <= seg.box[0] - 10.0
+                            and any(c.isdigit() or c in ",.()٠١٢٣٤٥٦٧٨٩" for c in st_sg)):
+                        col_cell_segs.setdefault(_column_of(_cx(sg)), []).append(sg)
+                for col_i, c_segs in sorted(col_cell_segs.items()):
+                    year_c = header_cols[col_i][0]
+                    if (fld, year_c) not in targets:
+                        continue
+                    ubox_c = [
+                        round(min(x.box[0] for x in c_segs), 1),
+                        round(min(x.box[1] for x in c_segs), 1),
+                        round(max(x.box[2] for x in c_segs), 1),
+                        round(max(x.box[3] for x in c_segs), 1),
+                    ]
+                    existing_bbs = data.candidate_bbox.setdefault(fld, {}).setdefault(year_c, [])
+                    if not any(b.get("page") == page and b.get("bbox_px") == ubox_c for b in existing_bbs):
+                        existing_bbs.append({"page": page, "bbox_px": ubox_c, "render_scale": render_scale})
+            row_nums = [sg for sg in row_band_segs if _is_number_text(sg.text or "")]
             if not row_nums:
                 continue
             # chain horizontally-adjacent fragments WITHIN ONE COLUMN, then
@@ -1839,10 +1926,23 @@ def _focused_local_cell_verification(data, raw, field_sources, doc_years,
                     else:
                         if cur:
                             joined = " ".join(x.text.strip() for x in cur)
-                            v = parse_number(joined)
-                            if v is not None:
-                                mags.append((v, col_i, sum(_cx(x) for x in cur)
-                                             / len(cur), list(cur)))
+                            # Skip CRNN Latin-garbled or dot-for-zero garbled reads as numeric candidates
+                            has_latin_garble = bool(re.search(r"[A-Za-z]", joined))
+                            has_ascii_on_arabic_page = bool(
+                                page_has_arabic_indic and re.search(r"[0-9]", joined)
+                            )
+                            has_dot_comma_garble = bool(
+                                ("," in joined or "٬" in joined or "،" in joined)
+                                and ("." in joined or "٫" in joined)
+                                and re.search(r"[.٫]\s*\d*[,٬،]|[,٬،]\s*\d*[.٫]", joined)
+                            )
+                            if (not has_latin_garble
+                                    and not has_ascii_on_arabic_page
+                                    and not has_dot_comma_garble):
+                                v = parse_number(joined)
+                                if v is not None:
+                                    mags.append((v, col_i, sum(_cx(x) for x in cur)
+                                                 / len(cur), list(cur)))
                         cur = [sg] if sg is not None else []
             # drop leading note-REFERENCE magnitudes per column: «(19)» before
             # the real year values is a note number, never a statement amount
@@ -1856,20 +1956,21 @@ def _focused_local_cell_verification(data, raw, field_sources, doc_years,
                     continue
                 # the provenance bbox is the VALUE segment's own box (the
                 # union of the chained group when fragments were joined)
-                ubox = [min(x.box[0] for x in grp),
-                        min(x.box[1] for x in grp),
-                        max(x.box[2] for x in grp),
-                        max(x.box[3] for x in grp)]
+                ubox = [round(min(x.box[0] for x in grp), 1),
+                        round(min(x.box[1] for x in grp), 1),
+                        round(max(x.box[2] for x in grp), 1),
+                        round(max(x.box[3] for x in grp), 1)]
                 data.candidates.setdefault(fld, {}).setdefault(year, []) \
                     .append((v, order))
                 data.candidate_labels.setdefault(fld, {}).setdefault(year, []) \
                     .append(text[:48])
                 data.candidate_layers.setdefault(fld, {}).setdefault(year, []) \
                     .append("local_ocr")
-                data.candidate_bbox.setdefault(fld, {}).setdefault(year, []) \
-                    .append({"page": page,
-                             "bbox_px": [round(x, 1) for x in ubox],
-                             "render_scale": render_scale})
+                existing_bbs = data.candidate_bbox.setdefault(fld, {}).setdefault(year, [])
+                if not any(b.get("page") == page and b.get("bbox_px") == ubox for b in existing_bbs):
+                    existing_bbs.append({"page": page,
+                                         "bbox_px": ubox,
+                                         "render_scale": render_scale})
                 if len(grp) > 1:
                     _fragment_map.setdefault((fld, year), []).append(
                         (v, list(grp), page))
@@ -1923,11 +2024,15 @@ def _focused_local_cell_verification(data, raw, field_sources, doc_years,
         _majority_vote(data)
 
 
+_AR_DIGITS_TRANS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹٫٬،", "01234567890123456789., ")
+
+
 def _is_number_text(text: str) -> bool:
     import re as _re
 
-    return bool(_re.fullmatch(r"[\d,.()\s]+", (text or "").strip())
-                and _re.search(r"\d", text or ""))
+    norm = (text or "").translate(_AR_DIGITS_TRANS).strip()
+    return bool(_re.fullmatch(r"[\d,.()\s\-]+", norm)
+                and _re.search(r"\d", norm))
 
 
 def _chains_box(prev_seg, next_seg) -> bool:
@@ -1939,8 +2044,8 @@ def _chains_box(prev_seg, next_seg) -> bool:
     h = max(prev_seg.box[3] - prev_seg.box[1], 4.0)
     if gap > h * 1.6 or gap < -h * 0.5:
         return False
-    pt = (prev_seg.text or "").strip()
-    nt = (next_seg.text or "").strip()
+    pt = (prev_seg.text or "").translate(_AR_DIGITS_TRANS).strip()
+    nt = (next_seg.text or "").translate(_AR_DIGITS_TRANS).strip()
     import re as _re
 
     return bool(_re.fullmatch(r"[\d ]+", pt) and _re.fullmatch(r"[\d ]+", nt))
@@ -1956,7 +2061,8 @@ def _chains(prev_tok: str, next_tok: str) -> bool:
 
 
 def _extract_year_token(tok: str) -> int | None:
-    m = _re.search(r"(?:19|20)\d{2}", tok or "")
+    norm = (tok or "").translate(_AR_DIGITS_TRANS)
+    m = _re.search(r"(?:19|20)\d{2}", norm)
     return int(m.group(0)) if m else None
 
 

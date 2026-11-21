@@ -581,7 +581,7 @@ class TestNotesRecovery:
         assert hits == []
 
     def test_net_income_pattern_excludes_pretax_row(self):
-        """«صافى أرباح (خسائر) العام قبل ضريبة الدخل» لا يُلتقط لصافي
+        r"""«صافى أرباح (خسائر) العام قبل ضريبة الدخل» لا يُلتقط لصافي
         الربح — الاستبعاد (?!\s*قبل) يمنعه."""
         from src.extraction.ocr_sanitizer import notes_value_lookup
 
@@ -1219,3 +1219,107 @@ class TestTelegramFullReport:
         chunks = B.build_full_report_messages(results)
         # الوسم تضاف في مستوى handler — هنا نتحقق أن الكشف يعمل
         assert any("local cache" in str(n) for n in results["notes"])
+
+
+# ═══ إصلاحات المراجعة التقنية الصارمة (Beneish LVGI + Sub-score gate + Debt + Bot) ═══
+class TestAuditReviewFixes:
+    def test_beneish_lvgi_is_curr_over_prev(self):
+        """LVGI = (TL_t / TA_t) / (TL_{t-1} / TA_{t-1}) — زيادة المديونية ترفع LVGI > 1."""
+        from src.analysis.calculator import YearMetrics
+        from src.analysis.redflags import beneish_m_score
+
+        prev = YearMetrics(
+            year=2022, revenue=1000.0, gross_profit=300.0, accounts_receivable=100.0,
+            fixed_assets=500.0, total_assets=1000.0, depreciation_amortization=50.0,
+            selling_expenses=100.0, total_liabilities=400.0,
+        )
+        curr = YearMetrics(
+            year=2023, revenue=1100.0, gross_profit=220.0, accounts_receivable=220.0,
+            fixed_assets=500.0, total_assets=1000.0, depreciation_amortization=40.0,
+            selling_expenses=110.0, total_liabilities=500.0,
+            net_income=100.0, operating_cash_flow=20.0,
+        )
+        bn = beneish_m_score(prev, curr)
+        assert bn.components["LVGI"] == pytest.approx(0.50 / 0.40, abs=1e-4)
+
+    def test_health_score_drops_contaminated_subscore_not_keep_it(self):
+        """إذا كان inventory محجوبًا بينما current_assets/liabilities موثقان:
+        quick_ratio يُستبعد من متوسط ركيزة السيولة ويبقى current_ratio وحده."""
+        from src.analysis.calculator import YearMetrics
+        from src.analysis.score import compute_health_score
+
+        m = YearMetrics(
+            year=2023,
+            current_assets=200.0, current_liabilities=100.0, inventory=190.0,
+            current_ratio=2.0, quick_ratio=0.10,  # quick_ratio ملوث بمخزون محجوب
+            total_liabilities=300.0, total_debt=200.0, equity=400.0, total_assets=700.0,
+            debt_to_equity=0.5, debt_ratio=300.0 / 700.0,
+            net_income=100.0, revenue=500.0, net_margin=20.0, roe=25.0, roa=14.0,
+            operating_cash_flow=120.0, cfo_to_net_income=1.2, cfo_margin=24.0,
+        )
+        hs_unblocked = compute_health_score(m, blocked_fields=set())
+        liq_unblocked = next(p for p in hs_unblocked.pillars if p.key == "liquidity")
+        # بدون حجب: متوسط (100 و 10) = 55
+        assert liq_unblocked.score == pytest.approx(55.0, abs=0.1)
+
+        hs_blocked_inv = compute_health_score(m, blocked_fields={"inventory"})
+        liq_blocked = next(p for p in hs_blocked_inv.pillars if p.key == "liquidity")
+        # مع حجب المخزون: quick_ratio يُستبعد وتُحسب السيولة من current_ratio وحده = 100
+        assert liq_blocked.score == pytest.approx(100.0, abs=0.1)
+        assert any("محجوب" in d for d in liq_blocked.details)
+
+    def test_reconcile_total_debt_includes_credit_facilities_and_overdraft(self):
+        """reconcile() يجمع التسهيلات الائتمانية والسحب على المكشوف ضمن إجمالي الدين."""
+        from src.extraction.normalizer import FinancialData, reconcile
+
+        d = FinancialData()
+        d.values = {
+            "short_term_credit_facilities": {2021: 3_915_952_409.0},
+            "bank_overdraft": {2021: 2_655_419.0},
+            "current_portion_lt_debt": {2021: 309_375_798.0},
+            "long_term_debt": {2021: 1_024_849_657.0},
+        }
+        reconcile(d)
+        assert d.get("total_debt", 2021) == pytest.approx(5_252_833_283.0, abs=1.0)
+
+    def test_identity_anchor_does_not_upgrade_single_read_unverified(self):
+        """تساوي معادلة الميزانية لا يرقّي قراءة واحدة مفردة (UNVERIFIED) لحقل آخر."""
+        from src.extraction.normalizer import FinancialData, build_decision_log, reconcile
+
+        d = FinancialData()
+        d.values = {
+            "total_assets": {2022: 1000.0},
+            "total_liabilities": {2022: 600.0},
+            "equity": {2022: 400.0},
+            "operating_cash_flow": {2022: 150.0},
+        }
+        for f, v in d.values.items():
+            d.candidates[f] = {2022: [(v[2022], 0)]}
+            d.confidence[f] = {2022: 1}
+        reconcile(d)
+        log = {e["field"]: e for e in build_decision_log(d)}
+        assert log["operating_cash_flow"]["status"] == "UNVERIFIED"
+
+    def test_bot_health_score_respects_blocked_fields(self):
+        """بوت تليجرام يرفض الدرجة الصحية عندما تكون ركيزة حرجة محجوبة في سجل القرار."""
+        import bot as B
+        from src.analysis.calculator import YearMetrics
+
+        m = YearMetrics(
+            year=2023, current_assets=200.0, current_liabilities=100.0,
+            current_ratio=2.0, quick_ratio=1.5,
+            total_liabilities=300.0, total_debt=200.0, equity=400.0, total_assets=700.0,
+            debt_to_equity=0.5, debt_ratio=0.42,
+        )
+        res = {
+            "company": "شركة اختبار", "curr_year": 2023, "prev_year": 2022,
+            "metric_years_available": [2022, 2023],
+            "curr_metrics": m, "prev_metrics": m,
+            "decision_log": [
+                {"field": "current_assets", "year": 2023, "status": "CONFLICT", "final": 200.0},
+                {"field": "current_liabilities", "year": 2023, "status": "CONFLICT", "final": 100.0},
+            ],
+            "currency_hint": "ج.م",
+        }
+        summary = B.build_result_summary(res)
+        assert "مرفوض" in summary

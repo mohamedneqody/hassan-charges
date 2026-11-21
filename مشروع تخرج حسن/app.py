@@ -390,20 +390,30 @@ def _pipeline_with_progress(file_name: str, raw: bytes, page_range, currency: st
                         error=str(cached_a.get("error") or ""),
                         model=str(cached_a.get("model") or ""),
                     )
+                    if not analysis.ratio_comments:
+                        analysis = build_fallback_narrative(results, analysis)
                 else:
                     analysis = analyze_financials(payload)
-                    if not analysis.ok:
+                    if not analysis.ok or not analysis.ratio_comments:
                         analysis = build_fallback_narrative(results, analysis)
-                    elif len(analysis.recommendations) < 3:
-                        from src.analysis.narrative import build_recommendations
+                    else:
+                        if len(analysis.ratio_comments) < 6:
+                            fb = build_fallback_narrative(results, analysis)
+                            seen_m = {m for m, _ in analysis.ratio_comments}
+                            for m, c in fb.ratio_comments:
+                                if m not in seen_m:
+                                    analysis.ratio_comments.append((m, c))
+                                    seen_m.add(m)
+                        if len(analysis.recommendations) < 3:
+                            from src.analysis.narrative import build_recommendations
 
-                        existing = {a for a, _ in analysis.recommendations}
-                        for action, evidence in build_recommendations(results):
-                            if len(analysis.recommendations) >= 5:
-                                break
-                            if action not in existing:
-                                analysis.recommendations.append((action, evidence))
-                                existing.add(action)
+                            existing = {a for a, _ in analysis.recommendations}
+                            for action, evidence in build_recommendations(results):
+                                if len(analysis.recommendations) >= 5:
+                                    break
+                                if action not in existing:
+                                    analysis.recommendations.append((action, evidence))
+                                    existing.add(action)
                     if analysis.ok:
                         # cache AI output ONLY when the AI actually ran —
                         # caching the deterministic fallback would poison
@@ -679,7 +689,7 @@ def overview_screen(r: dict) -> None:
     col_dupont, col_altman = st.columns(2)
 
     with col_dupont:
-        st.markdown("**تحليل DuPont — مصادر العائد على حقوق الملكية**")
+        st.markdown("**تحليل DuPont (3 عوامل على متوسط الأرصدة) — مصادر العائد على حقوق الملكية**")
         dp = dupont_analysis(r["curr_metrics"], r["prev_metrics"])
         if dp.missing:
             for miss in dp.missing:
@@ -719,7 +729,7 @@ def overview_screen(r: dict) -> None:
                     )
 
     with col_altman:
-        st.markdown("**نموذج Altman Z'' — الإنذار المبكر للضيق المالي**")
+        st.markdown("**نموذج Altman Z'' (الأسواق الناشئة — 4 متغيرات) — الإنذار المبكر للضيق المالي**")
         az = altman_z(r["curr_metrics"])
         if az.missing:
             for miss in az.missing:
@@ -939,9 +949,9 @@ def overview_screen(r: dict) -> None:
     st.divider()
     st.subheader("🎓 النماذج الأكاديمية للإنذار المبكر")
     st.caption(
-        "نماذج منشورة في الأدبيات المالية تُحسب على السنة الحالية فقط: ألتمان "
-        "Z-Score لاحتمال الإفلاس (نسخة الشركات غير المدرجة)، سبرينغيت، زميجيفسكي، "
-        "وتحليل دوبونت لتفكيك العائد على حقوق الملكية — حتمية بالكامل وبلا أي "
+        "نماذج منشورة في الأدبيات المالية تُحسب على أرصدة السنة الحالية فقط (نهاية الفترة): "
+        "ألتمان Z′-Score (نسخة الشركات غير المدرجة — 5 متغيرات)، سبرينغيت، زميجيفسكي، "
+        "وتحليل دوبونت (3 و5 عوامل على أرصدة نهاية العام) — حتمية بالكامل وبلا أي "
         "نداءات ذكاء اصطناعي، ولا تُحسب إلا ببياناتها كاملة."
     )
     acad_rows = []

@@ -64,6 +64,12 @@ def load_cached_extraction(key: str) -> dict | None:
     res = _read("extraction", key)
     if CACHE_DIR == PROJECT_ROOT / "cache":
         seed_path = SEED_CACHE_DIR / f"{key.replace('|', '__')}.json"
+        if not seed_path.exists() and SEED_CACHE_DIR.exists():
+            sha_prefix = key.split("|", 1)[0]
+            mode_suffix = "__fast.json" if key.endswith("|fast") else "__full.json"
+            matches = list(SEED_CACHE_DIR.glob(f"{sha_prefix}__*{mode_suffix}"))
+            if matches:
+                seed_path = matches[0]
         if seed_path.exists() and (res is None or int(res.get("cache_schema") or 0) < CACHE_SCHEMA_VERSION):
             try:
                 seed_data = json.loads(seed_path.read_text(encoding="utf-8"))

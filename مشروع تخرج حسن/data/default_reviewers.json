@@ -1,0 +1,28 @@
+{
+  "reviewers": [
+    {
+      "name": "hassan",
+      "salt": "f4707ce3b6a983617d6d778709492d2f",
+      "kdf": "pbkdf2_sha256",
+      "iterations": 600000,
+      "pin_hash": "24c6a4987409d5b0e971e4ab4a9ce0932d0761f74a333c25da13c0cc01eacdc2",
+      "roles": [
+        "approve",
+        "correct",
+        "reject"
+      ]
+    },
+    {
+      "name": "test-reviewer",
+      "salt": "7145dbf039dfb98c5455079654bd788c",
+      "kdf": "pbkdf2_sha256",
+      "iterations": 600000,
+      "pin_hash": "9ee308e7fe2f4e6fcdbf7c773c91256dced08f5c6ab84989cf7570a5989207e5",
+      "roles": [
+        "approve",
+        "correct",
+        "reject"
+      ]
+    }
+  ]
+}

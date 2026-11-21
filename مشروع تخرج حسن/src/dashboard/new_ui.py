@@ -307,6 +307,21 @@ def sec_overview(vm: dict, results: dict) -> None:
     lang = _lang()
     is_ar = lang != "en"
 
+    co_name = vm.get("company") or results.get("company") or results.get("file_name") or ""
+    p_yr, c_yr = vm.get("prev_year"), vm.get("curr_year")
+    period_str = f"{p_yr} → {c_yr}" if (p_yr and c_yr) else str(c_yr or "")
+    if co_name or period_str:
+        st.markdown(
+            f'<div class="report-card" style="--accent:var(--fs-primary);margin-bottom:12px;'
+            f'display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">'
+            f'<div><b style="font-size:1.08rem;">🏢 {esc(str(co_name))}</b></div>'
+            f'<div style="color:var(--fs-muted);font-weight:600;">'
+            f'📅 {("الفترة المالية:" if is_ar else "Fiscal period:")} <bdi dir="ltr">{esc(period_str)}</bdi>'
+            f' &nbsp;·&nbsp; 💱 {esc(str(vm.get("currency") or ""))}</div>'
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
     st.subheader(_T["summary"][lang])
     facts = executive_summary(results, vm, lang=lang)
     if facts:
@@ -572,9 +587,32 @@ def sec_statements(vm: dict, raw: bytes | None) -> None:
         )
         return
 
+    ev = st.session_state.get("ev_cell")
+    if ev:
+        with st.container(border=True):
+            ev_h1, ev_h2 = st.columns([5.0, 1.2])
+            with ev_h1:
+                st.markdown(f"#### 🔍 {_T['evidence'][lang]} — **{esc(str(ev.get('label', '')))}** · `{esc(str(ev.get('year', '')))}`")
+            with ev_h2:
+                if st.button("✖ إغلاق" if is_ar else "✖ Close", key="close_ev_top", use_container_width=True):
+                    st.session_state.pop("ev_cell", None)
+                    st.rerun()
+            evidence_block(ev, raw, vm["doc_sha"])
+    else:
+        render_empty_state(
+            "معاينة دليل المصدر" if is_ar else "Source evidence preview",
+            "لم تُختر خانة للمعاينة بعد."
+            if is_ar
+            else "No cell selected for inspection yet.",
+            icon="🔍",
+            next_step="اضغط زر «الدليل» بجانب أي خانة لعرض الصفحة الأصلية وقصاصة الرقم هنا في أعلى التبويب."
+            if is_ar
+            else "Click Evidence next to any row to inspect its source page & crop right here at the top.",
+        )
+
     for c in visible:
         with st.container(border=True):
-            col1, col2, col3, col4 = st.columns([2.2, 1.5, 1.6, 1.0])
+            col1, col2, col3, col4 = st.columns([2.0, 1.3, 2.0, 0.9])
             disp_lbl = c["label"] if is_ar else c.get("label_en", c["label"])
             with col1:
                 st.markdown(f"**{esc(disp_lbl)}** · {esc(c['year'])}")
@@ -618,29 +656,14 @@ def sec_statements(vm: dict, raw: bytes | None) -> None:
                     use_container_width=True,
                 ):
                     st.session_state["ev_cell"] = c
+                    st.rerun()
             if c["reason"] and c["gate"] != "use":
                 st.caption(
                     ("السبب: " if is_ar else "reason: ") + str(c["reason"])
                 )
 
-    ev = st.session_state.get("ev_cell")
-    if ev:
-        with st.expander(_T["evidence"][lang], expanded=True):
-            evidence_block(ev, raw, vm["doc_sha"])
-    else:
-        render_empty_state(
-            "معاينة دليل المصدر" if is_ar else "Source evidence preview",
-            "لم تُختر خانة للمعاينة بعد."
-            if is_ar
-            else "No cell selected for inspection yet.",
-            icon="🔍",
-            next_step="اضغط زر «الدليل» بجانب أي خانة لعرض الصفحة الأصلية وقصاصة الرقم."
-            if is_ar
-            else "Click Evidence next to any row to inspect its source page & crop.",
-        )
 
-
-def sec_metrics(vm: dict) -> None:
+def sec_metrics(vm: dict, results: dict | None = None) -> None:
     """Custom RTL/LTR HTML metrics table with sticky headers, filters & badges."""
     lang = _lang()
     is_ar = lang != "en"
@@ -723,6 +746,74 @@ def sec_metrics(vm: dict) -> None:
         else f"Showing {count} of {len(metrics_rows)} metrics — verification reflects the worst input."
     )
     st.markdown(table_html, unsafe_allow_html=True)
+
+    res_obj = results or st.session_state.get("results") or {}
+    curr_m = res_obj.get("curr_metrics")
+    prev_m = res_obj.get("prev_metrics")
+    if curr_m is not None:
+        from src.analysis.academic_models import academic_models
+        from src.analysis.redflags import SEVERITY_ICON, beneish_m_score, red_flag_analysis
+        from src.dashboard import theme
+
+        st.divider()
+        st.subheader("🎓 " + ("النماذج الأكاديمية للإنذار المبكر" if is_ar else "Academic Early-Warning Models"))
+        acad_rows = []
+        for m in academic_models(curr_m):
+            if m.value is not None:
+                comps = " · ".join(f"{k}={v:g}" for k, v in m.components.items())
+                acad_rows.append(
+                    "<tr>"
+                    f"<td><b>{esc(m.icon + ' ' + m.name)}</b></td>"
+                    f"<td class='num'><b><bdi dir='ltr'>{m.value:g}</bdi></b></td>"
+                    f"<td>{esc(m.verdict)}</td>"
+                    f"<td><bdi dir='ltr'>{esc(comps)}</bdi></td>"
+                    "</tr>"
+                )
+            else:
+                acad_rows.append(
+                    "<tr>"
+                    f"<td><b>{esc(m.name)}</b></td>"
+                    "<td class='num'>—</td>"
+                    f"<td>{'غير محسوب — بيانات ناقصة: ' if is_ar else 'Missing inputs: '}{esc(', '.join(m.missing))}</td>"
+                    "<td>—</td>"
+                    "</tr>"
+                )
+        st.markdown(
+            theme.fin_table(
+                ["النموذج", "القيمة", "الحكم", "المكوّنات"] if is_ar else ["Model", "Value", "Verdict", "Components"],
+                acad_rows,
+            ),
+            unsafe_allow_html=True,
+        )
+
+        if prev_m is not None:
+            st.divider()
+            st.subheader("⚠️ " + ("الأعلام الحمراء ونموذج Beneish M-Score" if is_ar else "Red Flags & Beneish M-Score"))
+            bn = beneish_m_score(prev_m, curr_m)
+            if bn.m_score is not None:
+                zone_icon = {"grey_above": "🟠", "grey": "🟡", "clean": "🟢"}.get(bn.zone, "")
+                st.markdown(
+                    f"**Beneish M-Score:** <span style='font-size:1.1rem;'><b><bdi dir='ltr'>{bn.m_score:.2f}</bdi></b></span> "
+                    f"{zone_icon} {esc(bn.verdict)}",
+                    unsafe_allow_html=True,
+                )
+                st.caption(
+                    ("المكوّنات: " if is_ar else "Components: ")
+                    + " · ".join(f"{k}={v:.2f}" for k, v in bn.components.items())
+                )
+            flags = red_flag_analysis(prev_m, curr_m)
+            if flags:
+                flag_rows = [
+                    "<tr>"
+                    f"<td><b>{esc(SEVERITY_ICON[fl.severity] + ' ' + fl.name)}</b></td>"
+                    f"<td>{esc(fl.detail)}</td>"
+                    "</tr>"
+                    for fl in flags
+                ]
+                st.markdown(
+                    theme.fin_table(["المؤشر", "الدليل الرقمي"] if is_ar else ["Flag", "Evidence"], flag_rows),
+                    unsafe_allow_html=True,
+                )
 
 
 def sec_health(vm: dict, results: dict) -> None:
@@ -1211,6 +1302,12 @@ def sec_review(vm: dict, results: dict, raw: bytes | None) -> None:
     lang = _lang()
     is_ar = lang != "en"
     st.subheader(_T["review"][lang])
+    if not (os.environ.get("REVIEWERS_FILE") or os.environ.get("REVIEWERS")) and not os.environ.get("PYTEST_CURRENT_TEST"):
+        _def_rf = Path(__file__).resolve().parents[2] / "data" / "default_reviewers.json"
+        if _def_rf.exists():
+            os.environ["REVIEWERS_FILE"] = str(_def_rf)
+        if not os.environ.get("REVIEW_HMAC_KEY"):
+            os.environ["REVIEW_HMAC_KEY"] = "finsight-cloud-instance-hmac-key-2026"
     if not (os.environ.get("REVIEWERS_FILE") or os.environ.get("REVIEWERS")):
         render_empty_state(
             "المراجعة البشرية غير مفعّلة" if is_ar else "Human review disabled",
@@ -1423,6 +1520,12 @@ def render(results: dict, analysis, raw: bytes | None) -> None:
             for k in [k for k in st.session_state if str(k).startswith("conf-")]:
                 st.session_state.pop(k, None)
             st.rerun()
+        if st.button("🧹 مسح الكاش المحلي" if is_ar else "🧹 Clear local cache", use_container_width=True):
+            from src.extraction.result_cache import clear_all_caches
+            clear_all_caches()
+            for k in ("results", "analysis", "raw_bytes", "ev_cell", "live_queue", "live_queue_key", "_report_memo", "_ev_img_cache"):
+                st.session_state.pop(k, None)
+            st.rerun()
 
     render_header()
 
@@ -1443,7 +1546,7 @@ def render(results: dict, analysis, raw: bytes | None) -> None:
     with tabs[1]:
         sec_statements(vm, raw)
     with tabs[2]:
-        sec_metrics(vm)
+        sec_metrics(vm, results)
     with tabs[3]:
         sec_health(vm, results)
     with tabs[4]:

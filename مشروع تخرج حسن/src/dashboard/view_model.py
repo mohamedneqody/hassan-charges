@@ -270,9 +270,18 @@ def categorized_insights(results: dict, analysis) -> dict:
         name = r.label_ar or r.label
         trend_by_metric[name] = r.status
         trend_by_metric[r.label] = r.status
+    eff_cur = (results.get("currency_hint") or "").strip()
+
+    def _norm_cur(txt: str) -> str:
+        s = str(txt or "")
+        if eff_cur and eff_cur != "$":
+            import re as _re
+            s = _re.sub(r"\$(?=[+-]?\d)", f"{eff_cur} ", s)
+        return s
+
     for metric, text in comments:
         status = trend_by_metric.get(metric)
-        item = {"metric": metric, "text": text,
+        item = {"metric": metric, "text": _norm_cur(text),
                 "status": status or "Neutral"}
         if status == "Positive":
             out["strengths"].append(item)
@@ -281,7 +290,7 @@ def categorized_insights(results: dict, analysis) -> dict:
         else:
             out["neutral"].append(item)
     for action, text in recs:
-        out["recommendations"].append({"metric": action, "text": text})
+        out["recommendations"].append({"metric": _norm_cur(action), "text": _norm_cur(text)})
     return out
 
 

@@ -52,6 +52,16 @@ try:
 except Exception:
     pass  # بيئة بلا streamlit (سكربتات) — .env يكفي
 
+if not os.getenv("PYTEST_CURRENT_TEST"):
+    _default_rev = PROJECT_ROOT / "data" / "default_reviewers.json"
+    if not os.getenv("REVIEWERS_FILE") and _default_rev.exists():
+        os.environ["REVIEWERS_FILE"] = str(_default_rev)
+    if not os.getenv("REVIEW_HMAC_KEY"):
+        os.environ["REVIEW_HMAC_KEY"] = "finsight-cloud-instance-hmac-key-2026"
+    if not os.getenv("REVIEW_LOG_PATH"):
+        import tempfile as _tf_cfg
+        os.environ["REVIEW_LOG_PATH"] = str(Path(_tf_cfg.gettempdir()) / "finsight_human_reviews.json")
+
 # --- AI ---
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash").strip() or "gemini-3.8-flash"
 

@@ -19,6 +19,20 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+_APP_BUILD_ID = "2026-11-21-v9.5"
+if not __import__("os").environ.get("PYTEST_CURRENT_TEST"):
+    if getattr(sys, "_finsight_build_id", None) != _APP_BUILD_ID:
+        for _mod_name in [m for m in list(sys.modules) if m == "src" or m.startswith("src.")]:
+            sys.modules.pop(_mod_name, None)
+        sys._finsight_build_id = _APP_BUILD_ID
+    try:
+        if st.session_state.get("_app_build_id") != _APP_BUILD_ID:
+            for _sk in ("results", "analysis", "raw_bytes", "ev_cell", "live_queue", "live_queue_key", "_report_memo"):
+                st.session_state.pop(_sk, None)
+            st.session_state["_app_build_id"] = _APP_BUILD_ID
+    except Exception:
+        pass
+
 from src.ai.gemini_agent import AIAnalysis, analyze_financials  # noqa: E402
 from src.analysis.comparison import CATEGORY_AR as _CAT_AR, LABELS_AR as _LBL_AR  # noqa: E402
 from src.analysis.narrative import build_fallback_narrative  # noqa: E402
@@ -366,9 +380,11 @@ def _pipeline_with_progress(file_name: str, raw: bytes, page_range, currency: st
                 _memo_put(_PIPELINE_MEMO, key, "ok", results)
                 return
             holder["line"] = "تم الاستخراج وحساب النسب — جارٍ تجهيز التعليق التحليلي…"
+            eff_currency = results.get("currency_hint") or currency
+            akey = _memo_key(raw, file_name, page_range, eff_currency, fast_mode)
             amemo = _memo_get(_ANALYSIS_MEMO, akey)
             if amemo is None:
-                payload = build_gemini_payload(results, currency)
+                payload = build_gemini_payload(results, eff_currency)
                 # Persistent analysis cache: the commentary is deterministic
                 # given the payload, so a re-run (or the demo day) replays it
                 # with zero API calls.

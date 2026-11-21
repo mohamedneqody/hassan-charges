@@ -983,12 +983,30 @@ def sec_insights(vm: dict, analysis) -> None:
         return
 
     if not is_ai_ok:
-        reason = getattr(analysis, "error", "") or ""
+        reason = str(getattr(analysis, "error", "") or "")
+        low_r = reason.lower()
+        if any(k in low_r for k in ("429", "resource_exhausted", "quota", "exhausted")):
+            friendly = (
+                "انتهت حصة Gemini المجانية لهذا اليوم (تتجدد تلقائيًا بعد منتصف الليل بتوقيت غرب أمريكا، أو أضف مفتاح API جديدًا في Secrets)."
+                if is_ar
+                else "Gemini free quota is exhausted for today (renews after midnight Pacific, or add a new API key in Secrets)."
+            )
+        elif any(k in low_r for k in ("504", "deadline", "timeout", "503", "unavailable")):
+            friendly = (
+                "خدمة Gemini لم تستجب في الوقت المحدد (ضغط مؤقت على الخدمة)."
+                if is_ar
+                else "Gemini did not respond in time (temporary service load)."
+            )
+        else:
+            friendly = (
+                "تعذّر الاتصال بـ Gemini." if is_ar else "Gemini is unavailable."
+            )
         st.warning(
             (
-                f"تعذّر الاتصال بـ Gemini ({reason}) — يُعرض التفسير القاعدي الحتمي المحسوب في Python دون تدخل ذكاء اصطناعي."
+                f"{friendly} يُعرض الآن التفسير القاعدي الحتمي المحسوب في Python — أرقامه صحيحة ومتتبعة، "
+                "لكنه ليس تعليقًا مولدًا بالذكاء الاصطناعي."
                 if is_ar
-                else f"Gemini unavailable ({reason}) — showing deterministic rule-based commentary computed in Python."
+                else f"{friendly} Showing the deterministic rule-based commentary computed in Python — numbers are exact and traceable, but it is not AI-generated."
             )
         )
     else:
@@ -1222,8 +1240,18 @@ def _build_live_queue(
     target_dir.mkdir(parents=True, exist_ok=True)
     doc_sha = hashlib.sha256(raw).hexdigest()
     queue = []
+    _prio = (
+        "total_assets", "current_assets", "current_liabilities", "total_liabilities",
+        "equity", "revenue", "net_income", "total_debt", "long_term_debt",
+        "short_term_credit_facilities", "operating_cash_flow", "cash", "inventory",
+    )
+    _rank = {f: i for i, f in enumerate(_prio)}
+    pending_sorted = sorted(
+        vm["pending"],
+        key=lambda e: (_rank.get(e["field"], 99), str(e.get("year"))),
+    )
     try:
-        for e in vm["pending"]:
+        for e in pending_sorted:
             field, year = e["field"], e["year"]
             pages = e.get("pages") or []
             if not pages:

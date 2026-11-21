@@ -784,15 +784,24 @@ html, body, .stApp {{
 }}
 .stApp .stButton > button[kind="primary"],
 .stApp .stButton > button[data-testid="stBaseButton-primary"] {{
-  background: linear-gradient(110deg, var(--fs-primary), var(--fs-deep) 60%, var(--fs-primary-dark)) !important;
-  background-size: 170% 100% !important;
+  background: linear-gradient(110deg, var(--fs-secondary) 0%, var(--fs-primary-mid) 50%, var(--fs-cyan) 100%) !important;
+  background-size: 165% 100% !important;
   color: var(--fs-on-primary) !important;
-  border: none !important;
-  padding: var(--fs-sp-3) var(--fs-sp-6) !important;
-  font-size: 1.02rem !important;
-  box-shadow: 0 14px 32px -16px rgba(98, 85, 231, .6) !important;
+  border: 1px solid rgba(255, 255, 255, .32) !important;
+  border-radius: 14px !important;
+  padding: 13px var(--fs-sp-6) !important;
+  min-height: 48px !important;
+  font-size: 1.05rem !important;
+  font-weight: 800 !important;
+  box-shadow: 0 12px 28px -10px rgba(8, 145, 178, .42), 0 6px 18px -8px rgba(124, 111, 232, .38) !important;
   position: relative;
   overflow: hidden;
+}}
+.stApp .stButton > button[kind="primary"] *,
+.stApp .stButton > button[data-testid="stBaseButton-primary"] * {{
+  color: var(--fs-on-primary) !important;
+  font-weight: 800 !important;
+  background: transparent !important;
 }}
 .stApp .stButton > button[kind="primary"]::after,
 .stApp .stButton > button[data-testid="stBaseButton-primary"]::after {{
@@ -801,26 +810,31 @@ html, body, .stApp {{
   top: 0;
   bottom: 0;
   width: 40%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .22), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .28), transparent);
   animation: fsShine 3.4s ease-in-out infinite;
 }}
 .stApp .stButton > button[kind="primary"]:hover,
 .stApp .stButton > button[data-testid="stBaseButton-primary"]:hover {{
   background-position: 100% 0 !important;
   transform: translateY(-2px) !important;
-  box-shadow: 0 18px 42px -16px rgba(98, 85, 231, .7) !important;
+  box-shadow: 0 16px 36px -10px rgba(34, 211, 238, .52), 0 10px 24px -10px rgba(124, 111, 232, .48) !important;
 }}
 .stApp .stButton > button[kind="primary"]:active,
 .stApp .stButton > button[data-testid="stBaseButton-primary"]:active {{
   transform: translateY(1px) scale(.99) !important;
-  box-shadow: 0 6px 16px -10px rgba(98, 85, 231, .5) !important;
+  box-shadow: 0 6px 16px -10px rgba(8, 145, 178, .45) !important;
 }}
 .stApp .stButton > button[kind="primary"]:disabled,
 .stApp .stButton > button[data-testid="stBaseButton-primary"]:disabled {{
   background: var(--fs-disabled-bg) !important;
   color: var(--fs-disabled-ink) !important;
+  border-color: var(--fs-line) !important;
   box-shadow: none !important;
   transform: none !important;
+}}
+.stApp .stButton > button[kind="primary"]:disabled *,
+.stApp .stButton > button[data-testid="stBaseButton-primary"]:disabled * {{
+  color: var(--fs-disabled-ink) !important;
 }}
 .stApp .stButton > button[kind="primary"]:disabled::after,
 .stApp .stButton > button[data-testid="stBaseButton-primary"]:disabled::after {{

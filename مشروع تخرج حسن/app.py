@@ -19,7 +19,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-_APP_BUILD_ID = "2026-11-21-v9.5"
+_APP_BUILD_ID = "2026-11-21-v9.6"
 if not __import__("os").environ.get("PYTEST_CURRENT_TEST"):
     if getattr(sys, "_finsight_build_id", None) != _APP_BUILD_ID:
         for _mod_name in [m for m in list(sys.modules) if m == "src" or m.startswith("src.")]:
@@ -2014,16 +2014,40 @@ def notes_screen(r) -> None:
         )
         return
     with st.spinner("جارٍ صياغة الإجابة من مقاطع الإيضاحات…" if is_ar else "Formulating answer..."):
-        answer = formulate_answer(q, chunks, r.get("company", ""))
+        _ans_box: list[str | None] = [None]
+        _co_str = r.get("company", "")
+
+        def _run_rag_llm() -> None:
+            try:
+                _ans_box[0] = formulate_answer(q, chunks, _co_str)
+            except Exception:
+                _ans_box[0] = None
+
+        _rag_t = threading.Thread(target=_run_rag_llm, daemon=True)
+        _rag_t.start()
+        _rag_t.join(timeout=8.0)
+        answer = _ans_box[0]
     if answer:
         st.markdown(answer)
+    else:
+        extractive_lines = [
+            f"- **[{'صفحة' if is_ar else 'Page'} {c.page}]**: {c.text[:420].strip()}{'…' if len(c.text) > 420 else ''}"
+            for c in chunks[:3]
+        ]
+        st.markdown(
+            ("📋 **الإجابة المستخرجة محليًا من مقاطع الإيضاحات المطابقة:**\n\n" if is_ar else "📋 **Local extractive answer from matching note chunks:**\n\n")
+            + "\n\n".join(extractive_lines)
+        )
     st.markdown(
         "**المقاطع المصدر (بالترتيب حسب التطابق):**"
         if is_ar
         else "**Source chunks (ranked by relevance):**"
     )
-    for c in chunks:
-        with st.expander(f"📄 صفحة {c.page} — درجة تطابق {c.score:.3f}" if is_ar else f"📄 Page {c.page} — score {c.score:.3f}"):
+    for idx_c, c in enumerate(chunks):
+        with st.expander(
+            f"📄 صفحة {c.page} — درجة تطابق {c.score:.3f}" if is_ar else f"📄 Page {c.page} — score {c.score:.3f}",
+            expanded=(idx_c == 0),
+        ):
             st.markdown(c.text)
 
 

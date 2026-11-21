@@ -274,8 +274,13 @@ def evidence_block(cell: dict, raw: bytes | None, doc_sha: str) -> None:
         )
         return
 
-    page_no = int(pages[0])
     bbox = cell.get("bbox")
+    bbox_page = None
+    if isinstance(bbox, list) and bbox and isinstance(bbox[0], dict):
+        bbox_page = bbox[0].get("page")
+    elif isinstance(bbox, dict):
+        bbox_page = bbox.get("page")
+    page_no = int(bbox_page) if bbox_page else int(pages[0])
     img, crop = _cached_evidence_images(raw, current_sha, page_no, bbox)
     col_page, col_crop = st.columns([3, 2])
     with col_page:
@@ -1223,13 +1228,18 @@ def _build_live_queue(
             pages = e.get("pages") or []
             if not pages:
                 continue
-            page_no = int(pages[0])
+            bbox = (results.get("candidate_bbox") or {}).get(f"{field}|{year}")
+            bbox_page = None
+            if isinstance(bbox, list) and bbox and isinstance(bbox[0], dict):
+                bbox_page = bbox[0].get("page")
+            elif isinstance(bbox, dict):
+                bbox_page = bbox.get("page")
+            page_no = int(bbox_page) if bbox_page else int(pages[0])
             if page_no < 1 or page_no > len(pdf):
                 continue
             page_png = target_dir / f"live_page_{page_no}.png"
             if not page_png.exists():
                 pdf[page_no - 1].render(scale=2.0).to_pil().save(page_png, "PNG")
-            bbox = (results.get("candidate_bbox") or {}).get(f"{field}|{year}")
             crop_png = None
             if bbox:
                 try:

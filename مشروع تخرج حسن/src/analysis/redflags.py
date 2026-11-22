@@ -146,12 +146,14 @@ def beneish_m_score(prev, curr) -> BeneishResult:
     res = BeneishResult()
     c, p = curr, prev
 
-    dsri = None
-    if c.accounts_receivable is not None and c.revenue and p.accounts_receivable is not None and p.revenue:
-        dsri = (c.accounts_receivable / c.revenue) / (p.accounts_receivable / p.revenue)
-    gmi = None
-    if p.gross_profit is not None and p.revenue and c.gross_profit is not None and c.revenue:
-        gmi = (p.gross_profit / p.revenue) / (c.gross_profit / c.revenue)
+    dsri = _safe_div(
+        _safe_div(c.accounts_receivable, c.revenue),
+        _safe_div(p.accounts_receivable, p.revenue),
+    )
+    gmi = _safe_div(
+        _safe_div(p.gross_profit, p.revenue),
+        _safe_div(c.gross_profit, c.revenue),
+    )
     aqi = None
     if (c.fixed_assets is not None and c.total_assets and p.fixed_assets is not None and p.total_assets):
         # Beneish (1999): AQI = [1 - (CA_t + PP&E_t) / TA_t] / [1 - (CA_{t-1} + PP&E_{t-1}) / TA_{t-1}]
@@ -161,17 +163,16 @@ def beneish_m_score(prev, curr) -> BeneishResult:
         else:
             soft_c = 1 - (c.fixed_assets / c.total_assets)
             soft_p = 1 - (p.fixed_assets / p.total_assets)
-        aqi = soft_c / soft_p if soft_p else None
-    sgi = None
-    if p.revenue and c.revenue is not None:
-        sgi = c.revenue / p.revenue
+        aqi = _safe_div(soft_c, soft_p)
+    sgi = _safe_div(c.revenue, p.revenue)
     depi = None
-    if (c.depreciation_amortization is not None and c.fixed_assets and p.depreciation_amortization is not None and p.fixed_assets):
+    if (c.depreciation_amortization is not None and c.fixed_assets is not None
+            and p.depreciation_amortization is not None and p.fixed_assets is not None):
         da_c = abs(c.depreciation_amortization)
         da_p = abs(p.depreciation_amortization)
-        rate_c = da_c / (da_c + c.fixed_assets)
-        rate_p = da_p / (da_p + p.fixed_assets)
-        depi = rate_p / rate_c if rate_c else None
+        rate_c = _safe_div(da_c, da_c + c.fixed_assets)
+        rate_p = _safe_div(da_p, da_p + p.fixed_assets)
+        depi = _safe_div(rate_p, rate_c)
     sgai = None
     # Beneish (1999): SGAI = (SGA_t / Sales_t) / (SGA_{t-1} / Sales_{t-1})
     c_admin = getattr(c, "admin_expenses", None)
@@ -183,14 +184,14 @@ def beneish_m_score(prev, curr) -> BeneishResult:
         else:
             c_sga = abs(c.selling_expenses)
             p_sga = abs(p.selling_expenses)
-        prev_sga_ratio = p_sga / p.revenue
-        sgai = (c_sga / c.revenue) / prev_sga_ratio if prev_sga_ratio else None
-    lvgi = None
-    if c.total_liabilities is not None and c.total_assets and p.total_liabilities is not None and p.total_assets:
-        lvgi = (c.total_liabilities / c.total_assets) / (p.total_liabilities / p.total_assets)
+        sgai = _safe_div(_safe_div(c_sga, c.revenue), _safe_div(p_sga, p.revenue))
+    lvgi = _safe_div(
+        _safe_div(c.total_liabilities, c.total_assets),
+        _safe_div(p.total_liabilities, p.total_assets),
+    )
     tata = None
     if c.net_income is not None and c.operating_cash_flow is not None and c.total_assets:
-        tata = (c.net_income - c.operating_cash_flow) / c.total_assets
+        tata = _safe_div(c.net_income - c.operating_cash_flow, c.total_assets)
 
     comps = dict(DSRI=dsri, GMI=gmi, AQI=aqi, SGI=sgi, DEPI=depi, SGAI=sgai, LVGI=lvgi, TATA=tata)
     for name, v in comps.items():

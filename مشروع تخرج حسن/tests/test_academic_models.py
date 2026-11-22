@@ -129,3 +129,37 @@ def test_aggregator_order_and_bilingual_names():
     assert keys == ["altman", "springate", "zmijewski", "dupont"]
     assert all(m.name for m in results)  # name resolves in the current language
     assert all(m.verdict for m in results)
+
+
+def test_beneish_zero_denominators_never_raise():
+    from src.analysis.redflags import beneish_m_score
+
+    prev_z = YearMetrics(
+        year=2021,
+        revenue=100.0,
+        gross_profit=20.0,
+        accounts_receivable=0.0,
+        total_assets=200.0,
+        total_liabilities=0.0,
+        fixed_assets=50.0,
+        depreciation_amortization=0.0,
+        selling_expenses=0.0,
+    )
+    curr_z = YearMetrics(
+        year=2022,
+        revenue=100.0,
+        gross_profit=0.0,
+        accounts_receivable=10.0,
+        total_assets=200.0,
+        total_liabilities=50.0,
+        fixed_assets=50.0,
+        depreciation_amortization=0.0,
+        selling_expenses=10.0,
+    )
+    res = beneish_m_score(prev_z, curr_z)
+    assert res.m_score is None
+    assert "GMI" in res.missing
+    assert "DSRI" in res.missing
+    assert "LVGI" in res.missing
+    assert "DEPI" in res.missing
+    assert "SGAI" in res.missing

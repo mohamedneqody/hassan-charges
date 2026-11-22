@@ -198,10 +198,17 @@ def compute_health_score(curr: YearMetrics,
         label_en, label_ar = "Weak", "ضعيف"
 
     complete = not missing_pillars
+    _pillar_ar = {p.key: p.name_ar for p in pillars}
+    computed_ar = "، ".join(
+        _pillar_ar.get(p.key, p.key) for p in pillars if p.key not in missing_pillars
+    ) or "لا شيء"
+    missing_ar = "، ".join(
+        _pillar_ar.get(k, k) for k in missing_pillars
+    ) or "لا شيء"
     policy = (
-        f"تغطية البيانات {coverage * 0.0 + coverage * 100:.0f}% | "
-        f"الركائز المحسوبة: {sorted(set(p.key for p in pillars) - set(missing_pillars))} | "
-        f"المحجوبة/الناقصة: {sorted(missing_pillars) or 'لا شيء'} | "
+        f"تغطية البيانات {coverage * 100:.0f}% | "
+        f"الركائز المحسوبة: {computed_ar} | "
+        f"المحجوبة/الناقصة: {missing_ar} | "
         + ("درجة كلية" if complete else
            "درجة جزئية — لا تعوض غياب ركيزة حرجة" if not refused else
            "رُفضت الدرجة: ركيزة سيولة/مديونية ناقصة")

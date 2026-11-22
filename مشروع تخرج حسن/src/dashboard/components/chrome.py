@@ -48,7 +48,7 @@ _BIDI_TOKEN_RE = re.compile(
     r"(?<![&#A-Za-z0-9_])"
     r"(?:"
     r"(?:&lt;=?|&gt;=?|[≤≥])\s*[+-]?\d+(?:[.,]\d+)*(?:[%xX]|pp|[KMB])?"
-    r"|[+-]?(?:\$|€|£|EGP|SAR|USD|AED)?[+-]?\d+(?:[.,]\d+)*(?:[%xX]|pp|[KMB])?"
+    r"|[+-]?(?:\$|€|£|EGP|SAR|USD|AED)?[+-]?\d+(?:[.,]\d+)*(?:/\d+(?:[.,]\d+)*)?(?:[%xX]|pp|[KMB])?"
     r")"
     r"(?![A-Za-z0-9_;])"
 )
@@ -438,8 +438,8 @@ def build_health_html(hs, lang: str = "ar") -> str:
         )
         hero_html = (
             '<div class="fs-health-hero">'
-            '<div class="fs-health-score-box">'
-            f'<span class="fs-health-num">{hs.total:.0f}</span>'
+            '<div class="fs-health-score-box" dir="ltr">'
+            f'<span class="fs-health-num">{int(round(hs.total))}</span>'
             '<span class="fs-health-denom">/100</span>'
             "</div>"
             '<div class="fs-health-meta">'

@@ -54,8 +54,8 @@ def test_fmt_value_ar_maps_magnitudes():
 
 
 def test_fmt_signed_ar_keeps_sign():
-    assert fmt_signed_ar(-1272749, CURRENCY, "ج.م", 1000) == "ج.م-1.27 مليار"
-    assert fmt_signed_ar(1272749, CURRENCY, "ج.م", 1000) == "ج.م+1.27 مليار"
+    assert fmt_signed_ar(-1272749, CURRENCY, "ج.م", 1000) == "-ج.م1.27 مليار"
+    assert fmt_signed_ar(1272749, CURRENCY, "ج.م", 1000) == "+ج.م1.27 مليار"
 
 
 def test_fmt_value_ar_passes_noncurrency_through():

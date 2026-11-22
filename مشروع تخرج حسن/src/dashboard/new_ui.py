@@ -1324,18 +1324,26 @@ def sec_metrics(vm: dict, results: dict | None = None) -> None:
         acad_rows = []
         for m in academic_models(curr_m):
             if m.value is not None:
-                comp_chips = "".join(
-                    f'<span class="fs-detail-chip">'
-                    f'{esc(_comp_ar_map.get(k, k) if is_ar else k)}: '
-                    f'<b><bdi dir="ltr">{v:g}</bdi></b></span>'
-                    for k, v in m.components.items()
-                )
+                comp_chips_list = []
+                for k, v in m.components.items():
+                    disp_k = _comp_ar_map.get(k, k) if is_ar else k
+                    if disp_k.isascii():
+                        comp_chips_list.append(
+                            f'<span class="fs-detail-chip" dir="ltr">'
+                            f'{esc(disp_k)}: <b>{v:g}</b></span>'
+                        )
+                    else:
+                        comp_chips_list.append(
+                            f'<span class="fs-detail-chip">'
+                            f'{esc(disp_k)}: <b><bdi dir="ltr">{v:g}</bdi></b></span>'
+                        )
+                comp_chips = "".join(comp_chips_list)
                 acad_rows.append(
                     "<tr>"
                     f"<td><b>{esc(m.icon + ' ' + m.name)}</b></td>"
-                    f"<td class='num'><b><bdi dir='ltr'>{m.value:g}</bdi></b></td>"
-                    f"<td>{esc(m.verdict)}</td>"
-                    f"<td><div class='fs-pillar-details'>{comp_chips}</div></td>"
+                    f"<td class='num' dir='ltr'><b>{m.value:g}</b></td>"
+                    f"<td style='white-space:normal;'>{esc(m.verdict)}</td>"
+                    f"<td style='white-space:normal;'><div class='fs-pillar-details'>{comp_chips}</div></td>"
                     "</tr>"
                 )
             else:
@@ -1376,8 +1384,8 @@ def sec_metrics(vm: dict, results: dict | None = None) -> None:
             if flags:
                 flag_rows = [
                     "<tr>"
-                    f"<td><b>{esc(SEVERITY_ICON[fl.severity] + ' ' + fl.name)}</b></td>"
-                    f"<td>{esc(fl.detail)}</td>"
+                    f"<td style='white-space:nowrap;'><b>{esc(SEVERITY_ICON[fl.severity] + ' ' + fl.name)}</b></td>"
+                    f"<td style='white-space:normal;word-break:break-word;'>{isolate_bidi_html(fl.detail)}</td>"
                     "</tr>"
                     for fl in flags
                 ]

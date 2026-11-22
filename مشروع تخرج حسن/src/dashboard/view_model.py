@@ -159,13 +159,22 @@ def executive_summary(results: dict, vm: dict, lang: str = "ar") -> list[str]:
     dec = vm["decisive_count"]
     if total:
         pct_cov = round(dec / total * 100)
-        facts.append(
-            f"تغطية التوثيق: {dec} من {total} خانة حاسمة "
-            f"({pct_cov}%) — الباقي يحتاج مراجعة بشرية قبل الاعتماد النهائي."
-            if is_ar
-            else f"Verification coverage: {dec} of {total} decisive cells "
-            f"({pct_cov}%) — remaining cells require human review before final sign-off."
-        )
+        if dec >= total:
+            facts.append(
+                f"تغطية التوثيق: {dec} من {total} خانة حاسمة "
+                f"({pct_cov}%) — جميع الخانات معتمدة بالكامل دون خانات معلقة."
+                if is_ar
+                else f"Verification coverage: {dec} of {total} decisive cells "
+                f"({pct_cov}%) — all cells verified with zero pending items."
+            )
+        else:
+            facts.append(
+                f"تغطية التوثيق: {dec} من {total} خانة حاسمة "
+                f"({pct_cov}%) — الباقي يحتاج مراجعة بشرية قبل الاعتماد النهائي."
+                if is_ar
+                else f"Verification coverage: {dec} of {total} decisive cells "
+                f"({pct_cov}%) — remaining cells require human review before final sign-off."
+            )
 
     # 2) الإيراد والربح (إن توفرا)
     rows = {r.key: r for r in results.get("rows", [])}
@@ -223,10 +232,11 @@ def executive_summary(results: dict, vm: dict, lang: str = "ar") -> list[str]:
     hs = compute_health_score(curr, blocked_fields=blocked)
     if hs.total is not None:
         lbl = hs.label_ar if is_ar else hs.label_en
+        score_int = int(round(hs.total))
         facts.append(
-            f"الدرجة الصحية: {hs.total:.0f}/100 ({lbl})."
+            f"الدرجة الصحية: {score_int}/100 ({lbl})."
             if is_ar
-            else f"Health score: {hs.total:.0f}/100 ({lbl})."
+            else f"Health score: {score_int}/100 ({lbl})."
         )
     else:
         sep = "، " if is_ar else ", "

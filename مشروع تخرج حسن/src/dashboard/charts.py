@@ -81,6 +81,8 @@ def fmt_value_ar(value: float | None, kind: str, currency: str = "$",
         # الكنسي مع سببها في قسم Missing Data — لا صياغة عربية بديلة.
         return "N/A"
     if kind == CURRENCY:
+        if value < 0:
+            return f"-{currency}{_ar_words(humanize(abs(value), scale))}"
         return f"{currency}{_ar_words(humanize(value, scale))}"
     return fmt_value(value, kind, currency)
 
@@ -90,8 +92,10 @@ def fmt_signed_ar(value: float | None, kind: str, currency: str = "$",
     if value is None:
         return "غير متوفر"
     if kind == CURRENCY:
+        if value < 0:
+            return f"-{currency}{_ar_words(humanize(abs(value), scale))}"
         sign = "+" if value > 0 else ""
-        return f"{currency}{sign}{_ar_words(humanize(value, scale))}"
+        return f"{sign}{currency}{_ar_words(humanize(value, scale))}"
     return fmt_signed(value, kind, currency)
 
 
@@ -99,6 +103,8 @@ def fmt_value(value: float | None, kind: str, currency: str = "$") -> str:
     if value is None:
         return "غير متوفر"
     if kind == CURRENCY:
+        if value < 0:
+            return f"-{currency}{humanize(abs(value))}"
         return f"{currency}{humanize(value)}"
     if kind == PERCENT:
         return f"{value:.1f}%"
@@ -279,7 +285,7 @@ def liquidity_chart(
     fig.add_bar(name=str(curr_year), x=labels, y=curr_vals, marker_color=CURR_COLOR,
                 text=[fmt_value(v, RATIO) for v in curr_vals], textposition="outside")
     fig.add_hline(y=1.0, line_dash="dash", line_color=WARNING,
-                  annotation_text="حد الأمان 1.0x", annotation_position="right top")
+                  annotation_text="حد الأمان (1.0)", annotation_position="top left")
     return _layout(fig, "نسب السيولة", "مضاعف (x)")
 
 
@@ -362,16 +368,16 @@ def health_gauge(score, lang: str = "ar") -> go.Figure:
         if is_ar
         else f"Financial Health Score — {lbl}"
     )
-    val = float(score.total) if score.total is not None else 0.0
+    val = int(round(float(score.total))) if score.total is not None else 0
     bar_color = SUCCESS if val >= 60 else (WARNING if val >= 40 else (PRIMARY if val >= 25 else NEG_COLOR))
     fig = go.Figure(
         go.Indicator(
             mode="gauge+number",
             value=val,
-            domain=dict(x=[0.08, 0.92], y=[0.14, 0.86]),
+            domain=dict(x=[0.11, 0.89], y=[0.14, 0.86]),
             number=dict(
                 suffix="/100",
-                font=dict(size=36, family="'IBM Plex Sans Arabic', Inter, sans-serif", color=INK),
+                font=dict(size=34, family="'IBM Plex Sans Arabic', Inter, sans-serif", color=INK),
                 valueformat=".0f",
             ),
             gauge=dict(
@@ -406,8 +412,8 @@ def health_gauge(score, lang: str = "ar") -> go.Figure:
         font=_FONT,
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        margin=dict(t=55, b=25, l=30, r=30),
-        height=300,
+        margin=dict(t=58, b=30, l=42, r=42),
+        height=345,
     )
     return fig
 
@@ -525,7 +531,8 @@ def income_summary_chart(
         marker=dict(color="#94A3B8", line=dict(width=0)),
         text=[_lbl_fmt(v) for v in p_vals],
         textposition="outside",
-        textfont=dict(size=11, color="#475569"),
+        cliponaxis=False,
+        textfont=dict(size=10.5, color="#475569"),
     )
     fig.add_bar(
         name=str(curr_year),
@@ -534,14 +541,20 @@ def income_summary_chart(
         marker=dict(color="#4F46E5", line=dict(width=0)),
         text=[_lbl_fmt(v) for v in c_vals],
         textposition="outside",
-        textfont=dict(size=11, color="#1E1B4B"),
+        cliponaxis=False,
+        textfont=dict(size=10.5, color="#1E1B4B"),
     )
     title = (
-        f"أداء قائمة الدخل ({prev_year} مقابل {curr_year})"
+        f"أداء قائمة الدخل ({prev_year} — {curr_year})"
         if is_ar
-        else f"Income Statement Performance ({prev_year} vs {curr_year})"
+        else f"Income Statement ({prev_year} vs {curr_year})"
     )
-    return _layout(fig, title, currency if currency else ("المبلغ" if is_ar else "Amount"), height=350)
+    fig = _layout(fig, title, "", height=370)
+    fig.update_layout(
+        legend=dict(orientation="h", yanchor="top", y=-0.18, xanchor="center", x=0.5, font=dict(size=12)),
+        margin=dict(t=58, b=72, l=50, r=20),
+    )
+    return fig
 
 
 def balance_structure_chart(
@@ -622,12 +635,16 @@ def balance_structure_chart(
         )
 
     title = (
-        f"هيكل التمويل والمركز المالي ({prev_year} مقابل {curr_year})"
+        f"هيكل التمويل ({prev_year} — {curr_year})"
         if is_ar
         else f"Capital Structure ({prev_year} vs {curr_year})"
     )
-    fig = _layout(fig, title, currency if currency else ("المبلغ" if is_ar else "Amount"), height=350)
-    fig.update_layout(barmode="stack")
+    fig = _layout(fig, title, "", height=370)
+    fig.update_layout(
+        barmode="stack",
+        legend=dict(orientation="h", yanchor="top", y=-0.18, xanchor="center", x=0.5, font=dict(size=11.5)),
+        margin=dict(t=58, b=72, l=50, r=20),
+    )
     return fig
 
 
@@ -682,14 +699,14 @@ def health_radar_chart(score, lang: str = "ar") -> go.Figure | None:
             ),
             angularaxis=dict(
                 gridcolor="#E2E8F0",
-                tickfont=dict(size=12, color=INK),
+                tickfont=dict(size=11.5, color=INK),
             ),
         ),
         font=_FONT,
         paper_bgcolor="rgba(0,0,0,0)",
-        legend=dict(orientation="h", yanchor="bottom", y=-0.16, xanchor="center", x=0.5),
-        margin=dict(t=56, b=52, l=42, r=42),
-        height=310,
+        legend=dict(orientation="h", yanchor="top", y=-0.20, xanchor="center", x=0.5),
+        margin=dict(t=58, b=76, l=82, r=82),
+        height=345,
     )
     return fig
 
@@ -722,17 +739,23 @@ def growth_bar_chart(
         marker_color=colors,
         text=[f"{'+' if v > 0 else ''}{v:.1f}%" for v in vals],
         textposition="outside",
+        cliponaxis=False,
         textfont=dict(size=11.5, color=INK),
         hovertemplate="%{y}: <b>%{x:+.1f}%</b><extra></extra>",
     ))
     yr_s = f" ({curr_year})" if curr_year else ""
     title = f"معدلات النمو السنوي{yr_s}" if is_ar else f"Year-over-Year Growth{yr_s}"
-    fig = _layout(fig, title, "", height=max(280, 44 * len(items) + 95))
+    fig = _layout(fig, title, "", height=max(300, 46 * len(items) + 100))
+    min_v, max_v = min(vals), max(vals)
+    lo = min(0.0, min_v) * 1.25 if min_v < 0 else 0.0
+    hi = max(0.0, max_v) * 1.25 if max_v > 0 else 5.0
     fig.update_layout(
         xaxis_title="نسبة النمو %" if is_ar else "Growth %",
         showlegend=False,
-        margin=dict(t=62, b=42, l=30, r=55),
+        margin=dict(t=60, b=46, l=24, r=78),
     )
+    fig.update_xaxes(range=[lo, hi], automargin=True)
+    fig.update_yaxes(automargin=True)
     fig.add_vline(x=0, line_color="#94A3B8", line_width=1.4)
     return fig
 
@@ -768,9 +791,9 @@ def insights_donut_chart(
     fig.update_layout(
         font=_FONT,
         paper_bgcolor="rgba(0,0,0,0)",
-        legend=dict(orientation="h", yanchor="top", y=-0.04, xanchor="center", x=0.5),
-        margin=dict(t=16, b=36, l=16, r=16),
-        height=230,
+        legend=dict(orientation="h", yanchor="top", y=-0.06, xanchor="center", x=0.5, font=dict(size=11.5)),
+        margin=dict(t=16, b=72, l=16, r=16),
+        height=280,
         annotations=[dict(
             text=f"<b>{total}</b><br>{'رؤية' if is_ar else 'Signals'}",
             x=0.5, y=0.5, font_size=13, showarrow=False, font=dict(color=INK),

@@ -1722,13 +1722,20 @@ def extract_via_vision(
     data.currency_hint = currency_holder.get("hint")
     data.company_hint = company_holder.get("name") or None
     if LOCAL_OCR_ENABLED and caller is None:
-        # Notes text capture (الإيضاحات المتممة): a free LOCAL Indra read of
-        # every page so the explanatory prose (accounting policies, loan
-        # terms, aging, contingencies) becomes searchable — the table-only
-        # sweep sees these pages but keeps none of their prose.
-        from .local_ocr import capture_notes_text
+        # Notes text capture (الإيضاحات المتممة): reuse markdown ALREADY extracted
+        # by the initial local_reads sweep so we never re-render or duplicate
+        # 29-page Indra ONNX RAM on Streamlit Cloud!
+        reused_notes = {
+            p: lr.markdown
+            for p, lr in (local_reads or {}).items()
+            if getattr(lr, "markdown", "") and lr.markdown.strip()
+        }
+        if reused_notes:
+            notes_pages = reused_notes
+        else:
+            from .local_ocr import capture_notes_text
 
-        notes_pages = capture_notes_text(raw)
+            notes_pages = capture_notes_text(raw)
         if notes_pages:
             data.notes_text = notes_pages
             data.notes.append(
@@ -1832,21 +1839,12 @@ def _focused_local_cell_verification(data, raw, field_sources, doc_years,
                  for ys in cands.values() for _v, o in ys), default=0) + 1
     appended = 0
     _fragment_map: dict = {}      # (field, year) -> [(full_v, group_segs, page)]
-    import threading
-
-    tls = threading.local()
-
-    def _conv():
-        conv = getattr(tls, "conv", None)
-        if conv is None:
-            import indra_ocr
-
-            conv = indra_ocr.load()
-            tls.conv = conv
-        return conv
+    from src.extraction.local_ocr import _SHARED_CONV_LOCK, get_shared_converter
 
     def _default_reader(png):
-        return _SC.read_page_lines(_conv(), png)
+        conv = get_shared_converter()
+        with _SHARED_CONV_LOCK:
+            return _SC.read_page_lines(conv, png)
 
     reader = line_reader or _default_reader
     render_scale = float(os.getenv("FOCUSED_LOCAL_RENDER_SCALE", "2.0"))

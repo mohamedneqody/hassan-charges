@@ -33,6 +33,7 @@ class LocalPageRead:
     digits: set[str]     # normalized digit strings (>= 4 digits) seen on page
     text_len: int
     cf_hint: bool = False  # markdown mentions the cash-flow statement
+    markdown: str = ""     # full page markdown (reused by notes_text & unit detection)
 
 
 _CF_MARKERS = ("التدفقات النقديه", "التدفقات النقدية", "انشطه تشغيليه", "أنشطة تشغيلية")
@@ -62,34 +63,80 @@ def _digits_from_markdown(md: str) -> set[str]:
     return out
 
 
+import threading as _threading
+
+_SHARED_CONV_LOCK = _threading.Lock()
+_SHARED_CONV = None
+
+
+def _is_cloud_host() -> bool:
+    """Detect memory-constrained hosted containers (Streamlit Community Cloud ~2.7GB)."""
+    return (
+        os.path.exists("/mount/src")
+        or os.getenv("HOME") == "/home/adminuser"
+        or bool(os.getenv("STREAMLIT_SHARING_MODE"))
+    )
+
+
+def get_shared_converter():
+    """Return a single process-wide Indra ONNX converter (~550MB) to prevent
+    multi-instance OOM crashes on Streamlit Cloud and save load time."""
+    global _SHARED_CONV
+    with _SHARED_CONV_LOCK:
+        if _SHARED_CONV is None:
+            import indra_ocr
+
+            _SHARED_CONV = indra_ocr.load()
+        return _SHARED_CONV
+
+
 def _default_workers() -> int:
-    """LOCAL_OCR_WORKERS env override (default 4). Each worker holds its own
-    ONNX converter ≈ 500-800MB RAM — hosted single-process environments
-    (Streamlit Community Cloud ≈ 2.7GB) set LOCAL_OCR_WORKERS=1 to stay
-    within budget; 4 workers peak ≈ 2.3GB for OCR alone."""
-    try:
-        return max(1, int(os.getenv("LOCAL_OCR_WORKERS", "4")))
-    except (TypeError, ValueError):
-        return 4
+    """LOCAL_OCR_WORKERS env override (default 4 locally, ALWAYS 1 on Streamlit Cloud).
+    Each worker holds its own ONNX converter ≈ 500-800MB RAM — 4 workers peak ≈ 2.8GB
+    and OOM-kill Streamlit Community Cloud containers."""
+    env_val = os.getenv("LOCAL_OCR_WORKERS")
+    if env_val is not None and env_val.strip():
+        try:
+            w = max(1, int(env_val.strip()))
+            return 1 if _is_cloud_host() else w
+        except (TypeError, ValueError):
+            pass
+    return 1 if _is_cloud_host() else 4
 
 
 def read_pages(pngs: dict[int, bytes], workers: int | None = None) -> dict[int, LocalPageRead] | None:
-    """OCR rendered page PNGs locally, in parallel. Returns {page: LocalPageRead}
-    or None on ANY failure (missing package, model error, timeout) — caller
-    treats None as 'no local layer' and proceeds Gemini-only.
-
-    Each worker thread owns its own converter instance: the ONNX session is
-    thread-safe but the image-pipeline around it is not, and a serial loop
-    cost ~2-4s per page before the first API call ever fired (22 pages ≈ a
-    whole minute of local OCR). 4 workers cut that to roughly a quarter.
-    """
+    """OCR rendered page PNGs locally. Uses the shared singleton converter when
+    workers == 1 (Streamlit Cloud low-RAM mode) or thread-local converters when
+    workers > 1 on local desktops."""
     if not pngs or not indra_available():
         return None
     if workers is None:
         workers = _default_workers()
     try:
+        import gc
         import threading
         from concurrent.futures import ThreadPoolExecutor
+
+        items = list(pngs.items())
+        reads: dict[int, LocalPageRead] = {}
+
+        if workers <= 1 or len(items) <= 1:
+            conv = get_shared_converter()
+            for page, png in items:
+                with _SHARED_CONV_LOCK:
+                    md = _page_markdown(conv, png)
+                if md is None:
+                    continue
+                reads[page] = LocalPageRead(
+                    page=page,
+                    has_table="<table" in md.lower(),
+                    digits=_digits_from_markdown(md),
+                    text_len=len(md),
+                    cf_hint=any(m in md for m in _CF_MARKERS),
+                    markdown=md,
+                )
+            gc.collect()
+            return reads or None
 
         import indra_ocr
 
@@ -102,13 +149,10 @@ def read_pages(pngs: dict[int, bytes], workers: int | None = None) -> dict[int, 
                 tls.conv = conv
             return conv
 
-        items = list(pngs.items())
-
         def _one(item: tuple[int, bytes]) -> tuple[int, str | None]:
             page, png = item
             return page, _page_markdown(_conv(), png)
 
-        reads: dict[int, LocalPageRead] = {}
         with ThreadPoolExecutor(max_workers=max(1, min(workers, len(items)))) as ex:
             for page, md in ex.map(_one, items):
                 if md is None:
@@ -119,6 +163,7 @@ def read_pages(pngs: dict[int, bytes], workers: int | None = None) -> dict[int, 
                     digits=_digits_from_markdown(md),
                     text_len=len(md),
                     cf_hint=any(m in md for m in _CF_MARKERS),
+                    markdown=md,
                 )
         return reads or None
     except Exception:
@@ -182,6 +227,19 @@ def capture_notes_text(raw: bytes, workers: int | None = None) -> dict[int, str]
             pngs[page] = buf.getvalue()
         doc.close()
 
+        if workers <= 1 or len(pngs) <= 1:
+            import gc
+
+            conv = get_shared_converter()
+            out: dict[int, str] = {}
+            for page, png in pngs.items():
+                with _SHARED_CONV_LOCK:
+                    md = _page_markdown(conv, png)
+                if md and md.strip():
+                    out[page] = md
+            gc.collect()
+            return out or None
+
         tls = threading.local()
 
         def _conv():
@@ -197,7 +255,7 @@ def capture_notes_text(raw: bytes, workers: int | None = None) -> dict[int, str]
             page, png = item
             return page, _page_markdown(_conv(), png)
 
-        out: dict[int, str] = {}
+        out = {}
         with ThreadPoolExecutor(max_workers=max(1, min(workers, len(items)))) as ex:
             for page, md in ex.map(_one, items):
                 if md and md.strip():

@@ -115,32 +115,44 @@ def _adaptive_local_reread(raw: bytes, profile, notes: list[str]) -> tuple[
         for pno in pages:
             if pno - 1 < len(pdf):
                 pngs[pno] = pdf[pno - 1].render(scale=2.0).to_pil().tobytes()
-        tls = threading.local()
+        from src.extraction.local_ocr import (
+            _SHARED_CONV_LOCK,
+            _default_workers,
+            _page_markdown,
+            get_shared_converter,
+        )
 
-        def _conv():
-            conv = getattr(tls, "conv", None)
-            if conv is None:
-                conv = indra_ocr.load()
-                tls.conv = conv
-            return conv
-
-        from src.extraction.local_ocr import _page_markdown
-
-        def _read(item: tuple[int, bytes]):
-            pno, png = item
-            return pno, _page_markdown(_conv(), png)
-
+        w_local = _default_workers()
         md: dict[int, str | None] = {}
-        for _attempt in range(2):              # the local model load is
-            try:                               # occasionally flaky (OpenBLAS)
-                md = {}
-                with ThreadPoolExecutor(max_workers=4) as ex:
-                    for pno, text in ex.map(_read, pngs.items()):
-                        md[pno] = text
-                break
-            except Exception as exc:
-                if _attempt == 1:
-                    notes.append(f"Local re-read failed twice: {exc}")
+        if w_local <= 1 or len(pngs) <= 1:
+            conv_s = get_shared_converter()
+            for pno, png in pngs.items():
+                with _SHARED_CONV_LOCK:
+                    md[pno] = _page_markdown(conv_s, png)
+        else:
+            tls = threading.local()
+
+            def _conv():
+                conv = getattr(tls, "conv", None)
+                if conv is None:
+                    conv = indra_ocr.load()
+                    tls.conv = conv
+                return conv
+
+            def _read(item: tuple[int, bytes]):
+                pno, png = item
+                return pno, _page_markdown(_conv(), png)
+
+            for _attempt in range(2):              # the local model load is
+                try:                               # occasionally flaky (OpenBLAS)
+                    md = {}
+                    with ThreadPoolExecutor(max_workers=w_local) as ex:
+                        for pno, text in ex.map(_read, pngs.items()):
+                            md[pno] = text
+                    break
+                except Exception as exc:
+                    if _attempt == 1:
+                        notes.append(f"Local re-read failed twice: {exc}")
         for pno in pages:
             text = md.get(pno)
             if not text:
@@ -314,30 +326,43 @@ def _adaptive_local_reread_scan(raw: bytes, notes: list[str]) -> tuple[
                 pdf[p - 1].render(scale=2.0).to_pil().convert("RGB")                     .save(buf, format="PNG")           # ENCODED png — the
                 pngs[p] = buf.getvalue()               # reader needs a file
 
-        tls = threading.local()
+        from src.extraction.local_ocr import (
+            _SHARED_CONV_LOCK,
+            _default_workers,
+            get_shared_converter,
+        )
 
-        def _conv():
-            conv = getattr(tls, "conv", None)
-            if conv is None:
-                conv = indra_ocr.load()
-                tls.conv = conv
-            return conv
-
-        def _read(item: tuple[int, bytes]):
-            pno, png = item
-            return pno, _page_markdown(_conv(), png)
-
+        w_local = _default_workers()
         md: dict[int, str | None] = {}
-        for _attempt in range(2):              # the local model load is
-            try:                               # occasionally flaky (OpenBLAS)
-                md = {}
-                with ThreadPoolExecutor(max_workers=4) as ex:
-                    for pno, text in ex.map(_read, pngs.items()):
-                        md[pno] = text
-                break
-            except Exception as exc:
-                if _attempt == 1:
-                    notes.append(f"Local re-read failed twice: {exc}")
+        if w_local <= 1 or len(pngs) <= 1:
+            conv_s = get_shared_converter()
+            for pno, png in pngs.items():
+                with _SHARED_CONV_LOCK:
+                    md[pno] = _page_markdown(conv_s, png)
+        else:
+            tls = threading.local()
+
+            def _conv():
+                conv = getattr(tls, "conv", None)
+                if conv is None:
+                    conv = indra_ocr.load()
+                    tls.conv = conv
+                return conv
+
+            def _read(item: tuple[int, bytes]):
+                pno, png = item
+                return pno, _page_markdown(_conv(), png)
+
+            for _attempt in range(2):              # the local model load is
+                try:                               # occasionally flaky (OpenBLAS)
+                    md = {}
+                    with ThreadPoolExecutor(max_workers=w_local) as ex:
+                        for pno, text in ex.map(_read, pngs.items()):
+                            md[pno] = text
+                    break
+                except Exception as exc:
+                    if _attempt == 1:
+                        notes.append(f"Local re-read failed twice: {exc}")
         import re as _tag_re
 
         for pno in pages:

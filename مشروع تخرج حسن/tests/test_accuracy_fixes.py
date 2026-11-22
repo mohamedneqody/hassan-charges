@@ -211,12 +211,82 @@ def test_debt_mapping_computes_both_totals_without_double_count():
     fin = data.get("financial_debt_incl_leases", 2022)
     # 4,063,400,167 + 299,320,963 + 363,974,291 = 4,726,695,421 (قروض وتسهيلات — ص23)
     assert borrowings == pytest.approx(4_726_695_421.0, abs=1.0)
-    # + 209,154,419 + 83,301,722 = 5,019,151,562 (شامل التأجير التمويلي)
+    # + 209,154,419 + 83,301,722 = 5,019,151,562 (شامل التأجير التمويلي — IFRS 16 / EAS 49)
     assert fin == pytest.approx(5_019_151_562.0, abs=1.0)
-    # لا عد مزدوج: الأقساط مرة واحدة، والتأجير خارج البنود بدون تأجير
-    assert data.get("total_debt", 2022) == pytest.approx(4_726_695_421.0, abs=1.0)
+    # لا عد مزدوج: إجمالي الدين المالي يطابق الشامل للتأجير، بينما القروض وحدها محفوظة في borrowings_excl_leases
+    assert data.get("total_debt", 2022) == pytest.approx(5_019_151_562.0, abs=1.0)
     log = {d["field"]: d for d in build_decision_log(data)}
     assert log["borrowings_excl_leases"]["status"] == "VERIFIED_DERIVED"
+    assert log["financial_debt_incl_leases"]["status"] == "VERIFIED_DERIVED"
+
+
+def test_partial_note_depreciation_never_outvotes_cash_flow_total():
+    """إهلاك تكلفة المبيعات الجزئي (39M مكرر في إيضاحين) لا يُسقط إجمالي إهلاك التدفقات (49M)."""
+    data = merge_parsed(
+        [
+            {2022: {"depreciation_amortization": 49_044_136.0, "fixed_assets": 495_544_560.0}},
+            {2022: {"depreciation_amortization": 39_012_520.0}},
+            {2022: {"depreciation_amortization": 39_012_520.0}},
+            {2022: {"depreciation_amortization": 120_688.0}},
+        ],
+        [],
+        captures_per_part=[
+            [{"field": "depreciation_amortization", "year": 2022, "value": 49_044_136.0, "label_text": "إهلاك أصول ثابتة"}],
+            [{"field": "depreciation_amortization", "year": 2022, "value": 39_012_520.0, "label_text": "إهلاك أصول ثابتة - تكلفة المبيعات"}],
+            [{"field": "depreciation_amortization", "year": 2022, "value": 39_012_520.0, "label_text": "مصروف إهلاك الأصول الثابتة"}],
+            [{"field": "depreciation_amortization", "year": 2022, "value": 120_688.0, "label_text": "إهلاك أصول ثابتة - بيع"}],
+        ],
+    )
+    reconcile(data)
+    assert data.get("depreciation_amortization", 2022) == pytest.approx(49_044_136.0, abs=1.0)
+    log = {d["field"]: d for d in build_decision_log(data)}
+    assert log["depreciation_amortization"]["status"] != "VERIFIED_EXACT"
+
+
+def test_beneish_textbook_aqi_and_sgai_direction():
+    """Beneish (1999): AQI includes CA+PPE, SGAI is curr/prev (not inverted) and includes G&A."""
+    from src.analysis.calculator import YearMetrics
+    from src.analysis.redflags import beneish_m_score
+
+    prev = YearMetrics(
+        year=2021, revenue=13_169_656_088.0, gross_profit=1_197_622_108.0,
+        accounts_receivable=691_267_962.0, current_assets=2_901_399_092.0,
+        fixed_assets=521_471_030.0, total_assets=14_614_683_997.0,
+        depreciation_amortization=49_252_251.0,
+        selling_expenses=-42_121_403.0, admin_expenses=-299_648_555.0,
+        total_liabilities=8_250_997_672.0,
+    )
+    curr = YearMetrics(
+        year=2022, revenue=16_665_919_878.0, gross_profit=1_632_142_979.0,
+        accounts_receivable=770_203_387.0, current_assets=4_248_947_378.0,
+        fixed_assets=495_544_560.0, total_assets=15_965_646_460.0,
+        depreciation_amortization=49_044_136.0,
+        selling_expenses=-48_052_831.0, admin_expenses=-383_519_092.0,
+        total_liabilities=9_027_315_979.0,
+        net_income=1_056_737_086.0, operating_cash_flow=1_214_507_839.0,
+    )
+    bn = beneish_m_score(prev, curr)
+    assert bn.components["AQI"] == pytest.approx(0.9178, abs=0.001)
+    assert bn.components["SGAI"] == pytest.approx(0.9978, abs=0.001)
+    assert bn.components["DEPI"] == pytest.approx(0.9583, abs=0.001)
+    assert bn.m_score == pytest.approx(-2.475, abs=0.01)
+
+
+def test_operating_expenses_derived_gross_not_netted():
+    """Gross OpEx = Selling + G&A + Other OpEx (does not net out Other Operating Income)."""
+    from src.analysis.calculator import compute_year_metrics
+
+    values = {
+        "revenue": {2022: 16_665_919_878.0},
+        "gross_profit": {2022: 1_632_142_979.0},
+        "selling_expenses": {2022: -48_052_831.0},
+        "admin_expenses": {2022: -383_519_092.0},
+        "other_operating_expenses": {2022: -25_399_046.0},
+        "operating_income": {2022: 1_257_960_603.0},
+    }
+    m = compute_year_metrics(2022, values)
+    assert m.operating_expenses == pytest.approx(456_970_969.0, abs=1.0)
+    assert m.opex_pct == pytest.approx(2.742, abs=0.01)
 
 
 def test_debt_mapping_partial_inputs_still_derive_borrowings():

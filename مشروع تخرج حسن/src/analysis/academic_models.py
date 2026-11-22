@@ -12,11 +12,11 @@ otherwise the missing list says exactly what the document lacks. No guesses.
       X5 = Sales / Total Assets.
       Zones: safe > 2.90 | grey 1.23–2.90 | distress < 1.23.
 - Springate (1978):
-      S = 1.03·A + 3.07·B + 0.57·C + 0.59·D
+      S = 1.03·A + 3.07·B + 0.66·C + 0.40·D
       A = WC/TA, B = EBIT/TA, C = Pretax Income / Current Liabilities, D = Sales/TA.
       S < 0.862 → potential insolvency (overall accuracy ≈ 92.5% in the paper).
 - Zmijewski (1984):
-      X = −4.336 − 4.513·(NI/TA) + 5.679·(TL/TA) + 0.004·(CL/CA)
+      X = −4.336 − 4.513·(NI/TA) + 5.679·(TL/TA) + 0.004·(CA/CL)
       Fitted so the financially-distressed group scores higher; X > 0 reads as
       elevated bankruptcy probability (the widely used study threshold).
 - DuPont decomposition: 3-step (margin × turnover × leverage) and 5-step
@@ -111,7 +111,7 @@ def springate_score(curr: YearMetrics) -> ModelResult:
         key="springate",
         name_en="Springate Model",
         name_ar="نموذج سبرينغيت",
-        formula="S = 1.03·A + 3.07·B + 0.57·C + 0.59·D (حد الخطر 0.862)",
+        formula="S = 1.03·A + 3.07·B + 0.66·C + 0.40·D (حد الخطر 0.862)",
         reference="Springate (1978)",
     )
     a = safe_div(curr.working_capital, curr.total_assets)
@@ -126,7 +126,7 @@ def springate_score(curr: YearMetrics) -> ModelResult:
             res.components[k] = round(v, 4)
     if res.missing:
         return res
-    s = 1.03 * a + 3.07 * b + 0.57 * c + 0.59 * d
+    s = 1.03 * a + 3.07 * b + 0.66 * c + 0.40 * d
     res.value = round(s, 3)
     if s < 0.862:
         res.zone = "distress"
@@ -145,13 +145,13 @@ def zmijewski_score(curr: YearMetrics) -> ModelResult:
         key="zmijewski",
         name_en="Zmijewski Score",
         name_ar="نموذج زميجيفسكي",
-        formula="X = −4.336 − 4.513·(NI/TA) + 5.679·(TL/TA) + 0.004·(CL/CA)",
+        formula="X = −4.336 − 4.513·(NI/TA) + 5.679·(TL/TA) + 0.004·(CA/CL)",
         reference="Zmijewski (1984)",
     )
     roa = safe_div(curr.net_income, curr.total_assets)
     debt_ratio = safe_div(curr.total_liabilities, curr.total_assets)
-    cl_ca = safe_div(curr.current_liabilities, curr.current_assets)
-    raw = {"NI/TA": roa, "TL/TA": debt_ratio, "CL/CA": cl_ca}
+    ca_cl = safe_div(curr.current_assets, curr.current_liabilities)
+    raw = {"NI/TA": roa, "TL/TA": debt_ratio, "CA/CL": ca_cl}
     for k, v in raw.items():
         if v is None:
             res.missing.append(k)
@@ -159,7 +159,7 @@ def zmijewski_score(curr: YearMetrics) -> ModelResult:
             res.components[k] = round(v, 4)
     if res.missing:
         return res
-    x = -4.336 - 4.513 * roa + 5.679 * debt_ratio + 0.004 * cl_ca
+    x = -4.336 - 4.513 * roa + 5.679 * debt_ratio + 0.004 * ca_cl
     res.value = round(x, 3)
     if x > 0:
         res.zone = "risk_high"

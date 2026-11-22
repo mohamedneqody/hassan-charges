@@ -43,6 +43,8 @@ class YearMetrics:
     net_income: float | None = None
     depreciation_amortization: float | None = None
     selling_expenses: float | None = None
+    admin_expenses: float | None = None
+    other_operating_expenses: float | None = None
     rd_expenses: float | None = None
     interest_expense: float | None = None
     ebitda: float | None = None
@@ -169,6 +171,8 @@ def compute_year_metrics(
     m.net_income = get("net_income")
     m.depreciation_amortization = get("depreciation_amortization")
     m.selling_expenses = get("selling_expenses")
+    m.admin_expenses = get("admin_expenses")
+    m.other_operating_expenses = get("other_operating_expenses")
     m.rd_expenses = get("rd_expenses")
     m.interest_expense = get("interest_expense")
     m.total_assets = get("total_assets")
@@ -203,7 +207,17 @@ def compute_year_metrics(
     if m.operating_income is None and m.gross_profit is not None and m.operating_expenses is not None:
         m.operating_income = m.gross_profit - abs(m.operating_expenses)
         m.notes["operating_income"] = "Derived as Gross Profit - Operating Expenses."
-    if m.operating_expenses is None and m.gross_profit is not None and m.operating_income is not None:
+    if m.operating_expenses is None and m.selling_expenses is not None and m.admin_expenses is not None:
+        m.operating_expenses = (
+            abs(m.selling_expenses)
+            + abs(m.admin_expenses)
+            + abs(m.other_operating_expenses or 0.0)
+        )
+        m.notes["operating_expenses"] = (
+            "Derived as Selling + General & Administrative"
+            + (" + Other Operating Expenses." if m.other_operating_expenses is not None else ".")
+        )
+    elif m.operating_expenses is None and m.gross_profit is not None and m.operating_income is not None:
         m.operating_expenses = m.gross_profit - m.operating_income
         m.notes["operating_expenses"] = "Derived as Gross Profit - Operating Income."
     if m.total_debt is None and any(

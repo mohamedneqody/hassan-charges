@@ -133,7 +133,7 @@ def red_flag_analysis(prev, curr) -> list[RedFlag]:
             ))
         elif cov < 2:
             flags.append(RedFlag(
-                "تغطية فوهات ضيقة", "medium",
+                "تغطية فوائد ضيقة", "medium",
                 f"الربح التشغيلي يغطي التكاليف التمويلية {cov:.1f}x فقط.",
             ))
 
@@ -154,20 +154,37 @@ def beneish_m_score(prev, curr) -> BeneishResult:
         gmi = (p.gross_profit / p.revenue) / (c.gross_profit / c.revenue)
     aqi = None
     if (c.fixed_assets is not None and c.total_assets and p.fixed_assets is not None and p.total_assets):
-        soft_c = 1 - (c.fixed_assets / c.total_assets)   # soft-assets share (approx.)
-        soft_p = 1 - (p.fixed_assets / p.total_assets)
+        # Beneish (1999): AQI = [1 - (CA_t + PP&E_t) / TA_t] / [1 - (CA_{t-1} + PP&E_{t-1}) / TA_{t-1}]
+        if c.current_assets is not None and p.current_assets is not None:
+            soft_c = 1 - ((c.current_assets + c.fixed_assets) / c.total_assets)
+            soft_p = 1 - ((p.current_assets + p.fixed_assets) / p.total_assets)
+        else:
+            soft_c = 1 - (c.fixed_assets / c.total_assets)
+            soft_p = 1 - (p.fixed_assets / p.total_assets)
         aqi = soft_c / soft_p if soft_p else None
     sgi = None
     if p.revenue and c.revenue is not None:
         sgi = c.revenue / p.revenue
     depi = None
     if (c.depreciation_amortization is not None and c.fixed_assets and p.depreciation_amortization is not None and p.fixed_assets):
-        rate_c = c.depreciation_amortization / (c.depreciation_amortization + c.fixed_assets)
-        rate_p = p.depreciation_amortization / (p.depreciation_amortization + p.fixed_assets)
+        da_c = abs(c.depreciation_amortization)
+        da_p = abs(p.depreciation_amortization)
+        rate_c = da_c / (da_c + c.fixed_assets)
+        rate_p = da_p / (da_p + p.fixed_assets)
         depi = rate_p / rate_c if rate_c else None
     sgai = None
+    # Beneish (1999): SGAI = (SGA_t / Sales_t) / (SGA_{t-1} / Sales_{t-1})
+    c_admin = getattr(c, "admin_expenses", None)
+    p_admin = getattr(p, "admin_expenses", None)
     if (c.selling_expenses is not None and c.revenue and p.selling_expenses is not None and p.revenue):
-        sgai = (p.selling_expenses / p.revenue) / (c.selling_expenses / c.revenue)
+        if c_admin is not None and p_admin is not None:
+            c_sga = abs(c.selling_expenses) + abs(c_admin)
+            p_sga = abs(p.selling_expenses) + abs(p_admin)
+        else:
+            c_sga = abs(c.selling_expenses)
+            p_sga = abs(p.selling_expenses)
+        prev_sga_ratio = p_sga / p.revenue
+        sgai = (c_sga / c.revenue) / prev_sga_ratio if prev_sga_ratio else None
     lvgi = None
     if c.total_liabilities is not None and c.total_assets and p.total_liabilities is not None and p.total_assets:
         lvgi = (c.total_liabilities / c.total_assets) / (p.total_liabilities / p.total_assets)

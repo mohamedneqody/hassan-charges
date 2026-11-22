@@ -525,6 +525,8 @@ exactly as printed, for EACH year column shown:
 - العملاء وأوراق القبض / الذمم المدينة (accounts receivable)
 - الموردون / الذمم الدائنة (accounts payable)
 - النقدية وما في حكمها (cash)
+- إهلاك أصول ثابتة — إجمالي الإهلاك في قائمة التدفقات النقدية فقط (depreciation_amortization)
+- مدفوعات لشراء أصول ثابتة ومشروعات تحت التنفيذ — في قائمة التدفقات النقدية فقط (capex)
 
 Return ONLY JSON:
 {{"years": [2021, 2022],
@@ -533,7 +535,8 @@ Return ONLY JSON:
               "revenue": [v1, v2], "net_income": [v1, v2],
               "pretax_income": [v1, v2],
               "inventory": [v1, v2], "accounts_receivable": [v1, v2],
-              "accounts_payable": [v1, v2], "cash": [v1, v2]}}}}
+              "accounts_payable": [v1, v2], "cash": [v1, v2],
+              "depreciation_amortization": [v1, v2], "capex": [v1, v2]}}}}
 Use null for any value not on the page. Parentheses = negative. Copy digits exactly.
 If TWO images of the same page are attached (standard cleanup + adaptive-threshold
 variant), cross-check between them and read from whichever shows the digits more
@@ -684,14 +687,18 @@ def _verify_core_fields(
         # spending a third-opinion call. The 2-vs-1 guard (local OCR
         # corroborating the capture) filters here too.
         disputes: dict[tuple[str, int], float] = {}
+        verify_fields = set(core) | {"depreciation_amortization", "capex"}
         for field, by_year in verified.items():
-            if field not in core:
+            if field not in verify_fields:
                 continue
             for year, value in by_year.items():
                 captured = data.get(field, year)
                 if captured is None:
                     continue
-                if field != "net_income":
+                if field == "capex":
+                    # Preserve outflow sign convention (align sign with captured)
+                    value = -abs(value) if captured < 0 else abs(value)
+                elif field != "net_income":
                     value = abs(value)  # magnitudes; NI may be a real loss (negative)
                 # الحاجز الهيكلي (عز 2023): الأعمدة المشوهة تجعل قراءة
                 # التحقق ترجع موضع العمود (2/1) بدل المبلغ — قيمة عدد
@@ -752,8 +759,11 @@ def _verify_core_fields(
             if captured is None:
                 continue
             third = third_map.get(field, {}).get(year)
-            if third is not None and field != "net_income":
-                third = abs(third)
+            if third is not None:
+                if field == "capex":
+                    third = -abs(third) if captured < 0 else abs(third)
+                elif field != "net_income":
+                    third = abs(third)
             # نفس الحاجز: موضع العمود من الرأي الثالث ليس شاهدًا
             if third is not None and float(third).is_integer() and 0 <= third <= 3:
                 third = None
@@ -820,18 +830,21 @@ Parentheses = negative. If the page has no cash-flow statement, return rows = []
 """
 
 
-VERIFY_CF_PROMPT = """From this scanned ARABIC cash-flow statement page, read ONLY these three
-net-cash totals, exactly as printed, for EACH year column shown:
+VERIFY_CF_PROMPT = """From this scanned ARABIC cash-flow statement page, read ONLY these cash-flow
+items, exactly as printed, for EACH year column shown:
 - النقدية الناتجة من الأنشطة التشغيلية (OPERATING activities) — the printed
   phrasing may be "صافي التدفقات النقدية من الأنشطة التشغيلية" OR
   "صافي النقدية الناتجة من أنشطة التشغيل" — same row either way
 - الأنشطة الاستثمارية (INVESTING activities)
 - الأنشطة التمويلية (FINANCING activities)
+- مدفوعات لشراء أصول ثابتة ومشروعات تحت التنفيذ (capex — investing outflow)
+- إهلاك أصول ثابتة (depreciation_amortization — operating non-cash adjustment)
 
 Return ONLY JSON:
 {{"years": [2021, 2022],
   "totals": {{"operating_cash_flow": [v1, v2], "investing_cash_flow": [v1, v2],
-              "financing_cash_flow": [v1, v2]}}}}
+              "financing_cash_flow": [v1, v2],
+              "capex": [v1, v2], "depreciation_amortization": [v1, v2]}}}}
 Use null for any value not on the page. Parentheses = NEGATIVE (they matter —
 keep the sign). Copy digits exactly.
 """
@@ -1027,13 +1040,18 @@ def _verify_cf_fields(
         except Exception as exc:
             notes.append(f"Cash-flow verification of page {page_number} failed: {exc}")
             continue
+        cf_verify_fields = set(cf_fields) | {"capex", "depreciation_amortization"}
         for field, by_year in verified.items():
-            if field not in cf_fields:
+            if field not in cf_verify_fields:
                 continue
             for year, value in by_year.items():
                 captured = data.get(field, year)
                 if captured is None:
                     continue
+                if field == "capex":
+                    value = -abs(value) if captured < 0 else abs(value)
+                elif field == "depreciation_amortization":
+                    value = abs(value)
                 if local_reads:
                     from src.extraction.local_ocr import confirms
 
@@ -1047,6 +1065,9 @@ def _verify_cf_fields(
                 if abs(value - captured) > max(1.0, 1e-6 * abs(captured)):
                     for part in parts:
                         if year in part and field in part[year]:
+                            # For D&A, only replace if the part holds the CF capture (not a tiny note slice)
+                            if field == "depreciation_amortization" and abs(part[year][field]) < 0.8 * abs(value):
+                                continue
                             part[year][field] = value  # sign included, corrected at source
                     if notes is not None:
                         notes.append(
@@ -1166,6 +1187,7 @@ def extract_via_vision(
     batches = _build_batches(selected)
 
     parts: list[dict[int, dict[str, float]]] = []
+    part_pages: list[int] = []  # source page per part — keeps primary statements ahead of notes
     accumulated = FinancialData()
     currency_holder: dict = {"hint": None}
     company_holder: dict = {"name": None}
@@ -1235,6 +1257,7 @@ def extract_via_vision(
             )
             break
         wave = batches[wave_start : wave_start + wave_size]
+        wave_results: list[tuple[list[int], list[dict]]] = []
         with ThreadPoolExecutor(max_workers=n_workers) as executor:
             futures = {executor.submit(_run_batch, chunk, imgs): chunk for chunk, imgs in wave}
             for future in as_completed(futures):
@@ -1251,14 +1274,24 @@ def extract_via_vision(
                     notes.append(f"Vision batch {chunk[0]}-{chunk[-1]} error: {exc}")
                     failure_reasons.append(str(exc)[:250])
                     batch_pages = []
-                _absorb_batch(batch_pages, chunk, parts, ok_pages, notes, currency_holder, doc_years_holder, field_sources, gap_sink, caps_acc)
-                if not company_holder.get("name"):
-                    company_holder["name"] = next(
-                        (p.get("company") for p in batch_pages if p.get("company")), None
-                    )
+                wave_results.append((chunk, batch_pages))
                 done_pages += len(chunk)
                 if progress_cb:
                     progress_cb(f"📚 وصلنا للصفحة {done_pages} من {n_pages}…")
+        # Absorb batches in ascending page order so parallel worker timing never
+        # lets later note pages hijack first-capture priority from primary statements.
+        for chunk, batch_pages in sorted(wave_results, key=lambda item: item[0][0]):
+            _before = len(parts)
+            _absorb_batch(batch_pages, chunk, parts, ok_pages, notes, currency_holder, doc_years_holder, field_sources, gap_sink, caps_acc)
+            _added = len(parts) - _before
+            if _added > 0:
+                part_pages.extend([chunk[0]] * _added)
+                if caps_acc and len(caps_acc) < len(parts):
+                    caps_acc.extend([[] for _ in range(len(parts) - len(caps_acc))])
+            if not company_holder.get("name"):
+                company_holder["name"] = next(
+                    (p.get("company") for p in batch_pages if p.get("company")), None
+                )
 
         accumulated = merge_parsed(parts, [], part_layers=["vision"] * len(parts))
         # التسريع — توقف الموجة الجافة: موجتان متتاليتان بلا أي بند جديد =
@@ -1355,6 +1388,7 @@ def extract_via_vision(
                     if err:
                         failure_reasons.append(err)
                     continue
+                _before_r = len(parts)
                 for page in _parse_vision_json(raw_text):
                     if page.get("rows") and isinstance(page["rows"][0], dict)                             and retry_semantic:
                         years0 = page["years"] or (doc_years_holder.get("years") or [])
@@ -1374,9 +1408,22 @@ def extract_via_vision(
                                 notes.append(f"Vision page skipped ({exc}).")
                     if not company_holder.get("name") and page.get("company"):
                         company_holder["name"] = page["company"]
+                _added_r = len(parts) - _before_r
+                if _added_r > 0:
+                    part_pages.extend([pn] * _added_r)
+                    if caps_acc and len(caps_acc) < len(parts):
+                        caps_acc.extend([[] for _ in range(len(parts) - len(caps_acc))])
                 if progress_cb:
                     progress_cb(
                         f"🔁 إعادة قراءة {retried_done}/{len(failed_pages)}…")
+        # Restore ascending document page order after retries so a retried
+        # Balance Sheet / Income Statement page still precedes later note pages.
+        if len(part_pages) == len(parts) and len(parts) > 1:
+            order_idx = sorted(range(len(parts)), key=lambda i: part_pages[i])
+            parts[:] = [parts[i] for i in order_idx]
+            part_pages[:] = [part_pages[i] for i in order_idx]
+            if len(caps_acc) == len(parts):
+                caps_acc[:] = [caps_acc[i] for i in order_idx]
         accumulated = merge_parsed(parts, [], part_layers=["vision"] * len(parts))
 
     # Focused double-read of the four core balance-sheet totals: replaces

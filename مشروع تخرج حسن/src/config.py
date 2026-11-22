@@ -477,6 +477,22 @@ FIELD_ALIASES: dict[str, list[str]] = {
         "مصروفات بيع وتسويق", "مصروفات بيع",
         "مصروفات بيعية وتسويقية", "مصاريف بيعية وتسويقية",
     ],
+    "admin_expenses": [
+        "general and administrative expenses", "administrative expenses",
+        "general administrative expenses", "g and a expenses",
+        # Arabic
+        "مصروفات عمومية وإدارية", "مصروفات عموميه واداريه",
+        "مصاريف عمومية وإدارية", "مصاريف عموميه واداريه",
+        "مصروفات إدارية وعمومية", "مصاريف إدارية وعمومية",
+        "المصروفات العمومية والإدارية", "المصاريف العمومية والإدارية",
+    ],
+    "other_operating_expenses": [
+        "other operating expenses", "other operating costs",
+        # Arabic
+        "مصروفات تشغيل أخرى", "مصروفات تشغيل اخري",
+        "مصاريف تشغيل أخرى", "مصاريف تشغيل اخري",
+        "مصروفات تشغيلية أخرى", "مصاريف تشغيلية أخرى",
+    ],
     "rd_expenses": [
         "research and development", "research and development expenses",
         "r d", "rd expenses",

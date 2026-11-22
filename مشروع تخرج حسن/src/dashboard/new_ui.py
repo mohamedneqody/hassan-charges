@@ -802,7 +802,8 @@ def sec_metrics(vm: dict, results: dict | None = None) -> None:
             "EBITMargin": "هامش التشغيل%",
             "NI/TA": "صافي الربح/الأصول",
             "TL/TA": "الالتزامات/الأصول",
-            "CL/CA": "خصوم/أصول متداولة",
+            "CA/CL": "أصول/خصوم متداولة",
+        "CL/CA": "خصوم/أصول متداولة",
         }
         acad_rows = []
         for m in academic_models(curr_m):

@@ -93,6 +93,7 @@ def test_two_way_registry_vs_engine_coverage(metrics):
         "revenue", "cost_of_revenue", "gross_profit", "operating_expenses",
         "operating_income", "pretax_income", "income_tax_expense",
         "net_income", "depreciation_amortization", "selling_expenses",
+        "admin_expenses", "other_operating_expenses",
         "rd_expenses", "interest_expense", "total_assets",
         "current_assets", "inventory", "accounts_receivable", "cash",
         "fixed_assets", "accounts_payable", "current_liabilities",

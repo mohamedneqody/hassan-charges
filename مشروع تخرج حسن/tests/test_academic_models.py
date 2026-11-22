@@ -67,26 +67,31 @@ def test_altman_distressed_is_distress():
 
 
 def test_springate_healthy_above_cutoff():
+    # Springate (1978): 1.03*A + 3.07*B + 0.66*C + 0.40*D
     m = springate_score(healthy())
-    assert m.value == pytest.approx(2.502, abs=0.01)
+    assert m.value == pytest.approx(2.264, abs=0.01)
     assert m.zone == "safe"
 
 
 def test_springate_distressed_below_cutoff():
     m = springate_score(distressed())
-    assert m.value == pytest.approx(0.270, abs=0.01)
+    assert m.value == pytest.approx(0.109, abs=0.01)
     assert m.zone == "distress"
 
 
 def test_zmijewski_healthy_below_zero():
+    # Zmijewski (1984): -4.336 - 4.513*(NI/TA) + 5.679*(TL/TA) + 0.004*(CA/CL)
     m = zmijewski_score(healthy())
-    assert m.value == pytest.approx(-2.057, abs=0.01)
+    assert m.value == pytest.approx(-2.051, abs=0.01)
+    assert "CA/CL" in m.components
+    assert m.components["CA/CL"] == pytest.approx(2.0, abs=1e-4)
     assert m.zone == "risk_low"
 
 
 def test_zmijewski_distressed_above_zero():
     m = zmijewski_score(distressed())
-    assert m.value == pytest.approx(1.052, abs=0.01)
+    assert m.value == pytest.approx(1.049, abs=0.01)
+    assert m.components["CA/CL"] == pytest.approx(0.75, abs=1e-4)
     assert m.zone == "risk_high"
 
 

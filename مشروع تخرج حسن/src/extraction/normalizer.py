@@ -181,6 +181,11 @@ _FIELD_NEGATIVE_PATTERNS: dict[str, tuple[str, ...]] = {
                              # «عملاء دفعات مقدمة» التزام عملاء — ليس رصيدًا مدينًا
                              # (normalize ة→ه: «مقدمة» ⇒ «مقدمه»)
                              "دفعات مقدمه", "دفعات مقدمة"),
+    # مجمع الإهلاك / رصيد أول وآخر المدة أرصدة ميزانية — ليست مصروف إهلاك الفترة
+    "depreciation_amortization": (
+        "مجمع", "accumulated", "رصيد اول", "رصيد اخر",
+        "في اول العام", "في اخر العام", "في نهايه العام",
+    ),
 }
 
 # A raw cell containing a percent sign is a ratio, never an absolute amount.
@@ -728,6 +733,16 @@ def _majority_vote(data: FinancialData) -> None:
             if best_val is None or best_count < 2:
                 continue  # no INDEPENDENT agreement — keep first-capture
             current = data.values.get(field, {}).get(year)
+            # Partial-note D&A guard (حارس إهلاك الإيضاحات الجزئية):
+            # In EAS/IFRS statements, Cash Flow prints TOTAL depreciation
+            # while COGS/Selling/G&A notes each print a strictly smaller
+            # partial slice (e.g. COGS D&A 39M echoed in two notes vs Cash Flow
+            # total D&A 49M). Echoed partial slices must NEVER outvote a larger
+            # total period depreciation capture.
+            if field == "depreciation_amortization":
+                max_cand = max((abs(v) for v in vals), default=0.0)
+                if max_cand > 0 and abs(best_val) < 0.95 * max_cand:
+                    continue
             # Record EVERY majority outcome that has a dissenting capture —
             # even when the winner equals the current value. A live run once
             # had two digit-close WRONG reads outvote the correct one; the
@@ -768,6 +783,28 @@ def reconcile(data: FinancialData) -> None:
     import itertools
 
     _majority_vote(data)
+
+    # Total D&A preference over partial departmental note slices:
+    # When multiple positive period D&A candidates exist (e.g. Cash Flow total
+    # 49M alongside COGS note 39M and Selling note 0.12M), prefer the largest
+    # valid period D&A candidate (sanity-bounded by fixed assets when known)
+    # without upgrading its verification status.
+    for year in list(data.years):
+        da_cands = [v for v, _o in (data.candidates.get("depreciation_amortization", {}).get(year) or []) if v is not None]
+        if len(da_cands) >= 2:
+            fa = data.get("fixed_assets", year)
+            valid = [v for v in da_cands if abs(v) > 0 and (fa is None or fa <= 0 or abs(v) <= 2.0 * abs(fa))]
+            if valid:
+                best_da = max(valid, key=abs)
+                cur_da = data.get("depreciation_amortization", year)
+                if cur_da is None or abs(best_da) > 1.05 * abs(cur_da):
+                    data.values.setdefault("depreciation_amortization", {})[year] = best_da
+                    data.notes.append(
+                        f"Selected total period depreciation ({best_da:,.0f}) in {year} over smaller "
+                        f"departmental note sub-allocation ({cur_da:,.0f})."
+                        if cur_da is not None else
+                        f"Selected total period depreciation ({best_da:,.0f}) in {year}."
+                    )
 
     # Tax bridge (جسر الضريبة): net income and pretax income are the two most
     # verified figures in the system (NI prints on three statements and is
@@ -1052,8 +1089,8 @@ def reconcile(data: FinancialData) -> None:
             # the COMPONENT SUM wins per the mandate (items beat opaque totals),
             # with the direct row preserved in the decision log.
             borrowings = (
-                (st_d or 0.0) + (st_cf or 0.0) + (ovd or 0.0)
-                + (cp or 0.0) + lt_d
+                abs(st_d or 0.0) + abs(st_cf or 0.0) + abs(ovd or 0.0)
+                + abs(cp or 0.0) + abs(lt_d)
             )
             direct_total = data.get("direct_total_debt", year)
             if direct_total is not None and abs(direct_total - borrowings) > max(1.0, 0.005 * direct_total):
@@ -1082,18 +1119,29 @@ def reconcile(data: FinancialData) -> None:
                         data, "derived_uncertain", set())
                     data.derived_uncertain.add(("borrowings_excl_leases", year))
                     data.derived_uncertain.add(("total_debt", year))
-            data.candidates.setdefault("borrowings_excl_leases", {}).setdefault(
-                year, []).append((borrowings, 0))
-            data.values.setdefault("total_debt", {})[year] = borrowings
-            data.derived[("total_debt", year)] = "borrowings excluding leases"
+            data.candidates.setdefault("borrowings_excl_leases", {})[year] = [(borrowings, 0)]
             nc_l = data.get("non_current_lease_liabilities", year)
             c_l = data.get("current_lease_liabilities", year)
-            if nc_l is not None and c_l is not None:
-                fin = borrowings + nc_l + c_l
+            if nc_l is not None or c_l is not None:
+                fin = borrowings + abs(nc_l or 0.0) + abs(c_l or 0.0)
                 data.values.setdefault("financial_debt_incl_leases", {})[year] = fin
-                data.derived[("financial_debt_incl_leases", year)] = "borrowings + lease liabilities"
-                data.candidates.setdefault("financial_debt_incl_leases", {}).setdefault(
-                    year, []).append((fin, 0))
+                data.derived[("financial_debt_incl_leases", year)] = (
+                    "قروض وتسهيلات + التزامات التأجير التمويلي (طويلة وقصيرة الأجل)")
+                data.candidates.setdefault("financial_debt_incl_leases", {})[year] = [(fin, 0)]
+                if ("borrowings_excl_leases", year) in (getattr(data, "derived_uncertain", set()) or set()):
+                    data.derived_uncertain.add(("financial_debt_incl_leases", year))
+                # IFRS 16 / EAS 49: total financial debt includes lease liabilities
+                # (matches calculator.py:217-227 and Note 32-2). Overwrite only if
+                # total_debt is missing or was previously derived (never clobber a direct capture).
+                td_map = data.values.setdefault("total_debt", {})
+                if year not in td_map or ("total_debt", year) in data.derived:
+                    td_map[year] = fin
+                    data.derived[("total_debt", year)] = "borrowings + lease liabilities"
+            else:
+                td_map = data.values.setdefault("total_debt", {})
+                if year not in td_map or ("total_debt", year) in data.derived:
+                    td_map[year] = borrowings
+                    data.derived[("total_debt", year)] = "borrowings excluding leases"
 
     # ص6 printed bridge (الجسر المطبوع في قائمة الدخل): pretax =
     # net activity profit − net financing costs + dividends from

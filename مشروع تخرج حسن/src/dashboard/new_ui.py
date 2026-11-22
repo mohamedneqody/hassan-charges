@@ -998,6 +998,8 @@ def sec_statements(vm: dict, raw: bytes | None) -> None:
                     .replace("['vision']", "طبقة الرؤية الذكية")
                     .replace("(['local_ocr'])", "(طبقة القراءة المحلية)")
                     .replace("['local_ocr']", "طبقة القراءة المحلية")
+                    .replace("(['z3_math'])", "(طبقة الإثبات الجبري Z3)")
+                    .replace("['z3_math']", "طبقة الإثبات الجبري Z3")
                 )
                 reason_html = (
                     f'<div class="fs-stmt-reason">'

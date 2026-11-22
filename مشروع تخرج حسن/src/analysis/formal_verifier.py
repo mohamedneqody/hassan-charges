@@ -907,3 +907,192 @@ def verify_policy_invariants_z3() -> tuple[PolicyTheorem, ...]:
     )
 
     return tuple(results)
+
+
+# ---------------------------------------------------------------------------
+# Z3 Algebraic Checksum Attestation (التوثيق الجبري الرياضي بـ Z3)
+# ---------------------------------------------------------------------------
+
+_STRICT_EQUALITY_AXIOMS = frozenset({
+    "A1_BS_BALANCE",
+    "A2_ASSETS_SUM",
+    "A3_LIAB_SUM",
+    "A5_GROSS_PROFIT",
+    "A6_NI_BRIDGE",
+})
+
+_DEBT_COMPONENT_FIELDS = (
+    "long_term_debt",
+    "short_term_debt",
+    "short_term_credit_facilities",
+    "bank_overdraft",
+    "current_portion_lt_debt",
+    "current_lease_liabilities",
+    "non_current_lease_liabilities",
+)
+
+_OPEX_COMPONENT_FIELDS = (
+    "selling_expenses",
+    "admin_expenses",
+    "other_operating_expenses",
+    "rd_expenses",
+)
+
+
+def _vals_close(a: float, b: float) -> bool:
+    return abs(a - b) <= max(1.0, 0.005 * max(abs(a), abs(b)))
+
+
+def _is_eligible_for_z3_attestation(data, field: str, year: int) -> bool:
+    """Strict Honesty-Gate guard: only directly captured, non-derived,
+    non-conflicting, spatially clean cells may receive Z3 algebraic attestation."""
+    val = (getattr(data, "values", {}) or {}).get(field, {}).get(year)
+    if val is None:
+        return False
+    # Rule 1: Never self-attest synthetically derived cells (zero tautology!)
+    derived = getattr(data, "derived", {}) or {}
+    if (field, year) in derived:
+        return False
+    # Rule 2: Must have at least one direct candidate capture from the document
+    raw_cands = (getattr(data, "candidates", {}) or {}).get(field, {}).get(year) or []
+    cand_vals = [v for v, _ in raw_cands if v is not None]
+    if not cand_vals:
+        return False
+    # Rule 3: Never override an unresolved CONFLICT
+    distinct: list[float] = []
+    for v in cand_vals:
+        if not any(_vals_close(v, d) for d in distinct):
+            distinct.append(v)
+    conf = (getattr(data, "confidence", {}) or {}).get(field, {}).get(year, 0)
+    if len(distinct) >= 2 and conf < 2:
+        return False
+    # Rule 4: Respect spatial gate findings if present
+    spatial = (getattr(data, "spatial_findings", {}) or {}).get((field, year))
+    if isinstance(spatial, dict) and spatial.get("downgrade"):
+        return False
+    return True
+
+
+def apply_z3_algebraic_attestation(
+    data,
+    notes: list[str] | None = None,
+    strict_rel_tol: float = 0.002,
+    cf_rel_tol: float = 0.05,
+) -> list[tuple[str, int, str]]:
+    """Attest directly captured cells participating in PROVEN closed accounting
+    equalities as an independent deterministic mathematical layer (`z3_math`).
+
+    Guarantees:
+      - Zero tautology: ALL participating terms of an equation must be directly
+        captured from the document (none synthetically derived by Python).
+      - Zero conflict suppression: conflicted cells (`CONFLICT`) are never promoted.
+      - Strict algebraic checksum: ≤ 0.2% residual for Balance Sheet / Income
+        identities (A1, A2, A3, A5, A6) and ≤ 5% for the 5-term Cash Flow bridge (A9).
+
+    Returns list of newly attested `(field, year, axiom_id)` triples.
+    """
+    values = getattr(data, "values", None) or {}
+    if not values:
+        return []
+
+    cert = verify_financial_statements(values, tolerance=strict_rel_tol)
+    to_attest: dict[tuple[str, int], str] = {}
+
+    # 1. Core closed multi-term accounting equalities (A1, A2, A3, A5, A6)
+    for ax in cert.axioms:
+        if ax.axiom_id not in _STRICT_EQUALITY_AXIOMS or ax.status != "PROVEN":
+            continue
+        if ax.lhs is None or ax.rhs is None or ax.residual is None:
+            continue
+        scale = max(abs(ax.lhs), abs(ax.rhs), 1.0)
+        if abs(ax.residual) > max(10.0, strict_rel_tol * scale):
+            continue
+        if len(ax.fields) < 3:
+            continue
+        if all(_is_eligible_for_z3_attestation(data, f, ax.year) for f in ax.fields):
+            for f in ax.fields:
+                to_attest.setdefault((f, ax.year), ax.axiom_id)
+
+    # 2. Cross-year Cash Flow Bridge (A9): OCF + ICF + FCF ≈ cash(curr) - cash(prev)
+    years = sorted(cert.years_checked)
+    if len(years) >= 2:
+        prev_y, curr_y = years[-2], years[-1]
+        cf_pairs = [
+            ("operating_cash_flow", curr_y),
+            ("investing_cash_flow", curr_y),
+            ("financing_cash_flow", curr_y),
+            ("cash", curr_y),
+            ("cash", prev_y),
+        ]
+        if all(_is_eligible_for_z3_attestation(data, f, y) for f, y in cf_pairs):
+            ocf = float(values["operating_cash_flow"][curr_y])
+            icf = float(values["investing_cash_flow"][curr_y])
+            fcf = float(values["financing_cash_flow"][curr_y])
+            c_curr = float(values["cash"][curr_y])
+            c_prev = float(values["cash"][prev_y])
+            delta_c = c_curr - c_prev
+            net_cf = ocf + icf + fcf
+            cf_scale = max(abs(ocf), abs(icf), abs(fcf), abs(delta_c), 1.0)
+            if abs(net_cf - delta_c) <= max(1000.0, cf_rel_tol * cf_scale):
+                for f, y in cf_pairs:
+                    to_attest.setdefault((f, y), "A9_CF_BRIDGE")
+
+    # 3. Exact Component-Sum Checksums (Debt sum & OpEx sum when non-derived)
+    for y in years:
+        # Total Debt == sum of directly captured debt components
+        if _is_eligible_for_z3_attestation(data, "total_debt", y):
+            td = float(values["total_debt"][y])
+            comp_f = [f for f in _DEBT_COMPONENT_FIELDS if _is_eligible_for_z3_attestation(data, f, y)]
+            if len(comp_f) >= 2:
+                comp_sum = sum(abs(float(values[f][y])) for f in comp_f)
+                if abs(abs(td) - comp_sum) <= max(10.0, strict_rel_tol * max(abs(td), comp_sum, 1.0)):
+                    to_attest.setdefault(("total_debt", y), "A10_DEBT_SUM")
+                    for f in comp_f:
+                        to_attest.setdefault((f, y), "A10_DEBT_SUM")
+
+        # Operating Expenses == sum of directly captured OpEx components
+        if _is_eligible_for_z3_attestation(data, "operating_expenses", y):
+            opex = abs(float(values["operating_expenses"][y]))
+            comp_f = [f for f in _OPEX_COMPONENT_FIELDS if _is_eligible_for_z3_attestation(data, f, y)]
+            if len(comp_f) >= 2:
+                comp_sum = sum(abs(float(values[f][y])) for f in comp_f)
+                if abs(opex - comp_sum) <= max(10.0, strict_rel_tol * max(opex, comp_sum, 1.0)):
+                    to_attest.setdefault(("operating_expenses", y), "A11_OPEX_SUM")
+                    for f in comp_f:
+                        to_attest.setdefault((f, y), "A11_OPEX_SUM")
+
+    if not to_attest:
+        return []
+
+    order_next = max(
+        (o for cands in (getattr(data, "candidates", {}) or {}).values()
+         for ys in cands.values() for _v, o in ys),
+        default=0,
+    ) + 1
+
+    attested: list[tuple[str, int, str]] = []
+    votes = getattr(data, "votes", None) or {}
+    for (field, year), ax_id in sorted(to_attest.items(), key=lambda kv: (kv[0][1], kv[0][0])):
+        val = float(values[field][year])
+        existing_layers = (getattr(data, "candidate_layers", {}) or {}).get(field, {}).get(year) or []
+        if "z3_math" in existing_layers:
+            continue
+        data.candidates.setdefault(field, {}).setdefault(year, []).append((val, order_next))
+        data.candidate_labels.setdefault(field, {}).setdefault(year, []).append(f"z3_math:{ax_id}")
+        data.candidate_layers.setdefault(field, {}).setdefault(year, []).append("z3_math")
+        data.bump_confidence(field, year, 2)
+        data.identity_ok[(field, year)] = True
+        if (field, year) in votes and isinstance(votes[(field, year)], dict):
+            wl = list(votes[(field, year)].get("winner_layers") or [])
+            if "z3_math" not in wl:
+                wl.append("z3_math")
+                votes[(field, year)]["winner_layers"] = sorted(set(wl))
+        attested.append((field, year, ax_id))
+        order_next += 1
+
+    if attested and notes is not None:
+        notes.append(
+            f"التوثيق الجبري بـ Z3: تم إثبات وتوثيق {len(attested)} خانة رياضياً "
+            f"عبر المعادلات المحاسبية المقفولة كطبقة تحقق مستقلة (z3_math)."
+        )
+    return attested

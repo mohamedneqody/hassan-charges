@@ -1398,6 +1398,8 @@ def build_decision_log(data: FinancialData) -> list[dict]:
                                   f"({sorted(set(winner_layers)) or ['غير معروفة']}) "
                                   "على مستند مصنَّف غير موثوق — الاتفاق صدى "
                                   "لمصدر واحد وليس تصديقًا مستقلًا")
+                    elif "z3_math" in winner_layers and not (vote and vote.get("contested")):
+                        reason = "تطابق القراءة البصرية مع الإثبات الجبري المحاسبي (Z3 SMT)"
             elif len(values) >= 2 and conf >= 1:
                 status, reason = "UNVERIFIED", "قراءتان بلا تحقق مستقل حاسم"
             else:

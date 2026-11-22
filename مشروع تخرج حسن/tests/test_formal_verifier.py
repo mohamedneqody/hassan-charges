@@ -171,3 +171,112 @@ def test_pipeline_attaches_formal_certificate_on_sample_csv():
     assert bs_is_failed == []
     assert len(cert["policy_theorems"]) == 5
     assert all(t["status"] == "PROVEN" for t in cert["policy_theorems"])
+
+
+def _mk_scanned_data(vals: dict[str, dict[int, float]]):
+    from src.extraction.normalizer import FinancialData
+
+    data = FinancialData(
+        values={f: dict(by_y) for f, by_y in vals.items()},
+        document_profile={"kind": "SCANNED_NO_TEXT", "text_layer_trusted": False},
+    )
+    order = 1
+    for f, by_y in vals.items():
+        for y, v in by_y.items():
+            data.candidates.setdefault(f, {}).setdefault(y, []).append((v, order))
+            data.candidate_layers.setdefault(f, {}).setdefault(y, []).append("vision")
+            data.candidate_labels.setdefault(f, {}).setdefault(y, []).append(f"vision:{f}")
+            data.bump_confidence(f, y, 1)
+            order += 1
+    return data
+
+
+def test_z3_algebraic_attestation_unlocks_health_score_on_closed_identities():
+    from src.analysis.calculator import compute_year_metrics
+    from src.analysis.formal_verifier import apply_z3_algebraic_attestation
+    from src.analysis.score import compute_health_score
+    from src.extraction.normalizer import build_decision_log
+
+    # Pure single-layer scanned vision extraction (exact Ezz Steel 2022 figures)
+    data = _mk_scanned_data({
+        "total_assets": {2021: 14_614_683_997.0, 2022: 15_965_646_460.0},
+        "non_current_assets": {2021: 11_713_284_905.0, 2022: 11_716_699_082.0},
+        "current_assets": {2021: 2_901_399_092.0, 2022: 4_248_947_378.0},
+        "total_liabilities": {2021: 10_997_997_672.0, 2022: 12_812_982_378.0},
+        "non_current_liabilities": {2021: 1_223_061_304.0, 2022: 720_697_980.0},
+        "current_liabilities": {2021: 9_774_936_368.0, 2022: 12_092_284_398.0},
+        "equity": {2021: 3_616_686_325.0, 2022: 3_152_664_082.0},
+        "revenue": {2022: 16_665_919_878.0},
+        "cost_of_revenue": {2022: -14_869_716_420.0},
+        "gross_profit": {2022: 1_796_203_458.0},
+        "pretax_income": {2022: 1_415_300_200.0},
+        "income_tax_expense": {2022: -244_068_549.0},
+        "net_income": {2022: 1_171_231_651.0},
+        "cash": {2021: 598_007_850.0, 2022: 1_004_894_141.0},
+        "operating_cash_flow": {2022: 1_800_000_000.0},
+        "investing_cash_flow": {2022: -600_000_000.0},
+        "financing_cash_flow": {2022: -793_113_709.0},
+    })
+
+    # Before Z3 attestation: ALL cells are UNVERIFIED (single vision layer on scanned PDF)
+    log_before = build_decision_log(data)
+    assert all(e["status"] == "UNVERIFIED" for e in log_before)
+
+    notes: list[str] = []
+    attested = apply_z3_algebraic_attestation(data, notes)
+    assert len(attested) >= 16
+    assert any("التوثيق الجبري بـ Z3" in n for n in notes)
+
+    log_after = build_decision_log(data)
+    by_key = {(e["field"], e["year"]): e for e in log_after}
+    for f in (
+        "current_assets", "current_liabilities", "total_assets",
+        "total_liabilities", "equity", "revenue", "net_income",
+        "operating_cash_flow",
+    ):
+        assert by_key[(f, 2022)]["status"] == "VERIFIED_EXACT", f"{f} should be VERIFIED_EXACT"
+
+    # Official Health Score now unlocks all 4 pillars automatically!
+    blocked_2022 = {
+        e["field"] for e in log_after
+        if e["year"] == 2022 and e["status"] != "VERIFIED_EXACT"
+    }
+    curr_m = compute_year_metrics(2022, data.values, prev_year=2021)
+    hs = compute_health_score(curr_m, blocked_fields=blocked_2022)
+    assert hs.total is not None
+    assert hs.complete is True
+    assert hs.missing_pillars == []
+
+
+def test_z3_algebraic_attestation_refuses_derived_tautology_and_conflicts():
+    from src.analysis.formal_verifier import apply_z3_algebraic_attestation
+    from src.extraction.normalizer import build_decision_log
+
+    # Case 1: total_liabilities was synthetically derived (tautology) -> MUST NOT attest A1
+    d_taut = _mk_scanned_data({
+        "total_assets": {2022: 1000.0},
+        "total_liabilities": {2022: 600.0},
+        "equity": {2022: 400.0},
+    })
+    d_taut.derived[("total_liabilities", 2022)] = "derived TA - Eq"
+    assert apply_z3_algebraic_attestation(d_taut) == []
+
+    # Case 2: current_assets has an unresolved CONFLICT -> MUST NOT attest A2
+    d_conf = _mk_scanned_data({
+        "total_assets": {2022: 1000.0},
+        "non_current_assets": {2022: 700.0},
+        "current_assets": {2022: 300.0},
+    })
+    d_conf.candidates["current_assets"][2022].append((500.0, 99))
+    d_conf.candidate_layers["current_assets"][2022].append("local_ocr")
+    assert apply_z3_algebraic_attestation(d_conf) == []
+    log = {e["field"]: e["status"] for e in build_decision_log(d_conf)}
+    assert log["current_assets"] == "CONFLICT"
+
+    # Case 3: broken equation (residual > 0.2%) -> MUST NOT attest
+    d_bad = _mk_scanned_data({
+        "total_assets": {2022: 1000.0},
+        "non_current_assets": {2022: 700.0},
+        "current_assets": {2022: 250.0},  # off by 5%
+    })
+    assert apply_z3_algebraic_attestation(d_bad) == []

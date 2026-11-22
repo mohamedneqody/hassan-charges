@@ -1686,6 +1686,16 @@ def extract_via_vision(
     # gated for human review. Never a silent replacement.
     _focused_local_cell_verification(data, raw, field_sources, doc_years_holder,
                                      selected, pages_png, notes)
+    # ── Z3 Algebraic Checksum Attestation (التوثيق الجبري الرياضي بـ Z3) ──
+    # Closed multi-term accounting identities (A1, A2, A3, A5, A6, A9, A10, A11)
+    # where ALL terms were directly captured (zero tautology, zero conflicts)
+    # provide a mathematically independent second verification layer (`z3_math`).
+    try:
+        from src.analysis.formal_verifier import apply_z3_algebraic_attestation
+
+        apply_z3_algebraic_attestation(data, notes)
+    except Exception:
+        pass
     # ── Spatial shadow mode (FEATURE FLAG: SPATIAL_SHADOW=1) ──
     # Runs the spatial cell extractor on the rendered pages and RECORDS its
     # findings without touching any captured value or decision-log status

@@ -112,3 +112,23 @@ def test_cashflow_chart_supports_unit_scale():
     fig_1x = charts.cashflow_chart(by_key, 2024, 2025, "$", scale=1, lang="en")
     fig_1k = charts.cashflow_chart(by_key, 2024, 2025, "$", scale=1000, lang="ar")
     assert fig_1k.data[0].y[0] == fig_1x.data[0].y[0] * 1000
+
+
+def test_resolve_cell_bbox_sibling_year_row_band():
+    from src.dashboard.new_ui import _extract_bbox_coords
+    from src.dashboard.view_model import resolve_cell_bbox
+
+    bbox_map = {
+        "revenue|2022": [{"page": 4, "bbox_px": [120, 400, 320, 430], "render_scale": 2.0}]
+    }
+    # Direct hit keeps original box
+    direct = resolve_cell_bbox(bbox_map, "revenue", 2022, [4])
+    assert isinstance(direct, list)
+
+    # Sibling year on same page produces a full-row band fallback
+    sib = resolve_cell_bbox(bbox_map, "revenue", 2021, [4])
+    assert isinstance(sib, dict) and sib.get("row_band") is True
+    assert sib.get("page") == 4
+
+    coords = _extract_bbox_coords(sib, page_no=4, img_w=1000, img_h=1400, target_scale=2.0)
+    assert coords == (20.0, 400.0, 980.0, 430.0)

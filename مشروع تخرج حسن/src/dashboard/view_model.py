@@ -45,6 +45,46 @@ def _gate_of(status: str) -> str:
         "missing" if status == "MISSING" else "not_decisive")
 
 
+def resolve_cell_bbox(
+    bbox_map: dict | None,
+    field: str,
+    year,
+    pages: list | None = None,
+):
+    """Return exact bbox for (field, year), or fall back to a sibling-year
+    full-row horizontal strip on the same statement page when available."""
+    if not isinstance(bbox_map, dict):
+        return None
+    direct = bbox_map.get(f"{field}|{year}")
+    if direct:
+        return direct
+    prefix = f"{field}|"
+    page_set = {int(p) for p in (pages or []) if str(p).isdigit()}
+    for k, val in bbox_map.items():
+        if not k.startswith(prefix) or not val:
+            continue
+        item = val[0] if isinstance(val, list) and val else val
+        if isinstance(item, dict):
+            pg = item.get("page")
+            if page_set and pg is not None and int(pg) not in page_set:
+                continue
+            coords = item.get("bbox_px") or item.get("bbox") or item.get("box")
+            if coords and len(coords) >= 4:
+                return {
+                    "page": pg if pg is not None else (next(iter(page_set)) if page_set else None),
+                    "bbox_px": list(coords[:4]),
+                    "render_scale": item.get("render_scale") or 2.0,
+                    "row_band": True,
+                }
+        elif isinstance(item, (list, tuple)) and len(item) >= 4:
+            return {
+                "page": next(iter(page_set)) if page_set else None,
+                "bbox": list(item[:4]),
+                "row_band": True,
+            }
+    return None
+
+
 def cell_rows(results: dict) -> list[dict]:
     """صف لكل (بند، سنة) في سجل القرار — قرار البوابة هو المعروض."""
     log = results.get("decision_log") or []
@@ -57,6 +97,7 @@ def cell_rows(results: dict) -> list[dict]:
         label = LABELS_AR.get(field, field)
         raw = labels.get(f"{field}|{year}") or ""
         raw_label = raw[-1] if isinstance(raw, list) and raw else raw
+        cand_pages = e.get("pages") or []
         rows.append({
             "field": field,
             "label": label,
@@ -69,11 +110,11 @@ def cell_rows(results: dict) -> list[dict]:
             "gate_label": GATE_LABELS[gate][0],
             "gate_kind": GATE_LABELS[gate][1],
             "source": e.get("source") or "—",
-            "pages": e.get("pages") or [],
+            "pages": cand_pages,
             "reason": e.get("reason") or "",
             "candidates": e.get("candidates") or [],
             "winner_layers": e.get("winner_layers"),
-            "bbox": bbox.get(f"{field}|{year}"),
+            "bbox": resolve_cell_bbox(bbox, field, year, cand_pages),
             "reviewed": bool((results.get("human_reviews") or {})
                              .get(f"{field}|{year}")),
         })

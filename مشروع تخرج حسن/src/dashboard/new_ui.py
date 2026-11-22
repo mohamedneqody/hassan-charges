@@ -47,6 +47,7 @@ from src.dashboard.view_model import (  # noqa: E402
     cell_value_display,
     executive_summary,
     report_memo,
+    resolve_cell_bbox,
 )
 
 _T = {
@@ -122,8 +123,20 @@ def _extract_bbox_coords(
         coords = item.get("bbox_px") or item.get("bbox") or item.get("box")
         if not coords or len(coords) < 4:
             return None
-        rscale = float(item.get("render_scale") or 2.0) or 2.0
-        x0, y0, x1, y1 = [float(v) * (target_scale / rscale) for v in coords[:4]]
+        is_row_band = bool(item.get("row_band"))
+        raw_vals = [float(v) for v in coords[:4]]
+        if max(abs(v) for v in raw_vals) <= 1.05:
+            x0, y0, x1, y1 = (
+                raw_vals[0] * img_w,
+                raw_vals[1] * img_h,
+                raw_vals[2] * img_w,
+                raw_vals[3] * img_h,
+            )
+        else:
+            rscale = float(item.get("render_scale") or 2.0) or 2.0
+            x0, y0, x1, y1 = [v * (target_scale / rscale) for v in raw_vals]
+        if is_row_band:
+            x0, x1 = img_w * 0.02, img_w * 0.98
         return (x0, y0, x1, y1)
 
     if isinstance(item, (list, tuple)) and len(item) >= 4:
@@ -193,13 +206,13 @@ def _render_crop(raw: bytes, page_no: int, bbox) -> bytes | None:
         return None
     try:
         x0, y0, x1, y1 = coords
-        pad = 8
+        pad_x, pad_y = 18, 12
         crop = img.crop(
             (
-                max(0, int(x0) - pad),
-                max(0, int(y0) - pad),
-                min(img.width, int(x1) + pad),
-                min(img.height, int(y1) + pad),
+                max(0, int(x0) - pad_x),
+                max(0, int(y0) - pad_y),
+                min(img.width, int(x1) + pad_x),
+                min(img.height, int(y1) + pad_y),
             )
         )
         buf = io.BytesIO()
@@ -283,29 +296,36 @@ def evidence_block(cell: dict, raw: bytes | None, doc_sha: str) -> None:
         bbox_page = bbox.get("page")
     page_no = int(bbox_page) if bbox_page else int(pages[0])
     img, crop = _cached_evidence_images(raw, current_sha, page_no, bbox)
-    col_page, col_crop = st.columns([3, 2])
-    with col_page:
-        if img:
-            st.image(img, caption=f"{_t('evidence')} — {'صفحة' if is_ar else 'p'}{page_no}")
-        else:
-            render_empty_state(
-                "تعذّر عرض الصفحة" if is_ar else "Page render unavailable",
-                f"الصفحة {page_no} غير موجودة في ملف PDF أو الملف ليس بصيغة PDF."
-                if is_ar
-                else f"Page {page_no} could not be rendered from this file.",
-                icon="🖼️",
+    is_row_band = isinstance(bbox, dict) and bool(bbox.get("row_band"))
+    if crop:
+        col_page, col_crop = st.columns([3, 2])
+        with col_page:
+            if img:
+                st.image(img, caption=f"{_t('evidence')} — {'صفحة' if is_ar else 'p'}{page_no}")
+        with col_crop:
+            crop_cap = (
+                "قصاصة صف البند (مرجّحة من السنة المقابلة)"
+                if (is_ar and is_row_band)
+                else ("القصاصة المركّزة" if is_ar else "Focused crop")
             )
-    with col_crop:
-        if crop:
-            st.image(crop, caption="القصاصة المركّزة" if is_ar else "Focused crop")
-        elif bbox is None:
-            render_empty_state(
-                "لا توجد إحداثيات قصّ (bbox)" if is_ar else "No bounding-box crop",
-                "مستند نصي رقمي أو قراءة صفحة كاملة دون إحداثيات موضعية للخانة."
+            st.image(crop, caption=crop_cap)
+    elif img:
+        st.image(
+            img,
+            caption=(
+                f"{_t('evidence')} — صفحة {page_no} (قراءة سياقية لصفحة كاملة دون إحداثيات قصّ موضعية لهذه الخانة)"
                 if is_ar
-                else "Digital text PDF or full-page capture without box coordinates.",
-                icon="🔍",
-            )
+                else f"{_t('evidence')} — p{page_no} (full-page capture without box coordinates)"
+            ),
+        )
+    else:
+        render_empty_state(
+            "تعذّر عرض الصفحة" if is_ar else "Page render unavailable",
+            f"الصفحة {page_no} غير موجودة في ملف PDF أو الملف ليس بصيغة PDF."
+            if is_ar
+            else f"Page {page_no} could not be rendered from this file.",
+            icon="🖼️",
+        )
 
 
 def sec_overview(vm: dict, results: dict) -> None:
@@ -923,29 +943,20 @@ def sec_statements(vm: dict, raw: bytes | None) -> None:
         return
 
     ev = st.session_state.get("ev_cell")
-    if ev:
-        with st.container(border=True):
-            ev_h1, ev_h2 = st.columns([5.0, 1.2])
-            with ev_h1:
-                st.markdown(f"#### 🔍 {_T['evidence'][lang]} — **{esc(str(ev.get('label', '')))}** · `{esc(str(ev.get('year', '')))}`")
-            with ev_h2:
-                if st.button("✖ إغلاق" if is_ar else "✖ Close", key="close_ev_top", use_container_width=True):
-                    st.session_state.pop("ev_cell", None)
-                    st.rerun()
-            evidence_block(ev, raw, vm["doc_sha"])
-    else:
-        render_empty_state(
-            "معاينة دليل المصدر" if is_ar else "Source evidence preview",
-            "لم تُختر خانة للمعاينة بعد."
-            if is_ar
-            else "No cell selected for inspection yet.",
-            icon="🔍",
-            next_step="اضغط زر «الدليل» بجانب أي خانة لعرض الصفحة الأصلية وقصاصة الرقم هنا في أعلى التبويب."
-            if is_ar
-            else "Click Evidence next to any row to inspect its source page & crop right here at the top.",
-        )
+    ev_key = (
+        (ev.get("field"), str(ev.get("year")))
+        if isinstance(ev, dict)
+        else None
+    )
+    st.caption(
+        "🔍 اضغط زر «الدليل» بجانب أي خانة لعرض الصفحة الأصلية وقصاصة الرقم مباشرة أسفلها."
+        if is_ar
+        else "🔍 Click Evidence next to any row to inspect its source page & crop right below it."
+    )
 
     for c in visible:
+        c_key = (c["field"], str(c["year"]))
+        is_ev_open = ev_key == c_key
         with st.container(border=True):
             col_main, col_btn = st.columns([5.2, 1.0])
             disp_lbl = c["label"] if is_ar else c.get("label_en", c["label"])
@@ -1011,13 +1022,24 @@ def sec_statements(vm: dict, raw: bytes | None) -> None:
                     unsafe_allow_html=True,
                 )
             with col_btn:
+                btn_lbl = (
+                    ("✖ إغلاق" if is_ar else "✖ Close")
+                    if is_ev_open
+                    else _T["open_evidence"][lang]
+                )
                 if st.button(
-                    _T["open_evidence"][lang],
+                    btn_lbl,
                     key=f"ev-{c['field']}-{c['year']}",
                     use_container_width=True,
                 ):
-                    st.session_state["ev_cell"] = c
+                    if is_ev_open:
+                        st.session_state.pop("ev_cell", None)
+                    else:
+                        st.session_state["ev_cell"] = c
                     st.rerun()
+            if is_ev_open:
+                st.divider()
+                evidence_block(c, raw, vm["doc_sha"])
 
 
 def _render_metrics_charts_suite(vm: dict, res_obj: dict, is_ar: bool, lang: str) -> None:
@@ -1970,7 +1992,9 @@ def _build_live_queue(
             pages = e.get("pages") or []
             if not pages:
                 continue
-            bbox = (results.get("candidate_bbox") or {}).get(f"{field}|{year}")
+            bbox = resolve_cell_bbox(
+                results.get("candidate_bbox"), field, year, pages
+            )
             bbox_page = None
             if isinstance(bbox, list) and bbox and isinstance(bbox[0], dict):
                 bbox_page = bbox[0].get("page")
@@ -2004,10 +2028,10 @@ def _build_live_queue(
                         ]
                         crop = img.crop(
                             (
-                                max(0, int(x0) - 6),
-                                max(0, int(y0) - 6),
-                                min(img.width, int(x1) + 6),
-                                min(img.height, int(y1) + 6),
+                                max(0, int(x0) - 18),
+                                max(0, int(y0) - 12),
+                                min(img.width, int(x1) + 18),
+                                min(img.height, int(y1) + 12),
                             )
                         )
                         safe_field = re.sub(r"[^A-Za-z0-9_-]", "_", str(field))

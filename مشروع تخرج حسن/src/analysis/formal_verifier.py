@@ -939,7 +939,22 @@ _OPEX_COMPONENT_FIELDS = (
 )
 
 
-def _vals_close(a: float, b: float) -> bool:
+_EXPENSE_SIGN_FIELDS = frozenset({
+    "cost_of_revenue",
+    "income_tax_expense",
+    "selling_expenses",
+    "admin_expenses",
+    "other_operating_expenses",
+    "operating_expenses",
+    "interest_expense",
+    "depreciation_amortization",
+    "capex",
+})
+
+
+def _vals_close(a: float, b: float, ignore_sign: bool = False) -> bool:
+    if ignore_sign:
+        a, b = abs(a), abs(b)
     return abs(a - b) <= max(1.0, 0.005 * max(abs(a), abs(b)))
 
 
@@ -958,10 +973,13 @@ def _is_eligible_for_z3_attestation(data, field: str, year: int) -> bool:
     cand_vals = [v for v, _ in raw_cands if v is not None]
     if not cand_vals:
         return False
-    # Rule 3: Never override an unresolved CONFLICT
+    # Rule 3: Never override a genuine magnitude CONFLICT (for expenses printed in
+    # parentheses like (14.87B) vs +14.87B, sign-convention-only difference is not a
+    # digit error when closed by a Z3 algebraic identity!)
+    ign_sign = field in _EXPENSE_SIGN_FIELDS
     distinct: list[float] = []
     for v in cand_vals:
-        if not any(_vals_close(v, d) for d in distinct):
+        if not any(_vals_close(v, d, ignore_sign=ign_sign) for d in distinct):
             distinct.append(v)
     conf = (getattr(data, "confidence", {}) or {}).get(field, {}).get(year, 0)
     if len(distinct) >= 2 and conf < 2:
@@ -1013,8 +1031,26 @@ def apply_z3_algebraic_attestation(
             for f in ax.fields:
                 to_attest.setdefault((f, ax.year), ax.axiom_id)
 
-    # 2. Cross-year Cash Flow Bridge (A9): OCF + ICF + FCF ≈ cash(curr) - cash(prev)
+    # 2. Direct 4-term Egyptian Balance Sheet Identity (A1b_BS_4TERM):
+    # Egyptian EAS statements print Equity + Non-Current Liab + Current Liab = Total Assets
+    # directly without printing a separate Total Liabilities subtotal line (so total_liabilities
+    # is derived, which blocks A1/A3). Checking TA == Eq + NCL + CL directly has ZERO tautology!
     years = sorted(cert.years_checked)
+    for y in years:
+        bs4 = ("total_assets", "equity", "non_current_liabilities", "current_liabilities")
+        if all(_is_eligible_for_z3_attestation(data, f, y) for f in bs4):
+            ta = float(values["total_assets"][y])
+            rhs4 = (
+                float(values["equity"][y])
+                + float(values["non_current_liabilities"][y])
+                + float(values["current_liabilities"][y])
+            )
+            scale4 = max(abs(ta), abs(rhs4), 1.0)
+            if abs(ta - rhs4) <= max(10.0, strict_rel_tol * scale4):
+                for f in bs4:
+                    to_attest.setdefault((f, y), "A1b_BS_4TERM")
+
+    # 3. Cross-year Cash Flow Bridge (A9): OCF + ICF + FCF ≈ cash(curr) - cash(prev)
     if len(years) >= 2:
         prev_y, curr_y = years[-2], years[-1]
         cf_pairs = [
@@ -1089,6 +1125,18 @@ def apply_z3_algebraic_attestation(
                 votes[(field, year)]["winner_layers"] = sorted(set(wl))
         attested.append((field, year, ax_id))
         order_next += 1
+
+    # Upgrade derived_uncertain for total_liabilities when BOTH directly-printed
+    # liability halves (NCL & CL) are now mathematically attested via A1b_BS_4TERM!
+    derived_unc = getattr(data, "derived_uncertain", None)
+    if isinstance(derived_unc, set):
+        for y in years:
+            if ("total_liabilities", y) in derived_unc:
+                if (
+                    ("non_current_liabilities", y) in to_attest
+                    and ("current_liabilities", y) in to_attest
+                ):
+                    derived_unc.discard(("total_liabilities", y))
 
     if attested and notes is not None:
         notes.append(

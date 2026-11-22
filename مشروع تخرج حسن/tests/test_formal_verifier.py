@@ -280,3 +280,40 @@ def test_z3_algebraic_attestation_refuses_derived_tautology_and_conflicts():
         "current_assets": {2022: 250.0},  # off by 5%
     })
     assert apply_z3_algebraic_attestation(d_bad) == []
+
+
+def test_z3_egyptian_4term_bs_and_expense_sign_convention():
+    from src.analysis.formal_verifier import apply_z3_algebraic_attestation
+    from src.extraction.normalizer import build_decision_log
+
+    # Egyptian EAS BS: total_liabilities is derived (not printed separately),
+    # while TA, Equity, NCL, CL are all directly printed and balance to the EGP!
+    d = _mk_scanned_data({
+        "total_assets": {2022: 15_965_646_460.0},
+        "equity": {2022: 6_845_602_367.0},
+        "non_current_liabilities": {2022: 720_697_980.0},
+        "current_liabilities": {2022: 8_399_346_113.0},
+        "total_liabilities": {2022: 9_120_044_093.0},
+        "revenue": {2022: 16_665_919_878.0},
+        "cost_of_revenue": {2022: -14_869_716_420.0},
+        "gross_profit": {2022: 1_796_203_458.0},
+    })
+    d.derived[("total_liabilities", 2022)] = "derived NCL + CL"
+    d.derived_uncertain = {("total_liabilities", 2022)}
+    # Simulate sign-convention difference on COGS: (-14.87B) vs (+14.87B)
+    d.candidates["cost_of_revenue"][2022].append((14_869_716_420.0, 99))
+    d.candidate_layers["cost_of_revenue"][2022].append("local_ocr")
+
+    attested = apply_z3_algebraic_attestation(d)
+    attested_fields = {f for f, _y, _ax in attested}
+    assert {"total_assets", "equity", "non_current_liabilities", "current_liabilities"} <= attested_fields
+    assert {"revenue", "cost_of_revenue", "gross_profit"} <= attested_fields
+    assert ("total_liabilities", 2022) not in d.derived_uncertain
+
+    log = {e["field"]: e["status"] for e in build_decision_log(d)}
+    assert log["total_assets"] == "VERIFIED_EXACT"
+    assert log["equity"] == "VERIFIED_EXACT"
+    assert log["current_liabilities"] == "VERIFIED_EXACT"
+    assert log["total_liabilities"] == "VERIFIED_DERIVED"
+    assert log["revenue"] == "VERIFIED_EXACT"
+    assert log["gross_profit"] == "VERIFIED_EXACT"

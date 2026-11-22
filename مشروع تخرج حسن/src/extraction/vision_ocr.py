@@ -1891,6 +1891,34 @@ def _focused_local_cell_verification(data, raw, field_sources, doc_years,
                 self.conf = getattr(sg, "conf", None)
 
         segs = [_Seg(x) for x in segs]
+        # Never match Balance-Sheet stock rows (e.g. "المخزون", "العملاء", "الموردون")
+        # on a pure Cash-Flow page ("التغير في: المخزون" = working-capital delta, NOT
+        # ending inventory!). Prevents wrong Page-8 crops & false CONFLICT pollution.
+        _pg_txt = " ".join(s.text or "" for s in segs)
+        _is_cf_only_page = (
+            any(m in _pg_txt for m in (
+                "التدفقات النقدية", "التدفقات النقديه",
+                "أنشطة التشغيل", "انشطة التشغيل", "انشطه التشغيل",
+                "أنشطة الاستثمار", "انشطة الاستثمار",
+            ))
+            and not any(m in _pg_txt for m in (
+                "المركز المالي", "إجمالي الأصول", "اجمالي الاصول",
+                "الأصول المتداولة", "الاصول المتداولة",
+            ))
+        )
+        if _is_cf_only_page:
+            _bs_stocks = {
+                "inventory", "accounts_receivable", "accounts_payable",
+                "fixed_assets", "cash", "current_assets", "non_current_assets",
+                "total_assets", "current_liabilities", "non_current_liabilities",
+                "total_liabilities", "equity", "retained_earnings", "capital",
+                "long_term_debt", "short_term_credit_facilities",
+                "current_portion_lt_debt", "current_lease_liabilities",
+                "non_current_lease_liabilities", "total_debt",
+            }
+            page_fields = [f for f in page_fields if f not in _bs_stocks]
+            if not page_fields:
+                continue
         page_has_arabic_indic = any(
             re.search(r"[\u0660-\u0669\u06f0-\u06f9]", s.text or "") for s in segs
         )

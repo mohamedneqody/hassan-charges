@@ -555,6 +555,38 @@ def verify_financial_statements(
             ["gross_profit", "revenue", "cost_of_revenue"], tolerance,
         ))
 
+        # A5b: Operating Income Bridge Sanity (GP - |OpEx| ≈ Operating Income within other-op-income band)
+        # Catches single-digit OCR slips in COGS (e.g. 6.38B → 1.38B) that fabricate a bogus
+        # 5.45B gross profit completely incompatible with operating_income (-26M) and OpEx (533M)!
+        op_inc = _val(values, "operating_income", y)
+        sell_v = _val(values, "selling_expenses", y)
+        adm_v = _val(values, "admin_expenses", y)
+        oth_op_v = _val(values, "other_operating_expenses", y)
+        opex_v = _val(values, "operating_expenses", y)
+        if opex_v is None and sell_v is not None and adm_v is not None:
+            opex_v = abs(sell_v) + abs(adm_v) + abs(oth_op_v or 0.0)
+        if gp is not None and op_inc is not None and opex_v is not None and rev:
+            implied_op = gp - abs(opex_v)
+            # Allow up to max(10% of revenue, 30% of |GP|) for Other Operating Income/Expenses
+            op_tol = max(0.10 * abs(rev), 0.30 * abs(gp), 100.0)
+            op_res = implied_op - op_inc
+            ok_op = abs(op_res) <= op_tol
+            year_axioms.append(AxiomCheck(
+                axiom_id="A5b_OP_BRIDGE", year=y,
+                name_ar="اتساق مجمل الربح مع ربح النشاط", name_en="Gross-to-Operating Profit Bridge",
+                formula="Gross Profit − |Operating Expenses| ≈ Operating Income",
+                lhs=round(implied_op, 2), rhs=round(op_inc, 2),
+                residual=round(op_res, 2), tolerance=round(op_tol, 2),
+                status="PROVEN" if ok_op else "VIOLATED",
+                fields=["gross_profit", "cost_of_revenue", "revenue", "operating_income"],
+                detail_ar=(
+                    "مجمل الربح متسق مع المصروفات التشغيلية وصافي ربح النشاط."
+                    if ok_op else
+                    f"تباين هائل بين (مجمل الربح − مصروفات التشغيل = {implied_op:,.0f}) "
+                    f"وربح النشاط ({op_inc:,.0f}) بفارق {op_res:+,.0f} — يُرجّح خطأ رقم في تكلفة المبيعات أو مجمل الربح!"
+                ),
+            ))
+
         # A6: Net Income Tax Bridge (Pretax + Tax = Net Income, sign-aware)
         if pretax is not None and tax is not None and ni is not None:
             # Handle both negative-printed tax (-179M) and magnitude-printed tax (+179M)

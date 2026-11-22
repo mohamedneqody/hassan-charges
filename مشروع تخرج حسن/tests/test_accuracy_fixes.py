@@ -332,6 +332,25 @@ def test_tiny_echoed_note_cannot_outvote_balance_sheet_receivables():
     assert data.get("accounts_receivable", 2023) == pytest.approx(54_893_089.0, abs=1.0)
 
 
+def test_balance_sheet_payables_protected_from_note_or_cf_majority_vote():
+    """2021 Ezz Steel: two echoed note/CF values (958M) must never replace BS AP (2.39B)."""
+    data = merge_parsed(
+        [
+            {2020: {"accounts_payable": 2_387_975_196.0}},
+            {2020: {"accounts_payable": 958_616_702.0}},
+            {2020: {"accounts_payable": 958_616_702.0}},
+        ],
+        [],
+        captures_per_part=[
+            [{"field": "accounts_payable", "year": 2020, "value": 2_387_975_196.0, "label_text": "موردون وأوراق دفع"}],
+            [{"field": "accounts_payable", "year": 2020, "value": 958_616_702.0, "label_text": "التغير في الموردين"}],
+            [{"field": "accounts_payable", "year": 2020, "value": 958_616_702.0, "label_text": "إيضاح الموردين"}],
+        ],
+    )
+    reconcile(data)
+    assert data.get("accounts_payable", 2020) == pytest.approx(2_387_975_196.0, abs=1.0)
+
+
 def test_debt_mapping_partial_inputs_still_derive_borrowings():
     """وثيقة بلا بند أقساط: الإجمالي = تسهيلات + قروض غير متداولة (بلا فشل)"""
     data = merge_parsed([{2022: {"short_term_debt": 1_000.0, "long_term_debt": 2_000.0}}], [])

@@ -657,7 +657,7 @@ def _verify_core_fields(
     if progress_cb:
         progress_cb(f"🔎 جارٍ التحقق المركزي من إجماليات الميزانية (الصفحات {pages_needed})…")
 
-    third_budget = {"left": 2}  # third-opinion calls per run
+    third_budget = {"left": 4}  # third-opinion calls per run (covers BS, IS, OCI/Equity, CF)
     time_left = deadline - _time.time() if deadline is not None else float("inf")
 
     for page_number in pages_needed:
@@ -801,6 +801,25 @@ def _verify_core_fields(
                         f"✓ {why} kept the sweep capture for {field} {year}."
                     )
             else:
+                # Accounting-identity veto on verify override: if `captured`
+                # ALREADY satisfies the printed Income Statement tax identity
+                # (pretax + tax == net_income) while `winner` breaks it, never
+                # let a noisy verify read (e.g. ٦→٩) corrupt the exact capture!
+                if field == "net_income":
+                    _pt = data.get("pretax_income", year)
+                    _tx = data.get("income_tax_expense", year)
+                    if _pt is not None and _tx is not None:
+                        _imp_a = _pt + _tx
+                        _imp_b = _pt - abs(_tx)
+                        _cap_err = min(abs(captured - _imp_a), abs(captured - _imp_b))
+                        _win_err = min(abs(winner - _imp_a), abs(winner - _imp_b))
+                        if _cap_err <= max(10.0, 1e-4 * abs(captured)) and _win_err > max(100.0, 1e-3 * abs(captured)):
+                            if notes is not None:
+                                notes.append(
+                                    f"✓ Accounting identity preserved sweep net_income {year} "
+                                    f"({captured:,.0f}) over disagreeing verify read ({winner:,.0f})."
+                                )
+                            continue
                 for part in parts:
                     if year in part and field in part[year]:
                         part[year][field] = winner  # corrected at the source

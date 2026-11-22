@@ -765,14 +765,16 @@ def _majority_vote(data: FinancialData) -> None:
                 max_cand = max((abs(v) for v in vals), default=0.0)
                 if max_cand > 0 and abs(best_val) < 0.95 * max_cand:
                     continue
-            # Balance-sheet detail guard: tiny echoed note/impairment lines
-            # (e.g. 80,100 or 718,191 echoed across notes) must NEVER outvote
-            # the primary balance-sheet capture when >10x smaller.
+            # Balance-sheet detail guard: Balance-Sheet-only detail stocks
+            # (AP, AR, Inventory, Fixed Assets, Cash) appear ONCE on the primary
+            # Balance Sheet (guaranteed first by ascending page order + verified
+            # by _verify_core_fields). Later occurrences are note sub-tables or
+            # Cash Flow working-capital deltas (Δ) — echoed note/CF values must
+            # NEVER replace the primary Balance Sheet capture via majority vote.
             if (
-                field in ("accounts_receivable", "accounts_payable", "inventory", "fixed_assets")
+                field in ("accounts_receivable", "accounts_payable", "inventory", "fixed_assets", "cash")
                 and current is not None
-                and abs(current) > 0
-                and abs(best_val) < 0.10 * abs(current)
+                and not _digit_close(current, best_val)
             ):
                 continue
             # Record EVERY majority outcome that has a dissenting capture —

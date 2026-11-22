@@ -82,6 +82,21 @@ def test_z3_catches_cash_flow_subtotal_hijack_via_cf_bridge():
     assert any(d.suspect_field == "operating_cash_flow" for d in cert.fault_diagnoses)
 
 
+def test_z3_catches_cogs_ocr_slip_via_gross_to_operating_bridge():
+    """If COGS 6.38B is misread as 1.38B (fabricating 5.45B GP vs -26M EBIT), A5b_OP_BRIDGE catches it."""
+    vals = {
+        "revenue": {2020: 6_834_721_928.0},
+        "cost_of_revenue": {2020: -1_381_470_486.0},
+        "gross_profit": {2020: 5_453_251_442.0},
+        "operating_expenses": {2020: 533_658_686.0},
+        "operating_income": {2020: -26_107_427.0},
+    }
+    cert = verify_financial_statements(vals, years=[2020], include_policy_theorems=False)
+    op_ax = next(a for a in cert.axioms if a.axiom_id == "A5b_OP_BRIDGE")
+    assert op_ax.status == "VIOLATED"
+    assert cert.failed_axioms >= 1
+
+
 def test_z3_feedback_repair_loop_accepts_verified_repair_and_never_leaks_target():
     vals = _ezz_2022_clean()
     vals["current_assets"][2022] = 3_248_947_378.0  # -1B OCR slip

@@ -521,6 +521,174 @@ def sec_overview(vm: dict, results: dict) -> None:
             + ((sep + "…") if len(raw_fields) > 8 else "")
         )
 
+    _render_formal_certificate(vm, is_ar)
+
+
+def _render_formal_certificate(vm: dict, is_ar: bool) -> None:
+    """Render the Z3 SMT Formal Verification Certificate & Policy Proofs card."""
+    import html as _html
+
+    cert = vm.get("formal_certificate")
+    if not isinstance(cert, dict):
+        return
+    _h = _html.escape
+
+    status = cert.get("status") or "PARTIALLY_PROVEN"
+    cert_id = cert.get("certificate_id") or "—"
+    engine = cert.get("solver_engine") or "Z3 SMT Solver"
+    passed = int(cert.get("passed_axioms") or 0)
+    failed = int(cert.get("failed_axioms") or 0)
+    checked = int(cert.get("total_checked") or 0)
+    summary_ar = cert.get("summary_ar") or ""
+    repairs = cert.get("repair_history") or []
+    accepted_repairs = [r for r in repairs if r.get("accepted")]
+
+    if status == "PROVEN_CONSISTENT":
+        badge_bg, badge_fg, badge_bd = "#ECFDF5", "#047857", "#A7F3D0"
+        badge_txt = "مُثبت رياضياً (Z3)" if is_ar else "Formally Proven (Z3)"
+        border_accent = "#10B981"
+    elif status == "VIOLATIONS_DETECTED":
+        badge_bg, badge_fg, badge_bd = "#FEF2F2", "#B91C1C", "#FECACA"
+        badge_txt = f"{failed} خرق محاسبي مكتشف" if is_ar else f"{failed} Violation(s) Detected"
+        border_accent = "#EF4444"
+    else:
+        badge_bg, badge_fg, badge_bd = "#FFFBEB", "#B45309", "#FDE68A"
+        badge_txt = "تحقق جزئي" if is_ar else "Partially Proven"
+        border_accent = "#F59E0B"
+
+    title = (
+        "شهادة التحقق الرياضي الرسمي (Z3 SMT Certificate)"
+        if is_ar
+        else "Formal Verification Certificate (Z3 SMT)"
+    )
+    repair_chip = ""
+    if accepted_repairs:
+        r_lbl = (
+            f"🛠️ {len(accepted_repairs)} تصحيح معتمد بحلقة Z3"
+            if is_ar
+            else f"🛠️ {len(accepted_repairs)} Z3-verified repair(s)"
+        )
+        repair_chip = (
+            f'<span style="background:#EEF2FF;color:#4338CA;border:1px solid #C7D2FE;'
+            f'border-radius:999px;padding:3px 10px;font-size:12px;font-weight:700;">'
+            f'{_h(r_lbl)}</span>'
+        )
+
+    st.markdown(
+        f'<div class="fs-card" style="border-right:4px solid {border_accent};margin-top:14px;">'
+        f'<div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;">'
+        f'<div style="font-size:16px;font-weight:800;color:#0F172A;">🛡️ {_h(title)}</div>'
+        f'<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">'
+        f'<span style="background:{badge_bg};color:{badge_fg};border:1px solid {badge_bd};'
+        f'border-radius:999px;padding:3px 11px;font-size:12px;font-weight:700;">{_h(badge_txt)}</span>'
+        f'{repair_chip}'
+        f'<span style="background:#F8FAFC;color:#475569;border:1px solid #E2E8F0;'
+        f'border-radius:999px;padding:3px 10px;font-size:11.5px;font-family:monospace;">'
+        f'{_h(cert_id)} · {passed}/{checked}</span>'
+        f'</div></div>'
+        f'<div style="font-size:13.5px;color:#334155;line-height:1.65;">{_h(summary_ar)}</div>'
+        f'<div style="font-size:11.5px;color:#64748B;margin-top:6px;">'
+        f'المحرك الرسمي: <code>{_h(engine)}</code> — نمط «محلّل ذكاء اصطناعي غير موثوق + مُدقّق شهادة حتمي».'
+        f'</div></div>',
+        unsafe_allow_html=True,
+    )
+
+    axioms = [a for a in (cert.get("axioms") or []) if a.get("status") != "SKIPPED"]
+    if axioms:
+        exp_lbl = (
+            f"عرض تفاصيل القيود المحاسبية المفحوصة ({passed}/{checked} مُثبت)"
+            if is_ar
+            else f"View checked accounting axioms ({passed}/{checked} proven)"
+        )
+        with st.expander(exp_lbl, expanded=(failed > 0)):
+            rows_html = []
+            for ax in axioms:
+                ok = ax.get("status") == "PROVEN"
+                st_badge = (
+                    '<span style="color:#047857;font-weight:700;">✅ مُثبت</span>'
+                    if ok
+                    else '<span style="color:#B91C1C;font-weight:700;">❌ خرق</span>'
+                )
+                lhs_s = f"{ax['lhs']:,.0f}" if isinstance(ax.get("lhs"), (int, float)) else "—"
+                rhs_s = f"{ax['rhs']:,.0f}" if isinstance(ax.get("rhs"), (int, float)) else "—"
+                res_s = f"{ax['residual']:+,.0f}" if isinstance(ax.get("residual"), (int, float)) else "—"
+                rows_html.append(
+                    "<tr>"
+                    f"<td>{_h(str(ax.get('year', '')))}</td>"
+                    f"<td><strong>{_h(ax.get('name_ar') if is_ar else ax.get('name_en', ''))}</strong>"
+                    f"<div style='font-size:11px;color:#64748B;direction:ltr;text-align:right;'>{_h(ax.get('formula', ''))}</div></td>"
+                    f"<td class='num'>{lhs_s}</td>"
+                    f"<td class='num'>{rhs_s}</td>"
+                    f"<td class='num'>{res_s}</td>"
+                    f"<td>{st_badge}</td>"
+                    "</tr>"
+                )
+            st.markdown(
+                '<div class="fin-table-wrap"><table class="fin-table">'
+                '<thead><tr>'
+                f'<th>{"السنة" if is_ar else "Year"}</th>'
+                f'<th>{"القيد المحاسبي" if is_ar else "Axiom"}</th>'
+                f'<th>{"الطرف الأيمن" if is_ar else "LHS"}</th>'
+                f'<th>{"الطرف الأيسر" if is_ar else "RHS"}</th>'
+                f'<th>{"الفارق" if is_ar else "Residual"}</th>'
+                f'<th>{"الحكم" if is_ar else "Verdict"}</th>'
+                '</tr></thead><tbody>'
+                + "".join(rows_html)
+                + '</tbody></table></div>',
+                unsafe_allow_html=True,
+            )
+
+            diags = cert.get("fault_diagnoses") or []
+            if diags:
+                st.markdown("**🔍 تشخيص Z3 لأصغر مجموعة تعارض (Unsat Core):**")
+                for dg in diags[:5]:
+                    st.warning(dg.get("reason_ar") or "")
+
+            if repairs:
+                st.markdown("**🔁 سجل حلقة التصحيح الحتمية (Z3 → AI Feedback Loop):**")
+                for rp in repairs:
+                    if rp.get("accepted"):
+                        st.success(f"جولة {rp.get('round_no')} (ص{rp.get('page_number')}): {rp.get('reason_ar')}")
+                    else:
+                        st.info(f"جولة {rp.get('round_no')} (ص{rp.get('page_number')}): {rp.get('reason_ar')}")
+
+    theorems = cert.get("policy_theorems") or []
+    if theorems:
+        proven_t = sum(1 for t in theorems if t.get("status") == "PROVEN")
+        th_lbl = (
+            f"براهين سياسات الحوكمة بـ Z3 ({proven_t}/{len(theorems)} نظرية مُثبتة رياضياً)"
+            if is_ar
+            else f"Z3 Formal Policy Proofs ({proven_t}/{len(theorems)} proven)"
+        )
+        with st.expander(th_lbl, expanded=False):
+            th_rows = []
+            for th in theorems:
+                ok_t = th.get("status") == "PROVEN"
+                s_tag = (
+                    '<span style="color:#047857;font-weight:700;">✅ PROVEN (unsat)</span>'
+                    if ok_t
+                    else '<span style="color:#B91C1C;font-weight:700;">❌ FAILED</span>'
+                )
+                th_rows.append(
+                    "<tr>"
+                    f"<td><strong>{_h(th.get('name_ar') if is_ar else th.get('name_en', ''))}</strong>"
+                    f"<div style='font-size:11.5px;color:#475569;margin-top:2px;'>{_h(th.get('statement_ar', ''))}</div></td>"
+                    f"<td style='direction:ltr;font-family:monospace;font-size:11.5px;'>{_h(th.get('smt_property', ''))}</td>"
+                    f"<td>{s_tag}</td>"
+                    "</tr>"
+                )
+            st.markdown(
+                '<div class="fin-table-wrap"><table class="fin-table">'
+                '<thead><tr>'
+                f'<th>{"النظرية / قاعدة الحوكمة" if is_ar else "Policy Theorem"}</th>'
+                f'<th>{"الصيغة المنطقية" if is_ar else "Formal Property"}</th>'
+                f'<th>{"حكم Z3" if is_ar else "Z3 Verdict"}</th>'
+                '</tr></thead><tbody>'
+                + "".join(th_rows)
+                + '</tbody></table></div>',
+                unsafe_allow_html=True,
+            )
+
 
 def sec_statements(vm: dict, raw: bytes | None) -> None:
     lang = _lang()

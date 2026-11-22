@@ -289,6 +289,49 @@ def test_operating_expenses_derived_gross_not_netted():
     assert m.opex_pct == pytest.approx(2.742, abs=0.01)
 
 
+def test_accounts_payable_and_long_term_debt_vetoes():
+    """2023 audit regressions: BS AP matches without ال, ECL/advances vetoed, CF loan repayments vetoed."""
+    assert match_field("موردون وأوراق دفع") == "accounts_payable"
+    assert match_field("إجمالي موردون و أوراق دفع") == "accounts_payable"
+    assert match_field("موردون - دفعات مقدمة") is None
+    assert match_field("الخسائر الإئتمانية المتوقعة من الموردين - دفعات مقدمة") is None
+    assert match_field("(مدفوعات) لسداد قروض طويلة الأجل") is None
+    assert match_field("الاضمحلال في قيمة المدينون") is None
+
+
+def test_total_debt_computed_when_long_term_debt_is_zero_or_none():
+    """2023 Ezz Steel: long_term_debt is '--' (None) while credit facilities + current portion exist."""
+    data = merge_parsed([{2023: {
+        "short_term_credit_facilities": 6_204_060_910.0,
+        "bank_overdraft": 4_811_795.0,
+        "current_portion_lt_debt": 363_974_291.0,
+        "non_current_lease_liabilities": 121_960_204.0,
+        "current_lease_liabilities": 90_144_503.0,
+    }}], [])
+    reconcile(data)
+    assert data.get("borrowings_excl_leases", 2023) == pytest.approx(6_572_846_996.0, abs=1.0)
+    assert data.get("total_debt", 2023) == pytest.approx(6_784_951_703.0, abs=1.0)
+
+
+def test_tiny_echoed_note_cannot_outvote_balance_sheet_receivables():
+    """Two echoed 80,100 note lines must never replace 54.89M balance-sheet receivables."""
+    data = merge_parsed(
+        [
+            {2023: {"accounts_receivable": 54_893_089.0}},
+            {2023: {"accounts_receivable": 80_100.0}},
+            {2023: {"accounts_receivable": 80_100.0}},
+        ],
+        [],
+        captures_per_part=[
+            [{"field": "accounts_receivable", "year": 2023, "value": 54_893_089.0, "label_text": "عملاء وأوراق قبض"}],
+            [{"field": "accounts_receivable", "year": 2023, "value": 80_100.0, "label_text": "إيضاح أ"}],
+            [{"field": "accounts_receivable", "year": 2023, "value": 80_100.0, "label_text": "إيضاح ب"}],
+        ],
+    )
+    reconcile(data)
+    assert data.get("accounts_receivable", 2023) == pytest.approx(54_893_089.0, abs=1.0)
+
+
 def test_debt_mapping_partial_inputs_still_derive_borrowings():
     """وثيقة بلا بند أقساط: الإجمالي = تسهيلات + قروض غير متداولة (بلا فشل)"""
     data = merge_parsed([{2022: {"short_term_debt": 1_000.0, "long_term_debt": 2_000.0}}], [])

@@ -120,16 +120,26 @@ _FIELD_NEGATIVE_PATTERNS: dict[str, tuple[str, ...]] = {
     "current_liabilities": ("غير المتداوله",),
     # «أقساط قروض طويلة الأجل مستحقة السداد خلال عام» carries the words
     # «قروض طويلة الأجل» but is the CURRENT portion — a live run shipped it
-    # as long_term_debt.
-    "long_term_debt": ("اقساط", "أقساط", "مستحقه السداد خلال عام"),
+    # as long_term_debt. And «(مدفوعات) لسداد قروض طويلة الأجل» is a CF outflow.
+    "long_term_debt": (
+        "اقساط", "أقساط", "مستحقه السداد خلال عام",
+        "مدفوعات", "مدفوعات لسداد", "متحصلات", "المدفوع",
+        "repayment", "proceeds", "paid",
+    ),
     # «بنوك - سحب على المكشوف» is its own printed line and is NOT part of
     # the printed borrowings definition (facilities + installments + loans).
-    "short_term_debt": ("مكشوف", "تسهيلات ائتمانيه"),
+    "short_term_debt": ("مكشوف", "تسهيلات ائتمانيه", "مدفوعات", "متحصلات"),
     # إصلاح حديد عز: الحقلان الجديدان — كل بند مطبوع لحاله، ولا يجوز أن
     # يمتصه حقل آخر (short_term_debt توقف عن امتصاص التسهيلات والمكشوف)
     "short_term_credit_facilities": ("مكشوف", "اقساط", "أقساط",
-                                      "قروض طويله"),
+                                      "قروض طويله", "مدفوعات", "متحصلات"),
     "bank_overdraft": ("تسهيلات", "اقساط", "أقساط", "قروض"),
+    "current_portion_lt_debt": ("مدفوعات", "متحصلات"),
+    "current_lease_liabilities": ("مدفوعات", "المدفوع"),
+    "non_current_lease_liabilities": (
+        "مستحقه السداد خلال عام", "المستحقه السداد خلال عام",
+        "مدفوعات", "المدفوع",
+    ),
     # «ضريبة الدخل المؤجلة» is not the period's income-tax expense.
     # (normalize_label unifies ؤ→و: المؤجلة → الموجله)
     # AbuQir root-cause fix (2026-11-05): the income-tax NOTE carries
@@ -177,10 +187,22 @@ _FIELD_NEGATIVE_PATTERNS: dict[str, tuple[str, ...]] = {
     # وإيضاح العملاء يطبع «الخسائر الائتمانية المتوقعة من العملاء» —
     # الـsubstring «العملاء» أسند مخصص ECL (33,792,792) للعميلين معًا.
     # المخصص ليس رصيد العملاء — فيتو حاسم. (normalize: ة→ه، ئ→ي)
-    "accounts_receivable": ("الائتمانيه", "خساير",
-                             # «عملاء دفعات مقدمة» التزام عملاء — ليس رصيدًا مدينًا
-                             # (normalize ة→ه: «مقدمة» ⇒ «مقدمه»)
-                             "دفعات مقدمه", "دفعات مقدمة"),
+    "accounts_receivable": (
+        "الائتمانيه", "خساير",
+        # «عملاء دفعات مقدمة» التزام عملاء — ليس رصيدًا مدينًا
+        "دفعات مقدمه", "دفعات مقدمة",
+        "اضمحلال", "الاضمحلال", "مخصص",
+        "اطراف ذات علاقه", "اطراف ذوي علاقه",
+    ),
+    # نفس الفيتو للموردين: «موردون - دفعات مقدمة» أصل متداول وليس التزاماً،
+    # و«الخسائر الائتمانية المتوقعة من الموردين» مخصص (718,191 أسقط 2.94B في 2023!)
+    "accounts_payable": (
+        "الائتمانيه", "خساير",
+        "دفعات مقدمه", "دفعات مقدمة",
+        "اضمحلال", "الاضمحلال", "مخصص",
+        "اطراف ذات علاقه", "اطراف ذوي علاقه",
+        "مدفوعات", "متحصلات",
+    ),
     # مجمع الإهلاك / رصيد أول وآخر المدة أرصدة ميزانية — ليست مصروف إهلاك الفترة
     "depreciation_amortization": (
         "مجمع", "accumulated", "رصيد اول", "رصيد اخر",
@@ -743,6 +765,16 @@ def _majority_vote(data: FinancialData) -> None:
                 max_cand = max((abs(v) for v in vals), default=0.0)
                 if max_cand > 0 and abs(best_val) < 0.95 * max_cand:
                     continue
+            # Balance-sheet detail guard: tiny echoed note/impairment lines
+            # (e.g. 80,100 or 718,191 echoed across notes) must NEVER outvote
+            # the primary balance-sheet capture when >10x smaller.
+            if (
+                field in ("accounts_receivable", "accounts_payable", "inventory", "fixed_assets")
+                and current is not None
+                and abs(current) > 0
+                and abs(best_val) < 0.10 * abs(current)
+            ):
+                continue
             # Record EVERY majority outcome that has a dissenting capture —
             # even when the winner equals the current value. A live run once
             # had two digit-close WRONG reads outvote the correct one; the
@@ -885,14 +917,41 @@ def reconcile(data: FinancialData) -> None:
                     best_assignment[c] is not None for c, _ in comps
                 ):
                     derived = components
-                    data.notes.append(
-                        f"Replaced captured '{target}' in {year} ({t:,.0f}) with the "
-                        f"identity value ({derived:,.0f} = "
-                        + " + ".join(
-                            (f"|{c}|" if s == 1 else f"-|{c}|") for c, s in comps
-                        ) + ")."
-                    )
-                    best_assignment[target] = derived
+                    # Guard for gross_profit = revenue - |cost_of_revenue|:
+                    # If COGS had a 1-digit OCR slip (e.g. 6.38B read as 1.38B)
+                    # while printed gross_profit (453M) is consistent with
+                    # operating_income (-26M), replacing gross_profit with 5.45B
+                    # destroys gross margin & Beneish GMI. Heal COGS instead!
+                    heal_cogs = False
+                    if target == "gross_profit":
+                        op_inc = data.get("operating_income", year)
+                        rev_v = best_assignment.get("revenue")
+                        if (
+                            op_inc is not None
+                            and rev_v
+                            and abs(derived - t) > 0.25 * abs(rev_v)
+                            and abs(t - op_inc) < 0.25 * abs(derived - op_inc)
+                        ):
+                            heal_cogs = True
+                    if heal_cogs:
+                        implied_cogs = -(abs(best_assignment["revenue"]) - t)
+                        old_cogs = best_assignment["cost_of_revenue"]
+                        data.notes.append(
+                            f"Replaced garbled 'cost_of_revenue' in {year} ({old_cogs:,.0f}) "
+                            f"with identity value ({implied_cogs:,.0f} = -(Revenue - Gross Profit)) "
+                            f"because printed gross_profit ({t:,.0f}) aligns with operating_income."
+                        )
+                        best_assignment["cost_of_revenue"] = implied_cogs
+                        best_assignment[target] = t
+                    else:
+                        data.notes.append(
+                            f"Replaced captured '{target}' in {year} ({t:,.0f}) with the "
+                            f"identity value ({derived:,.0f} = "
+                            + " + ".join(
+                                (f"|{c}|" if s == 1 else f"-|{c}|") for c, s in comps
+                            ) + ")."
+                        )
+                        best_assignment[target] = derived
                 else:
                     # Balance-sheet totals: never force-derive — flag instead.
                     first_captured = cand_lists[target][0][0]
@@ -1083,14 +1142,14 @@ def reconcile(data: FinancialData) -> None:
         st_cf = data.get("short_term_credit_facilities", year)
         ovd = data.get("bank_overdraft", year)
         has_short = (st_d is not None or st_cf is not None or ovd is not None)
-        if has_short and lt_d is not None:
+        if has_short and (lt_d is not None or cp is not None):
             # A directly captured total-debt row (e.g. «إجمالي القروض والتسهيلات»)
             # that disagrees with the component sum is a CONFLICT — logged, and
             # the COMPONENT SUM wins per the mandate (items beat opaque totals),
             # with the direct row preserved in the decision log.
             borrowings = (
                 abs(st_d or 0.0) + abs(st_cf or 0.0) + abs(ovd or 0.0)
-                + abs(cp or 0.0) + abs(lt_d)
+                + abs(cp or 0.0) + abs(lt_d or 0.0)
             )
             direct_total = data.get("direct_total_debt", year)
             if direct_total is not None and abs(direct_total - borrowings) > max(1.0, 0.005 * direct_total):

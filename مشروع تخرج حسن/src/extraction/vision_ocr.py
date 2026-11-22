@@ -521,10 +521,10 @@ exactly as printed, for EACH year column shown:
 - المبيعات / الإيرادات (revenue)
 - صافي أرباح العام (net income)
 - صافي أرباح العام قبل ضريبة الدخل (pretax income) — يُطبع أيضًا أول قائمة التدفقات
-- المخزون (inventory)
-- العملاء وأوراق القبض / الذمم المدينة (accounts receivable)
-- الموردون / الذمم الدائنة (accounts payable)
-- النقدية وما في حكمها (cash)
+- المخزون — قائمة المركز المالي فقط، لا تقرأ صفوف التغير في التدفقات (inventory)
+- العملاء وأوراق القبض / الذمم المدينة — قائمة المركز المالي فقط، لا تقرأ صفوف التغير في التدفقات (accounts receivable)
+- الموردون وأوراق الدفع / الذمم الدائنة — قائمة المركز المالي فقط، لا تقرأ صفوف التغير في التدفقات (accounts payable)
+- النقدية وما في حكمها — قائمة المركز المالي فقط (cash)
 - إهلاك أصول ثابتة — إجمالي الإهلاك في قائمة التدفقات النقدية فقط (depreciation_amortization)
 - مدفوعات لشراء أصول ثابتة ومشروعات تحت التنفيذ — في قائمة التدفقات النقدية فقط (capex)
 
@@ -688,9 +688,21 @@ def _verify_core_fields(
         # corroborating the capture) filters here too.
         disputes: dict[tuple[str, int], float] = {}
         verify_fields = set(core) | {"depreciation_amortization", "capex"}
+        _bs_only = {
+            "inventory", "accounts_receivable", "accounts_payable", "cash",
+            "total_assets", "current_assets", "total_liabilities",
+            "current_liabilities", "equity",
+        }
+        _cf_only_pages = (
+            {p for f in ("operating_cash_flow", "investing_cash_flow", "financing_cash_flow")
+             for p in field_sources.get(f, [])}
+            - {p for f in ("total_assets", "equity") for p in field_sources.get(f, [])}
+        )
         for field, by_year in verified.items():
             if field not in verify_fields:
                 continue
+            if page_number in _cf_only_pages and field in _bs_only:
+                continue  # Cash-flow working-capital changes (Δ) are never BS balances
             for year, value in by_year.items():
                 captured = data.get(field, year)
                 if captured is None:
@@ -698,8 +710,8 @@ def _verify_core_fields(
                 if field == "capex":
                     # Preserve outflow sign convention (align sign with captured)
                     value = -abs(value) if captured < 0 else abs(value)
-                elif field != "net_income":
-                    value = abs(value)  # magnitudes; NI may be a real loss (negative)
+                elif field not in ("net_income", "pretax_income"):
+                    value = abs(value)  # magnitudes; NI & pretax may be real losses (negative)
                 # الحاجز الهيكلي (عز 2023): الأعمدة المشوهة تجعل قراءة
                 # التحقق ترجع موضع العمود (2/1) بدل المبلغ — قيمة عدد
                 # صحيح 0-3 ليست مبلغ قائمة: لا شاهد ولا نزاع ولا رأي ثالث
@@ -762,7 +774,7 @@ def _verify_core_fields(
             if third is not None:
                 if field == "capex":
                     third = -abs(third) if captured < 0 else abs(third)
-                elif field != "net_income":
+                elif field not in ("net_income", "pretax_income"):
                     third = abs(third)
             # نفس الحاجز: موضع العمود من الرأي الثالث ليس شاهدًا
             if third is not None and float(third).is_integer() and 0 <= third <= 3:
@@ -1389,7 +1401,12 @@ def extract_via_vision(
                         failure_reasons.append(err)
                     continue
                 _before_r = len(parts)
-                for page in _parse_vision_json(raw_text):
+                try:
+                    retry_pages = _parse_vision_json(raw_text)
+                except Exception as exc:
+                    notes.append(f"Vision retry page {pn} returned non-JSON ({exc}) — skipped.")
+                    retry_pages = []
+                for page in retry_pages:
                     if page.get("rows") and isinstance(page["rows"][0], dict)                             and retry_semantic:
                         years0 = page["years"] or (doc_years_holder.get("years") or [])
                         if len(years0) >= 2:
@@ -1615,6 +1632,23 @@ def extract_via_vision(
     for (field_name, year), level in confidence.items():
         data.bump_confidence(field_name, year, level)
     reconcile(data)
+    # ── Neuro-Symbolic Deterministic Guardrail (Z3 SMT → AI Repair Feedback Loop) ──
+    # When any formal EAS/IFRS accounting axiom fails after reconciliation,
+    # Z3 extracts the minimal Unsat Core and routes ONLY the violated page/fields
+    # back to Gemini Vision at 2400px. A proposed repair is ACCEPTED ONLY IF
+    # re-running the formal certificate checker strictly reduces violations.
+    if not fast_mode:
+        _z3_feedback_repair_loop(
+            data=data,
+            field_sources=field_sources,
+            pages_png=pages_png,
+            selected=selected,
+            pool=pool,
+            caller=caller,
+            notes=notes,
+            progress_cb=progress_cb,
+            deadline=deadline,
+        )
     if __import__("os").environ.get("INDRA_DEBUG_PARTS"):
         import json as _json
         from pathlib import Path as _Path
@@ -2152,18 +2186,51 @@ def _absorb_semantic_page(
     الموديل يصنف من المفردات المغلقة والـregex يعمل مُصححًا متقاطعًا:
     الاتفاق يقوى، والاختلاف يُفصح عنه (مصنّفان مستقلان)."""
     from src.config import FIELD_ALIASES
-    from src.extraction.normalizer import match_field
+    from src.extraction.normalizer import (
+        _FIELD_NEGATIVE_PATTERNS,
+        match_field,
+        normalize_label,
+    )
 
     page_parts: dict[int, dict[str, float]] = {}
     page_caps: list[dict] = []
+    # Detect Cash-Flow Statement page numbers inside this semantic response so
+    # working-capital change rows («المخزون / العملاء / الموردون» under «التغير في:»)
+    # on a Cash Flow page NEVER contaminate Balance Sheet ending balances.
+    _BS_STOCK_FIELDS = {
+        "inventory", "accounts_receivable", "accounts_payable", "cash",
+        "total_assets", "current_assets", "total_liabilities",
+        "current_liabilities", "equity", "fixed_assets",
+        "long_term_debt", "short_term_debt", "short_term_credit_facilities",
+        "current_portion_lt_debt", "non_current_lease_liabilities",
+        "current_lease_liabilities",
+    }
+    _CF_MARKERS = ("operating_cash_flow", "investing_cash_flow", "financing_cash_flow", "capex")
+    cf_page_nos: set = set()
+    bs_page_nos: set = set()
+    for _r in page.get("rows") or []:
+        if not isinstance(_r, dict):
+            continue
+        _pno = _r.get("page_no")
+        _rf = _r.get("field")
+        _rl = normalize_label(str(_r.get("label") or ""))
+        if _rf in _CF_MARKERS or "انشطه التشغيل" in _rl or "الانشطه التشغيليه" in _rl or "التدفقات النقديه" in _rl:
+            cf_page_nos.add(_pno)
+        if _rf in ("total_assets", "equity"):
+            bs_page_nos.add(_pno)
+    pure_cf_page_nos = cf_page_nos - bs_page_nos
+
     for row in page.get("rows") or []:
         if not isinstance(row, dict):
             continue
         label = str(row.get("label") or "").strip()
+        norm_lbl = normalize_label(label)
         field = row.get("field")
         values = row.get("values") or {}
         if field not in FIELD_ALIASES:
             field = None
+        if field in _BS_STOCK_FIELDS and row.get("page_no") in pure_cf_page_nos:
+            continue  # Working-capital Δ or CF ending cash — never a BS balance
         # خريطة مفاتيح القيم → السنة: الموديل يرجع y1/y2 (مفاتيح القالب)
         # أو السنوات أو المواضع — وyears قد تأتي معكوسة [الحالية، السابقة]
         # فالمفتاح y1 يُحل موضعيًا على years وليس بالفرض
@@ -2180,9 +2247,28 @@ def _absorb_semantic_page(
             if yy is not None and isinstance(v, (int, float)):
                 row_vals[int(yy)] = float(v)
         if field is None:
-            # الصف بلا تصنيف — سجل الفجوات إن كان يحمل أرقامًا
-            if row_vals and gap_sink is not None:
-                gap_sink.append({"label": label[:120], "values": row_vals})
+            # Check newly added OpEx/AP canonical fields that the semantic prompt may leave null
+            fallback_field = match_field(label)
+            if fallback_field in ("admin_expenses", "other_operating_expenses"):
+                field = fallback_field
+            else:
+                # الصف بلا تصنيف — سجل الفجوات إن كان يحمل أرقامًا
+                if row_vals and gap_sink is not None:
+                    gap_sink.append({"label": label[:120], "values": row_vals})
+                continue
+        # Enforce hard accounting vetoes even on semantic model tags:
+        # 1) Pre-interest CF subtotal («النقدية الناتجة من أنشطة التشغيل» without «صافي»)
+        #    must NEVER hijack operating_cash_flow (2023 Ezz Steel: 1,794M vs 1,214M).
+        if (
+            field == "operating_cash_flow"
+            and "صافي" not in norm_lbl
+            and ("انشطه التشغيل" in norm_lbl or "الانشطه التشغيليه" in norm_lbl)
+        ):
+            continue
+        # 2) Negative-pattern vetoes (e.g. CF loan repayments never feed long_term_debt;
+        #    ECL/advances/related-party rows never feed AP/AR).
+        neg_pats = _FIELD_NEGATIVE_PATTERNS.get(field)
+        if neg_pats and any(normalize_label(p) in norm_lbl for p in neg_pats):
             continue
         # مُصحح متقاطع: الـregex ضد تصنيف الموديل
         regex_field = match_field(label)
@@ -2288,6 +2374,24 @@ def _absorb_batch(
                     "re-reads cover it.")
                 continue
             if parsed:
+                # Strip Balance-Sheet stock fields from pure Cash-Flow pages
+                # so working-capital change rows (Δ) never hijack BS balances.
+                _cf_k = {"operating_cash_flow", "investing_cash_flow", "financing_cash_flow", "capex"}
+                _bs_anchor = {"total_assets", "equity"}
+                _bs_strip = {
+                    "inventory", "accounts_receivable", "accounts_payable", "cash",
+                    "total_assets", "current_assets", "total_liabilities",
+                    "current_liabilities", "equity", "fixed_assets",
+                    "long_term_debt", "short_term_debt", "short_term_credit_facilities",
+                    "current_portion_lt_debt", "non_current_lease_liabilities",
+                    "current_lease_liabilities",
+                }
+                _all_f = {f for ym in parsed.values() for f in ym}
+                if (_all_f & _cf_k) and not (_all_f & _bs_anchor):
+                    for ym in parsed.values():
+                        for bf in list(ym.keys()):
+                            if bf in _bs_strip:
+                                ym.pop(bf, None)
                 parts.append(parsed)
                 ok_pages.update(chunk)
                 for year_fields in parsed.values():
@@ -2295,6 +2399,242 @@ def _absorb_batch(
                         field_sources.setdefault(field, []).extend(chunk)
         except Exception as exc:  # one bad page must not kill the run
             notes.append(f"Vision page skipped ({exc}).")
+
+
+Z3_REPAIR_PROMPT = """A formal accounting verifier (Z3 SMT Solver) detected an arithmetic
+inconsistency on this scanned ARABIC financial statement page for fiscal year {year}:
+{violation_summary}
+
+Re-read ONLY the following fields from the printed table on THIS page, digit-by-digit,
+for EACH year column shown (parentheses = negative; copy exact printed digits, NEVER guess or compute):
+{field_bullets}
+
+Return ONLY JSON:
+{{"years": [{years_hint}], "values": {{{json_template}}}}}
+Use null if a field is NOT printed on this page. Cross-check both attached image variants
+(standard cleanup + adaptive-threshold) carefully — watch Arabic digits ٦ vs ١ and ٠ vs ٥.
+"""
+
+
+def _z3_feedback_repair_loop(
+    data: FinancialData,
+    field_sources: dict[str, list[int]],
+    pages_png: list[bytes],
+    selected: list[int],
+    pool: APIKeyPool,
+    caller=None,
+    notes: list[str] | None = None,
+    progress_cb=None,
+    deadline: float | None = None,
+    max_rounds: int = 2,
+) -> list[dict]:
+    """Deterministic Guardrail -> AI Repair Feedback Loop (Certificate-Checked).
+
+    1. Runs the Z3 Formal Verifier on reconciled `data.values`.
+    2. When `failed_axioms > 0`, takes Z3's minimal Unsat-Core suspect fields
+       and asks Gemini Vision to independently re-read ONLY those fields at
+       2400px dual-variant resolution (NEVER telling Gemini the Z3 implied number).
+    3. Re-runs Z3 on a candidate copy: accepts the repair ONLY IF the certificate
+       strictly reduces violations (or slashes the violated residual >80% with zero
+       new violations). Otherwise rejects and records the attempt honestly.
+    """
+    import copy as _copy
+    import time as _time
+    from src.analysis.formal_verifier import (
+        _FIELD_AR,
+        RepairAttempt,
+        verify_financial_statements,
+    )
+
+    notes = notes if notes is not None else []
+    repairs: list[dict] = []
+    years = sorted(y for y in (data.years or []) if isinstance(y, int))
+    if not years or not selected:
+        data.formal_repairs = repairs
+        return repairs
+
+    cert = verify_financial_statements(data.values, years=years, include_policy_theorems=False)
+    if cert.failed_axioms == 0 or not cert.fault_diagnoses:
+        data.formal_repairs = repairs
+        return repairs
+
+    selected_set = set(selected)
+    tried_targets: set[tuple[int, str]] = set()
+
+    for round_no in range(1, max_rounds + 1):
+        if cert.failed_axioms == 0 or not cert.fault_diagnoses:
+            break
+        if deadline is not None and _time.time() > deadline - 15:
+            notes.append("Z3 feedback repair stopped — time budget nearly exhausted.")
+            break
+        if caller is None and not pool.has_usable_pairs():
+            break
+
+        # Pick first untried (year, statement_hint) diagnosis
+        diag = next(
+            (d for d in cert.fault_diagnoses if (d.year, d.statement_hint) not in tried_targets),
+            None,
+        )
+        if diag is None:
+            break
+        tried_targets.add((diag.year, diag.statement_hint))
+
+        # Collect suspect fields from this year's violated axioms on the same statement
+        violated_y = [ax for ax in cert.axioms if ax.year == diag.year and ax.status == "VIOLATED"]
+        target_fields: list[str] = []
+        for d in cert.fault_diagnoses:
+            if d.year == diag.year and d.statement_hint == diag.statement_hint:
+                if d.suspect_field not in target_fields:
+                    target_fields.append(d.suspect_field)
+        for ax in violated_y:
+            for f in ax.fields:
+                if f not in target_fields and len(target_fields) < 5:
+                    target_fields.append(f)
+        if not target_fields:
+            break
+
+        # Locate the primary statement page (prefer lowest page number <= 10)
+        cand_pages: list[int] = []
+        for f in target_fields:
+            for p in field_sources.get(f, []):
+                if p in selected_set and p not in cand_pages:
+                    cand_pages.append(p)
+        if not cand_pages:
+            # Fallback to canonical primary pages
+            fallback_p = {"balance_sheet": 5, "income_statement": 6, "cash_flow": 9}.get(diag.statement_hint, 5)
+            if fallback_p in selected_set:
+                cand_pages.append(fallback_p)
+        if not cand_pages:
+            continue
+        page_number = min(cand_pages)
+
+        violation_summary = "\n".join(
+            f"- {ax.name_en} ({ax.formula}): residual = {ax.residual:+,.0f}"
+            for ax in violated_y[:3]
+        )
+        field_bullets = "\n".join(
+            f"- {f} ({_FIELD_AR.get(f, f)})" for f in target_fields
+        )
+        years_hint = ", ".join(str(y) for y in years[-2:])
+        json_template = ", ".join(f'"{f}": [v1, v2]' for f in target_fields)
+        prompt = Z3_REPAIR_PROMPT.format(
+            year=diag.year,
+            violation_summary=violation_summary,
+            field_bullets=field_bullets,
+            years_hint=years_hint,
+            json_template=json_template,
+        )
+
+        if progress_cb:
+            progress_cb(
+                f"🛡️ حلقة التصحيح الرسمي (Z3 — جولة {round_no}): إعادة فحص صفحة {page_number}…"
+            )
+
+        try:
+            src_png = pages_png[selected.index(page_number)]
+            img = preprocess_image(src_png, max_side=2400)
+            img_bin = preprocess_image(src_png, max_side=2400, binarize=True)
+            raw_text = (
+                caller("k", "m", prompt, [img, img_bin])
+                if caller is not None
+                else _call_with_rotation(pool, prompt, [img, img_bin])
+            )
+            parsed_json = _loads_relaxed(raw_text)
+        except Exception as exc:
+            notes.append(f"Z3 repair round {round_no} (page {page_number}) skipped: {exc}")
+            continue
+
+        resp_years = [extract_year(y) for y in (parsed_json.get("years") or [])]
+        resp_years = [y for y in resp_years if y]
+        if not resp_years:
+            resp_years = list(years[-2:])
+        vals_block = parsed_json.get("values") or parsed_json.get("totals") or {}
+
+        proposed: dict[tuple[str, int], float] = {}
+        for f, arr in (vals_block.items() if isinstance(vals_block, dict) else []):
+            if f not in target_fields or not isinstance(arr, list):
+                continue
+            for idx, raw_v in enumerate(arr):
+                if idx >= len(resp_years):
+                    break
+                num = parse_number(raw_v)
+                if num is None:
+                    continue
+                if float(num).is_integer() and 0 <= num <= 3:
+                    continue
+                proposed[(f, resp_years[idx])] = float(num)
+
+        if not proposed:
+            continue
+
+        # Build candidate values and verify via Z3 Certificate Checker
+        cand_values = _copy.deepcopy(data.values)
+        prev_snap: dict[str, float | None] = {}
+        prop_snap: dict[str, float] = {}
+        for (f, y), new_v in proposed.items():
+            if y != diag.year:
+                continue
+            old_v = data.get(f, y)
+            if old_v is not None and abs(new_v - old_v) <= max(1.0, 1e-6 * abs(old_v)):
+                continue
+            prev_snap[f] = old_v
+            prop_snap[f] = new_v
+            cand_values.setdefault(f, {})[y] = new_v
+
+        if not prop_snap:
+            continue
+
+        new_cert = verify_financial_statements(cand_values, years=years, include_policy_theorems=False)
+        old_res_sum = sum(abs(ax.residual or 0.0) for ax in cert.axioms if ax.status == "VIOLATED")
+        new_res_sum = sum(abs(ax.residual or 0.0) for ax in new_cert.axioms if ax.status == "VIOLATED")
+
+        accepted = (
+            new_cert.failed_axioms < cert.failed_axioms
+            or (
+                new_cert.failed_axioms == cert.failed_axioms
+                and old_res_sum > 0
+                and new_res_sum < 0.2 * old_res_sum
+            )
+        )
+
+        broken_before = cert.failed_axioms
+        if accepted:
+            for f, new_v in prop_snap.items():
+                data.values.setdefault(f, {})[diag.year] = new_v
+            reconcile(data)
+            reason_ar = (
+                f"تم قبول التصحيح بشهادة Z3 (الانتهاكات انخفضت من {broken_before} "
+                f"إلى {new_cert.failed_axioms}): "
+                + "، ".join(
+                    f"{_FIELD_AR.get(f, f)} ({prev_snap.get(f):,.0f} → {v:,.0f})"
+                    if prev_snap.get(f) is not None else f"{_FIELD_AR.get(f, f)} (→ {v:,.0f})"
+                    for f, v in prop_snap.items()
+                )
+            )
+            notes.append(f"✓ حلقة التصحيح بـ Z3 (ص{page_number}): {reason_ar}")
+            cert = verify_financial_statements(data.values, years=years, include_policy_theorems=False)
+        else:
+            reason_ar = (
+                f"رفض المُدقّق Z3 القراءة المقترحة (الانتهاكات بقيت {new_cert.failed_axioms} "
+                f"مقابل {broken_before}) — تم الإبقاء على القراءة الأصلية بصدق."
+            )
+            notes.append(f"ℹ حلقة التصحيح بـ Z3 (ص{page_number}): {reason_ar}")
+
+        repairs.append(RepairAttempt(
+            round_no=round_no,
+            year=diag.year,
+            target_fields=list(prop_snap.keys()),
+            page_number=page_number,
+            broken_axioms_before=broken_before,
+            broken_axioms_after=new_cert.failed_axioms,
+            proposed_values=prop_snap,
+            previous_values=prev_snap,
+            accepted=accepted,
+            reason_ar=reason_ar,
+        ).to_dict())
+
+    data.formal_repairs = repairs
+    return repairs
 
 
 def run_spatial_shadow(data, page_items, notes=None, fields=None,

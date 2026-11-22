@@ -148,6 +148,7 @@ def run_pipeline(file_name: str, raw: bytes, company: str, progress_cb=None, pag
                 "notes_text": data.notes_text,
                 "field_sources": getattr(data, "field_sources", {}),
                 "spatial_shadow": getattr(data, "spatial_shadow", None),
+                "formal_repairs": list(getattr(data, "formal_repairs", []) or []),
                 "human_reviews": {
                     f"{k[0]}|{k[1]}": v for k, v
                     in (getattr(data, "human_reviews", {}) or {}).items()},
@@ -341,6 +342,27 @@ def run_pipeline(file_name: str, raw: bytes, company: str, progress_cb=None, pag
     bbox = _cached_bbox or _flatten(getattr(data, "candidate_bbox", {}))
     labels = _cached_labels or _flatten(getattr(data, "candidate_labels", {}))
 
+    # ── Formal Verification Certificate (Z3 SMT Solver) ──
+    from src.analysis.formal_verifier import (
+        RepairAttempt,
+        verify_financial_statements,
+    )
+
+    formal_cert = verify_financial_statements(
+        data.values, years=years_sorted, include_policy_theorems=True,
+    )
+    raw_repairs = getattr(data, "formal_repairs", None) or (
+        cached.get("formal_repairs") if cached else []
+    ) or []
+    for rp in raw_repairs:
+        if isinstance(rp, RepairAttempt):
+            formal_cert.repair_history.append(rp)
+        elif isinstance(rp, dict):
+            try:
+                formal_cert.repair_history.append(RepairAttempt(**rp))
+            except Exception:
+                pass
+
     return {
         "company": company,
         "file_name": file_name,
@@ -374,6 +396,7 @@ def run_pipeline(file_name: str, raw: bytes, company: str, progress_cb=None, pag
         "candidate_bbox": bbox,
         "candidate_labels": labels,
         "document_sha256_16": hashlib.sha256(raw).hexdigest()[:16],
+        "formal_certificate": formal_cert.to_dict(),
     }
 
 

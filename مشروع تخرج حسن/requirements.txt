@@ -21,3 +21,8 @@ indra-ocr==1.1.2
 # DEFAULT_EXCLUDED_CONTENT_TYPES from starlette.middleware.gzip — removed in
 # starlette 1.7.0 (breaks `streamlit run` entirely). 1.6.0 restores it.
 starlette==1.6.0
+
+# Formal SMT Verification Layer (Z3 — Microsoft Research):
+# Certificate checking of EAS/IFRS accounting axioms, Unsat-Core fault diagnosis,
+# and mathematical proofs of Honesty Gate / Health Score policy invariants.
+z3-solver>=4.12.0

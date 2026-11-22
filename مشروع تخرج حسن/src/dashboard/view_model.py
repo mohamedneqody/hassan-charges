@@ -125,6 +125,7 @@ def build_view_model(results: dict, currency: str = "$") -> dict:
         "verification": verif,
         "notes_text": results.get("notes_text") or {},
         "human_reviews": results.get("human_reviews") or {},
+        "formal_certificate": results.get("formal_certificate") or None,
     }
 
 

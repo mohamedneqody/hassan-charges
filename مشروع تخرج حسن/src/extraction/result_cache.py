@@ -23,7 +23,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]  # src/extraction/… → project root
 CACHE_DIR = PROJECT_ROOT / "cache"
 SEED_CACHE_DIR = PROJECT_ROOT / "data" / "seed_cache"
-CACHE_SCHEMA_VERSION = 2
+CACHE_SCHEMA_VERSION = 3
 
 _LOCK = threading.Lock()
 
@@ -62,7 +62,9 @@ def _write(cache_sub: str, key: str, payload: dict) -> None:
 
 def load_cached_extraction(key: str) -> dict | None:
     res = _read("extraction", key)
-    if CACHE_DIR == PROJECT_ROOT / "cache":
+    if res is not None and int(res.get("cache_schema") or 0) < CACHE_SCHEMA_VERSION:
+        res = None  # invalidate pre-v9.17 stale caches automatically
+    if res is None and CACHE_DIR == PROJECT_ROOT / "cache":
         seed_path = SEED_CACHE_DIR / f"{key.replace('|', '__')}.json"
         if not seed_path.exists() and SEED_CACHE_DIR.exists():
             sha_prefix = key.split("|", 1)[0]
@@ -70,11 +72,12 @@ def load_cached_extraction(key: str) -> dict | None:
             matches = list(SEED_CACHE_DIR.glob(f"{sha_prefix}__*{mode_suffix}"))
             if matches:
                 seed_path = matches[0]
-        if seed_path.exists() and (res is None or int(res.get("cache_schema") or 0) < CACHE_SCHEMA_VERSION):
+        if seed_path.exists():
             try:
                 seed_data = json.loads(seed_path.read_text(encoding="utf-8"))
-                _write("extraction", key, seed_data)
-                return seed_data
+                if int(seed_data.get("cache_schema") or 0) >= CACHE_SCHEMA_VERSION:
+                    _write("extraction", key, seed_data)
+                    return seed_data
             except Exception:
                 pass
     return res

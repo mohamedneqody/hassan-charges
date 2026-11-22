@@ -1953,6 +1953,67 @@ section[data-testid="stSidebar"] .stButton > button[data-testid="stBaseButton-pr
   }}
 }}
 
+/* == v9.20 Executive Visual Polish: Section Banners, Chart Frames, Delta Pills, Category Bands == */
+.fs-sec-banner {{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 18px 0 12px 0;
+  padding: 10px 16px;
+  background: linear-gradient(90deg, rgba(79,70,229,0.07), rgba(14,165,233,0.04));
+  border-inline-start: 4px solid var(--fs-primary);
+  border-radius: 10px;
+}}
+.fs-sec-banner-title {{
+  font-size: 1.02rem;
+  font-weight: 800;
+  color: var(--fs-ink);
+  margin: 0;
+}}
+.fs-sec-banner-sub {{
+  font-size: 0.80rem;
+  color: var(--fs-muted);
+}}
+.fs-delta-pill {{
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}}
+.fs-delta-pill.up {{ background: var(--fs-success-bg); color: var(--fs-success); border: 1px solid var(--fs-success-border); }}
+.fs-delta-pill.down {{ background: var(--fs-danger-bg); color: var(--fs-danger); border: 1px solid var(--fs-danger-border); }}
+.fs-delta-pill.flat {{ background: var(--fs-neutral-bg); color: var(--fs-muted); border: 1px solid var(--fs-line); }}
+.fin-table tr.fs-cat-divider td {{
+  background: linear-gradient(90deg, var(--fs-soft-purple), var(--fs-surface2)) !important;
+  color: var(--fs-deep) !important;
+  font-weight: 800 !important;
+  font-size: 0.86rem !important;
+  padding: 8px 14px !important;
+  border-top: 2px solid var(--fs-indigo-soft) !important;
+  border-bottom: 1px solid var(--fs-indigo-soft) !important;
+}}
+.fs-chart-caption {{
+  font-size: 0.78rem;
+  color: var(--fs-muted);
+  text-align: center;
+  margin-top: -8px;
+  margin-bottom: 8px;
+}}
+.fs-insight-card {{
+  transition: transform .16s ease, box-shadow .16s ease;
+}}
+.fs-insight-card:hover {{
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+}}
+
 /* == Accessibility: prefers-reduced-motion == */
 @media (prefers-reduced-motion: reduce) {{
   .fs-header, .fs-hero-copy, .fs-preview, .fs-feature, .fs-kpi, .fs-bar,

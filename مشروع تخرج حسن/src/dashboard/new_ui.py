@@ -458,6 +458,8 @@ def sec_overview(vm: dict, results: dict) -> None:
         unsafe_allow_html=True,
     )
 
+    _render_overview_visuals_and_table(vm, results, is_ar, lang)
+
     st.divider()
     total_cells = vm["cell_count"]
     decisive_cells = vm["decisive_count"]
@@ -522,6 +524,160 @@ def sec_overview(vm: dict, results: dict) -> None:
         )
 
     _render_formal_certificate(vm, is_ar)
+
+
+def _sec_banner(title: str, subtitle: str = "") -> None:
+    """Render a clean executive section banner with accent border."""
+    sub_html = f'<span class="fs-sec-banner-sub">{esc(subtitle)}</span>' if subtitle else ""
+    st.markdown(
+        f'<div class="fs-sec-banner">'
+        f'<div class="fs-sec-banner-title">{esc(title)}</div>'
+        f'{sub_html}'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def _render_overview_visuals_and_table(vm: dict, results: dict, is_ar: bool, lang: str) -> None:
+    """v9.20 Executive Visual Dashboard (charts) + category-banded Financial Statements summary table."""
+    from src.dashboard import charts
+
+    prev_m = results.get("prev_metrics")
+    curr_m = results.get("curr_metrics")
+    if prev_m is None and curr_m is None:
+        return
+
+    prev_y = vm.get("prev_year")
+    curr_y = vm.get("curr_year")
+    sc = vm.get("unit_scale") or 1
+    cur = vm.get("currency") or "$"
+
+    # 1. Interactive Executive Visual Charts (Income Performance + Capital Structure)
+    fig_inc = charts.income_summary_chart(
+        prev_m, curr_m, prev_y, curr_y, currency=cur, scale=sc, lang=lang
+    )
+    fig_bal = charts.balance_structure_chart(
+        prev_m, curr_m, prev_y, curr_y, currency=cur, scale=sc, lang=lang
+    )
+    if fig_inc is not None or fig_bal is not None:
+        _sec_banner(
+            "📊 اللوحة البصرية التنفيذية" if is_ar else "📊 Executive Visual Snapshot",
+            (
+                f"مقارنة الأداء التشغيلي وهيكل التمويل ({prev_y} مقابل {curr_y})"
+                if is_ar
+                else f"Operating performance & capital structure ({prev_y} vs {curr_y})"
+            ),
+        )
+        _cfg = {"displayModeBar": False}
+        if fig_inc is not None and fig_bal is not None:
+            c_left, c_right = st.columns(2)
+            with c_left:
+                st.plotly_chart(fig_inc, use_container_width=True, key="ov_income_chart", config=_cfg)
+            with c_right:
+                st.plotly_chart(fig_bal, use_container_width=True, key="ov_balance_chart", config=_cfg)
+        elif fig_inc is not None:
+            st.plotly_chart(fig_inc, use_container_width=True, key="ov_income_chart", config=_cfg)
+        else:
+            st.plotly_chart(fig_bal, use_container_width=True, key="ov_balance_chart", config=_cfg)
+
+    # 2. Executive Financial Statements Summary Table (Category-banded RTL HTML)
+    sections = [
+        (
+            "📈 قائمة الدخل" if is_ar else "📈 Income Statement",
+            [
+                ("revenue", "الإيرادات" if is_ar else "Revenue", True),
+                ("cost_of_goods_sold", "تكلفة الإيرادات" if is_ar else "Cost of Goods Sold", False),
+                ("gross_profit", "مجمل الربح" if is_ar else "Gross Profit", True),
+                ("operating_income", "الربح التشغيلي" if is_ar else "Operating Income", True),
+                ("ebitda", "الأرباح قبل الفوائد والضرائب والإهلاك (EBITDA)" if is_ar else "EBITDA", True),
+                ("net_income", "صافي الربح" if is_ar else "Net Income", True),
+            ],
+        ),
+        (
+            "🏦 قائمة المركز المالي" if is_ar else "🏦 Balance Sheet",
+            [
+                ("total_assets", "إجمالي الأصول" if is_ar else "Total Assets", True),
+                ("current_assets", "الأصول المتداولة" if is_ar else "Current Assets", True),
+                ("cash", "النقد وما في حكمه" if is_ar else "Cash & Equivalents", True),
+                ("total_liabilities", "إجمالي الالتزامات" if is_ar else "Total Liabilities", False),
+                ("current_liabilities", "الالتزامات المتداولة" if is_ar else "Current Liabilities", False),
+                ("total_debt", "إجمالي الديون (شاملاً التأجير)" if is_ar else "Total Debt (incl. leases)", False),
+                ("equity", "إجمالي حقوق الملكية" if is_ar else "Total Equity", True),
+            ],
+        ),
+        (
+            "💧 قائمة التدفقات النقدية" if is_ar else "💧 Cash Flows",
+            [
+                ("operating_cash_flow", "التدفق النقدي التشغيلي" if is_ar else "Operating Cash Flow", True),
+                ("investing_cash_flow", "التدفق النقدي الاستثماري" if is_ar else "Investing Cash Flow", None),
+                ("financing_cash_flow", "التدفق النقدي التمويلي" if is_ar else "Financing Cash Flow", None),
+                ("free_cash_flow", "التدفق النقدي الحر (FCF)" if is_ar else "Free Cash Flow (FCF)", True),
+            ],
+        ),
+    ]
+
+    def _fmt_money(v: float | None) -> str:
+        if v is None:
+            return "—"
+        txt = cell_value_display(v, sc, cur) if is_ar else f"{cur}{humanize(v, sc)}"
+        return f'<bdi dir="ltr">{esc(txt)}</bdi>'
+
+    body_rows: list[str] = []
+    for sec_title, items in sections:
+        sec_rows: list[str] = []
+        for attr, lbl, higher_good in items:
+            pv = getattr(prev_m, attr, None) if prev_m is not None else None
+            cv = getattr(curr_m, attr, None) if curr_m is not None else None
+            if pv is None and cv is None:
+                continue
+            if pv not in (None, 0) and cv is not None:
+                pct = (cv - pv) / abs(pv) * 100.0
+                arrow = "▲" if pct > 0.05 else ("▼" if pct < -0.05 else "•")
+                if higher_good is None or abs(pct) <= 0.05:
+                    pill_cls = "flat"
+                elif (pct > 0) == higher_good:
+                    pill_cls = "up"
+                else:
+                    pill_cls = "down"
+                delta_html = (
+                    f'<span class="fs-delta-pill {pill_cls}">'
+                    f'{arrow} <bdi dir="ltr">{pct:+.1f}%</bdi></span>'
+                )
+            else:
+                delta_html = '<span class="fs-delta-pill flat">—</span>'
+            is_bold = attr in ("revenue", "net_income", "total_assets", "equity", "operating_cash_flow")
+            lbl_html = f"<b>{esc(lbl)}</b>" if is_bold else esc(lbl)
+            sec_rows.append(
+                f"<tr>"
+                f"<td>{lbl_html}</td>"
+                f'<td class="num">{_fmt_money(pv)}</td>'
+                f'<td class="num">{"<b>" + _fmt_money(cv) + "</b>" if is_bold else _fmt_money(cv)}</td>'
+                f'<td class="num">{delta_html}</td>'
+                f"</tr>"
+            )
+        if sec_rows:
+            body_rows.append(f'<tr class="fs-cat-divider"><td colspan="4">{esc(sec_title)}</td></tr>')
+            body_rows.extend(sec_rows)
+
+    if body_rows:
+        _sec_banner(
+            "📑 الملخص التنفيذي للقوائم المالية" if is_ar else "📑 Executive Financial Statements Summary",
+            (
+                "أهم بنود الدخل والمركز المالي والتدفقات النقدية مع نسب التغير السنوي"
+                if is_ar
+                else "Core Income, Balance Sheet & Cash Flow line items with YoY changes"
+            ),
+        )
+        h_item = "البند المالي" if is_ar else "Line Item"
+        h_chg = "التغير السنوي" if is_ar else "YoY Change"
+        table_html = (
+            '<div class="fin-table-wrap"><table class="fin-table">'
+            f'<thead><tr><th>{esc(h_item)}</th><th class="num">{esc(str(prev_y))}</th>'
+            f'<th class="num">{esc(str(curr_y))}</th><th class="num">{esc(h_chg)}</th></tr></thead>'
+            f'<tbody>{"".join(body_rows)}</tbody>'
+            "</table></div>"
+        )
+        st.markdown(table_html, unsafe_allow_html=True)
 
 
 def _render_formal_certificate(vm: dict, is_ar: bool) -> None:
@@ -864,6 +1020,184 @@ def sec_statements(vm: dict, raw: bytes | None) -> None:
                     st.rerun()
 
 
+def _render_metrics_charts_suite(vm: dict, res_obj: dict, is_ar: bool, lang: str) -> None:
+    """v9.20 Interactive 4-tab Plotly charts suite for Financial Metrics."""
+    from src.dashboard import charts
+
+    by_key = res_obj.get("rows_by_key") or {
+        r.key: r for r in (res_obj.get("rows") or []) if hasattr(r, "key")
+    }
+    growth_rows = res_obj.get("growth_rows") or []
+    all_rows = res_obj.get("rows") or []
+    if not by_key and not growth_rows:
+        return
+
+    prev_y = vm.get("prev_year")
+    curr_y = vm.get("curr_year")
+    cur = vm.get("currency") or "$"
+    sc = vm.get("unit_scale") or 1
+    _cfg = {"displayModeBar": False}
+
+    def _has_vals(keys: tuple[str, ...]) -> bool:
+        for k in keys:
+            r = by_key.get(k)
+            if r is not None and (r.previous is not None or r.current is not None):
+                return True
+        return False
+
+    has_margins = _has_vals(("gross_margin", "operating_margin", "net_margin"))
+    has_returns = _has_vals(("roa", "roe"))
+    has_liq = _has_vals(("current_ratio", "quick_ratio"))
+    has_lev = _has_vals(("debt_to_equity", "debt_ratio"))
+    has_cf = _has_vals(("operating_cash_flow", "investing_cash_flow", "financing_cash_flow"))
+    has_eff = _has_vals(("asset_turnover", "inventory_turnover"))
+    fig_growth = charts.growth_bar_chart(growth_rows, curr_year=curr_y, lang=lang)
+    fig_trend = None
+    if fig_growth is None and all_rows:
+        fig_trend = charts.trend_scatter(all_rows, prev_y, curr_y, lang=lang)
+
+    if not any((has_margins, has_returns, has_liq, has_lev, has_cf, has_eff, fig_growth, fig_trend)):
+        return
+
+    _sec_banner(
+        "📊 الرسوم البيانية التفاعلية للمؤشرات المالية"
+        if is_ar
+        else "📊 Interactive Financial Ratio Charts",
+        (
+            f"مقارنة بصرية تفاعلية بين {prev_y} و{curr_y} عبر محاور الربحية والسيولة والمديونية والنمو"
+            if is_ar
+            else f"Interactive visual comparison ({prev_y} vs {curr_y}) across profitability, liquidity, leverage & growth"
+        ),
+    )
+
+    tab_labels = (
+        [
+            "💰 الربحية والعوائد",
+            "💧 السيولة والمديونية",
+            "⚡ التدفقات والكفاءة",
+            "🚀 النمو السنوي",
+        ]
+        if is_ar
+        else [
+            "💰 Profitability & Returns",
+            "💧 Liquidity & Leverage",
+            "⚡ Cash Flows & Efficiency",
+            "🚀 YoY Growth",
+        ]
+    )
+    ct1, ct2, ct3, ct4 = st.tabs(tab_labels)
+
+    with ct1:
+        if has_margins and has_returns:
+            c_l, c_r = st.columns(2)
+            with c_l:
+                st.plotly_chart(
+                    charts.margins_chart(by_key, prev_y, curr_y, cur),
+                    use_container_width=True,
+                    key="m_margins_chart",
+                    config=_cfg,
+                )
+            with c_r:
+                st.plotly_chart(
+                    charts.returns_chart(by_key, prev_y, curr_y),
+                    use_container_width=True,
+                    key="m_returns_chart",
+                    config=_cfg,
+                )
+        elif has_margins:
+            st.plotly_chart(
+                charts.margins_chart(by_key, prev_y, curr_y, cur),
+                use_container_width=True,
+                key="m_margins_chart",
+                config=_cfg,
+            )
+        elif has_returns:
+            st.plotly_chart(
+                charts.returns_chart(by_key, prev_y, curr_y),
+                use_container_width=True,
+                key="m_returns_chart",
+                config=_cfg,
+            )
+        else:
+            st.info("لا تتوفر بيانات ربحية كافية للرسم." if is_ar else "Insufficient profitability data.")
+
+    with ct2:
+        if has_liq and has_lev:
+            c_l, c_r = st.columns(2)
+            with c_l:
+                st.plotly_chart(
+                    charts.liquidity_chart(by_key, prev_y, curr_y),
+                    use_container_width=True,
+                    key="m_liquidity_chart",
+                    config=_cfg,
+                )
+            with c_r:
+                st.plotly_chart(
+                    charts.leverage_chart(by_key, prev_y, curr_y),
+                    use_container_width=True,
+                    key="m_leverage_chart",
+                    config=_cfg,
+                )
+        elif has_liq:
+            st.plotly_chart(
+                charts.liquidity_chart(by_key, prev_y, curr_y),
+                use_container_width=True,
+                key="m_liquidity_chart",
+                config=_cfg,
+            )
+        elif has_lev:
+            st.plotly_chart(
+                charts.leverage_chart(by_key, prev_y, curr_y),
+                use_container_width=True,
+                key="m_leverage_chart",
+                config=_cfg,
+            )
+        else:
+            st.info("لا تتوفر بيانات سيولة أو مديونية كافية للرسم." if is_ar else "Insufficient liquidity/leverage data.")
+
+    with ct3:
+        if has_cf and has_eff:
+            c_l, c_r = st.columns(2)
+            with c_l:
+                st.plotly_chart(
+                    charts.cashflow_chart(by_key, prev_y, curr_y, cur, scale=sc, lang=lang),
+                    use_container_width=True,
+                    key="m_cashflow_chart",
+                    config=_cfg,
+                )
+            with c_r:
+                st.plotly_chart(
+                    charts.efficiency_chart(by_key, prev_y, curr_y),
+                    use_container_width=True,
+                    key="m_efficiency_chart",
+                    config=_cfg,
+                )
+        elif has_cf:
+            st.plotly_chart(
+                charts.cashflow_chart(by_key, prev_y, curr_y, cur, scale=sc, lang=lang),
+                use_container_width=True,
+                key="m_cashflow_chart",
+                config=_cfg,
+            )
+        elif has_eff:
+            st.plotly_chart(
+                charts.efficiency_chart(by_key, prev_y, curr_y),
+                use_container_width=True,
+                key="m_efficiency_chart",
+                config=_cfg,
+            )
+        else:
+            st.info("لا تتوفر بيانات تدفقات أو كفاءة كافية للرسم." if is_ar else "Insufficient cash flow/efficiency data.")
+
+    with ct4:
+        if fig_growth is not None:
+            st.plotly_chart(fig_growth, use_container_width=True, key="m_growth_chart", config=_cfg)
+        elif fig_trend is not None:
+            st.plotly_chart(fig_trend, use_container_width=True, key="m_trend_chart", config=_cfg)
+        else:
+            st.info("لا تتوفر معدلات نمو سنوي للعرض." if is_ar else "No YoY growth data available.")
+
+
 def sec_metrics(vm: dict, results: dict | None = None) -> None:
     """Custom RTL/LTR HTML metrics table with sticky headers, filters & badges."""
     lang = _lang()
@@ -883,6 +1217,20 @@ def sec_metrics(vm: dict, results: dict | None = None) -> None:
             else "Review extracted cells in Statements & Cells.",
         )
         return
+
+    res_obj_charts = results or st.session_state.get("results") or {}
+    _render_metrics_charts_suite(vm, res_obj_charts, is_ar, lang)
+
+    _sec_banner(
+        "📋 جدول النسب والمؤشرات المالية الكامل"
+        if is_ar
+        else "📋 Complete Financial Ratios Table",
+        (
+            "قابل للتصفية حسب الفئة أو حالة التوثيق مع عزل رقمي دقيق"
+            if is_ar
+            else "Filterable by category, verification status, or search term"
+        ),
+    )
 
     all_cats: list[str] = []
     for r in metrics_rows:
@@ -1062,15 +1410,43 @@ def sec_health(vm: dict, results: dict) -> None:
 
     if hs.total is not None:
         st.markdown(build_health_html(hs, lang=lang), unsafe_allow_html=True)
-        with st.expander(
-            "عرض المقياس البصري (Gauge) وسياسة التغطية"
+        _cfg = {"displayModeBar": False}
+        fig_rad = charts.health_radar_chart(hs, lang=lang)
+        _sec_banner(
+            "🎯 التمثيل البصري لمؤشر الصحة المالية"
             if is_ar
-            else "Show visual gauge & coverage policy",
-            expanded=False,
-        ):
-            st.plotly_chart(charts.health_gauge(hs, lang=lang), use_container_width=True)
-            if getattr(hs, "policy", ""):
-                st.caption(hs.policy)
+            else "🎯 Financial Health Visual Profile",
+            (
+                "المقياس العام وتوازن الأركان الأربعة مقارنة بالمعيار المستهدف (70/100)"
+                if is_ar
+                else "Overall score gauge and 4-pillar balance vs target benchmark (70/100)"
+            ),
+        )
+        if fig_rad is not None:
+            hc1, hc2 = st.columns(2)
+            with hc1:
+                st.plotly_chart(
+                    charts.health_gauge(hs, lang=lang),
+                    use_container_width=True,
+                    key="health_gauge_official",
+                    config=_cfg,
+                )
+            with hc2:
+                st.plotly_chart(
+                    fig_rad,
+                    use_container_width=True,
+                    key="health_radar_official",
+                    config=_cfg,
+                )
+        else:
+            st.plotly_chart(
+                charts.health_gauge(hs, lang=lang),
+                use_container_width=True,
+                key="health_gauge_official",
+                config=_cfg,
+            )
+        if getattr(hs, "policy", ""):
+            st.caption(hs.policy)
         return
 
     hs_est = compute_health_score(results["curr_metrics"], blocked_fields=None)
@@ -1084,16 +1460,30 @@ def sec_health(vm: dict, results: dict) -> None:
             "Below is an **unofficial exploratory estimate** computed from preliminary extracted values for preview only; verify critical cells in Human Review to unlock the official score."
         )
         st.markdown(build_health_html(hs_est, lang=lang), unsafe_allow_html=True)
-        with st.expander(
-            "عرض المقياس البصري الاستكشافي (Gauge)"
-            if is_ar
-            else "Show exploratory visual gauge",
-            expanded=False,
-        ):
+        _cfg = {"displayModeBar": False}
+        fig_rad_est = charts.health_radar_chart(hs_est, lang=lang)
+        if fig_rad_est is not None:
+            hc1, hc2 = st.columns(2)
+            with hc1:
+                st.plotly_chart(
+                    charts.health_gauge(hs_est, lang=lang),
+                    use_container_width=True,
+                    key="health_gauge_exploratory",
+                    config=_cfg,
+                )
+            with hc2:
+                st.plotly_chart(
+                    fig_rad_est,
+                    use_container_width=True,
+                    key="health_radar_exploratory",
+                    config=_cfg,
+                )
+        else:
             st.plotly_chart(
                 charts.health_gauge(hs_est, lang=lang),
                 use_container_width=True,
                 key="health_gauge_exploratory",
+                config=_cfg,
             )
         with st.expander(
             "🛡️ عرض تفاصيل حجب الدرجة الرسمية وفق بوابة الصدق"
@@ -1287,18 +1677,48 @@ def sec_insights(vm: dict, analysis) -> None:
             )
         )
 
+    from src.dashboard import charts
+
     results_ctx = st.session_state.get("results") or {"rows": []}
     cats = categorized_insights(results_ctx, analysis)
 
-    st.markdown(
-        '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 12px 0;">'
-        f'<span class="fs-gate ok">● {esc(_T["strengths"][lang])}: {len(cats["strengths"])}</span>'
-        f'<span class="fs-gate bad">▲ {esc(_T["weaknesses"][lang])}: {len(cats["weaknesses"])}</span>'
-        f'<span class="fs-gate miss">◆ {esc(_T["neutral"][lang])}: {len(cats["neutral"])}</span>'
-        f'<span class="fs-gate ok">🧭 {esc(_T["recommendations"][lang])}: {len(cats["recommendations"])}</span>'
-        "</div>",
-        unsafe_allow_html=True,
+    n_pos = len(cats["strengths"])
+    n_neg = len(cats["weaknesses"])
+    n_neu = len(cats["neutral"])
+    n_rec = len(cats["recommendations"])
+
+    pills_html = (
+        '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 12px 0;">'
+        f'<span class="fs-gate ok">● {esc(_T["strengths"][lang])}: {n_pos}</span>'
+        f'<span class="fs-gate bad">▲ {esc(_T["weaknesses"][lang])}: {n_neg}</span>'
+        f'<span class="fs-gate miss">◆ {esc(_T["neutral"][lang])}: {n_neu}</span>'
+        f'<span class="fs-gate ok">🧭 {esc(_T["recommendations"][lang])}: {n_rec}</span>'
+        "</div>"
     )
+    fig_donut = charts.insights_donut_chart(n_pos, n_neg, n_neu, lang=lang)
+    if fig_donut is not None:
+        ic_left, ic_right = st.columns([1.45, 1.0])
+        with ic_left:
+            _sec_banner(
+                "🧠 توزيع الإشارات والتوصيات التحليلية"
+                if is_ar
+                else "🧠 Analytical Signals & Action Distribution",
+                (
+                    "تصنيف تلقائي لنقاط القوة والمخاطر والمؤشرات المستقرة بناءً على الاتجاه الفعلي للأرقام"
+                    if is_ar
+                    else "Auto-classified strengths, risks & stable signals grounded in actual computed deltas"
+                ),
+            )
+            st.markdown(pills_html, unsafe_allow_html=True)
+        with ic_right:
+            st.plotly_chart(
+                fig_donut,
+                use_container_width=True,
+                key="insights_donut_chart",
+                config={"displayModeBar": False},
+            )
+    else:
+        st.markdown(pills_html, unsafe_allow_html=True)
 
     groups = [
         (_T["strengths"][lang], cats["strengths"], "is-pos", "ok", "●"),

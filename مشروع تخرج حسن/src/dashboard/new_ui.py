@@ -649,7 +649,10 @@ def _render_overview_visuals_and_table(vm: dict, results: dict, is_ar: bool, lan
                     unit_word = f" {w}"
                     break
             sign_s = "-" if v < 0 else ""
-            return f'<bdi dir="ltr">{sign_s}{esc(num_part)}</bdi>{esc(unit_word)} {esc(cur)}'
+            return (
+                f'<span dir="rtl" style="white-space:nowrap;display:inline-block;">'
+                f'<bdi dir="ltr">{sign_s}{esc(num_part)}</bdi>{esc(unit_word)}&nbsp;{esc(cur)}</span>'
+            )
         sign_s = "-" if v < 0 else ""
         return f'<bdi dir="ltr">{sign_s}{esc(cur)}{esc(humanize(abs(v), sc))}</bdi>'
 
@@ -971,15 +974,31 @@ def sec_statements(vm: dict, raw: bytes | None) -> None:
         with st.container(border=True):
             col_main, col_btn = st.columns([5.2, 1.0])
             disp_lbl = c["label"] if is_ar else c.get("label_en", c["label"])
-            val_txt = (
-                cell_value_display(c["value"], vm["unit_scale"], vm["currency"])
-                if is_ar
-                else (
-                    "N/A"
-                    if c["value"] is None
-                    else f"{vm['currency']}{humanize(c['value'], vm['unit_scale'])}"
+            if is_ar and c["value"] is not None:
+                _v = float(c["value"])
+                _rh = humanize(abs(_v), vm["unit_scale"])
+                _wm = {"B": "مليار", "M": "مليون", "K": "ألف"}
+                _np, _uw = _rh, ""
+                for _sf, _wd in _wm.items():
+                    if _rh.endswith(_sf):
+                        _np, _uw = _rh[: -len(_sf)], f" {_wd}"
+                        break
+                _sg = "-" if _v < 0 else ""
+                val_html = (
+                    f'<span dir="rtl" style="white-space:nowrap;">'
+                    f'<bdi dir="ltr">{_sg}{esc(_np)}</bdi>{esc(_uw)}&nbsp;{esc(vm["currency"])}</span>'
                 )
-            )
+            else:
+                val_txt = (
+                    cell_value_display(c["value"], vm["unit_scale"], vm["currency"])
+                    if is_ar
+                    else (
+                        "N/A"
+                        if c["value"] is None
+                        else f"{'-' if float(c['value']) < 0 else ''}{vm['currency']}{humanize(abs(float(c['value'])), vm['unit_scale'])}"
+                    )
+                )
+                val_html = f'<bdi dir="ltr">{esc(val_txt)}</bdi>'
             gate_lbl = (
                 c["gate_label"]
                 if is_ar
@@ -1026,7 +1045,7 @@ def sec_statements(vm: dict, raw: bytes | None) -> None:
                     f"{raw_sub}"
                     f"</div>"
                     f'<div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;">'
-                    f'<span class="fs-stmt-val"><bdi dir="ltr">{esc(val_txt)}</bdi></span>'
+                    f'<span class="fs-stmt-val">{val_html}</span>'
                     f"{rev_tag}"
                     f'{gate_badge(c["gate"], gate_lbl)}'
                     f"</div>"
@@ -1415,6 +1434,12 @@ def sec_metrics(vm: dict, results: dict | None = None) -> None:
                     ("المكوّنات: " if is_ar else "Components: ")
                     + " · ".join(f"{k}={v:.2f}" for k, v in bn.components.items())
                 )
+            elif bn.missing:
+                st.caption(
+                    f"ℹ️ **Beneish M-Score:** غير محسوب لعدم توفر مكوّنات ({', '.join(bn.missing)})."
+                    if is_ar
+                    else f"ℹ️ **Beneish M-Score:** unavailable — missing components ({', '.join(bn.missing)})."
+                )
             flags = red_flag_analysis(prev_m, curr_m)
             if flags:
                 flag_rows = [
@@ -1427,6 +1452,12 @@ def sec_metrics(vm: dict, results: dict | None = None) -> None:
                 st.markdown(
                     theme.fin_table(["المؤشر", "الدليل الرقمي"] if is_ar else ["Flag", "Evidence"], flag_rows),
                     unsafe_allow_html=True,
+                )
+            else:
+                st.success(
+                    "🟢 لم تُرصد أعلام حمراء أو مؤشرات إنذار مبكر بين السنتين بناءً على البيانات المتاحة."
+                    if is_ar
+                    else "🟢 No early-warning red flags detected between the two years."
                 )
 
 

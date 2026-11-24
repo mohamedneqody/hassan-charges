@@ -238,7 +238,13 @@ def kpi_card(
     year_html = f'<span class="fs-kpi-year">{esc(year)}</span>' if year not in ("", None) else ""
     val_cls = "fs-kpi-value is-na" if value in ("N/A", "—", "") else "fs-kpi-value"
 
-    arrow = {"up": "▲", "down": "▼", "flat": "◆", "na": "–"}.get(mood, "")
+    _d_strip = (delta or "").strip()
+    if _d_strip.startswith("-"):
+        arrow = "▼"
+    elif _d_strip.startswith("+"):
+        arrow = "▲"
+    else:
+        arrow = {"up": "▲", "down": "▼", "flat": "◆", "na": "–"}.get(mood, "")
     delta_inner = f"{arrow} <bdi dir=\"ltr\">{esc(delta)}</bdi>" if arrow and delta else esc(delta)
     delta_html = (
         f'<div class="fs-kpi-sub"><span class="fs-kpi-delta {esc(mood)}">{delta_inner}</span></div>'

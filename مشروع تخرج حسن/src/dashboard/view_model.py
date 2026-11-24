@@ -282,7 +282,7 @@ def executive_summary(results: dict, vm: dict, lang: str = "ar") -> list[str]:
     if curr.debt_ratio is not None:
         if is_ar:
             state = "داخل" if curr.debt_ratio < 0.5 else "أعلى من"
-            facts.append(f"نسبة الدين {curr.debt_ratio:.2f} — {state} الحد الإرشادي العام (< 0.50).")
+            facts.append(f"نسبة الدين {curr.debt_ratio:.2f} — {state} الحد الإرشادي العام (أقل من 0.50).")
         else:
             state = "within" if curr.debt_ratio < 0.5 else "above"
             facts.append(f"Debt ratio {curr.debt_ratio:.2f} — {state} the < 0.50 general guideline.")

@@ -704,9 +704,9 @@ def health_radar_chart(score, lang: str = "ar") -> go.Figure | None:
         ),
         font=_FONT,
         paper_bgcolor="rgba(0,0,0,0)",
-        legend=dict(orientation="h", yanchor="top", y=-0.20, xanchor="center", x=0.5),
-        margin=dict(t=58, b=76, l=82, r=82),
-        height=345,
+        legend=dict(orientation="h", yanchor="top", y=-0.16, xanchor="center", x=0.5),
+        margin=dict(t=54, b=88, l=82, r=82),
+        height=365,
     )
     return fig
 
@@ -752,7 +752,7 @@ def growth_bar_chart(
     fig.update_layout(
         xaxis_title="نسبة النمو %" if is_ar else "Growth %",
         showlegend=False,
-        margin=dict(t=60, b=46, l=24, r=78),
+        margin=dict(t=60, b=46, l=160 if is_ar else 140, r=82),
     )
     fig.update_xaxes(range=[lo, hi], automargin=True)
     fig.update_yaxes(automargin=True)

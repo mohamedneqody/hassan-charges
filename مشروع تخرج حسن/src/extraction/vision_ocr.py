@@ -1186,8 +1186,8 @@ def extract_via_vision(
         except Exception:
             local_reads = None
         if local_reads:
-            table_first = [p for p in selected if local_reads[p].has_table]
-            rest = [p for p in selected if not local_reads[p].has_table]
+            table_first = [p for p in selected if p in local_reads and local_reads[p].has_table]
+            rest = [p for p in selected if not (p in local_reads and local_reads[p].has_table)]
             order = table_first + rest
             if order != selected:
                 by_page = dict(zip(selected, pages_png))

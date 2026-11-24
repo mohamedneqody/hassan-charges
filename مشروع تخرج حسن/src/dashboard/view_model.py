@@ -287,8 +287,12 @@ def executive_summary(results: dict, vm: dict, lang: str = "ar") -> list[str]:
             state = "within" if curr.debt_ratio < 0.5 else "above"
             facts.append(f"Debt ratio {curr.debt_ratio:.2f} — {state} the < 0.50 general guideline.")
 
-    # 4) الدرجة الصحية أو سبب الحجب
-    blocked = {e["field"] for e in vm["pending"]}
+    # 4) الدرجة الصحية أو سبب الحجب (تطابق تام مع تبويب الدرجة الصحية: حجب السنة الحالية فقط)
+    blocked = {
+        e["field"] for e in vm["pending"]
+        if e.get("field")
+        and (curr_year is None or e.get("year") in (None, curr_year) or str(e.get("year")) == str(curr_year))
+    }
     hs = compute_health_score(curr, blocked_fields=blocked)
     if hs.total is not None:
         lbl = hs.label_ar if is_ar else hs.label_en

@@ -165,7 +165,11 @@ def compute_year_metrics(
     m.cost_of_revenue = get("cost_of_revenue")
     m.gross_profit = get("gross_profit")
     m.operating_expenses = get("operating_expenses")
-    m.operating_income = get("operating_income")
+    m.operating_income = (
+        get("operating_income")
+        if get("operating_income") is not None
+        else get("net_activity_profit")
+    )
     m.pretax_income = get("pretax_income")
     m.income_tax_expense = get("income_tax_expense")
     m.net_income = get("net_income")

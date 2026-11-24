@@ -1122,7 +1122,22 @@ def apply_z3_algebraic_attestation(
             layer_list.extend([fallback_layer] * (len(cand_list) - len(layer_list)))
         elif len(layer_list) > len(cand_list):
             del layer_list[len(cand_list):]
-        if "z3_math" not in layer_list:
+        # Ensure at least one primary reading layer ("vision") aligns with `val`
+        # (needed when Z3 repair updated `values[f][y]` from a 2400px vision re-read
+        # while the earlier candidate in `cand_list` held the old un-repaired value).
+        has_non_z3_match = any(
+            v is not None and _vals_close(v, val) and lyr != "z3_math"
+            for (v, _o), lyr in zip(cand_list, layer_list)
+        )
+        if not has_non_z3_match:
+            cand_list.append((val, order_next))
+            label_list.append(f"vision_z3_repaired:{ax_id}")
+            layer_list.append("vision")
+            order_next += 1
+        if not any(
+            v is not None and _vals_close(v, val) and lyr == "z3_math"
+            for (v, _o), lyr in zip(cand_list, layer_list)
+        ):
             cand_list.append((val, order_next))
             label_list.append(f"z3_math:{ax_id}")
             layer_list.append("z3_math")

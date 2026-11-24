@@ -171,13 +171,31 @@ def read_pages(pngs: dict[int, bytes], workers: int | None = None) -> dict[int, 
 
 
 def _page_markdown(conv, png: bytes) -> str | None:
-    """Markdown for one page image via a temp file; None on any failure."""
+    """Markdown for one page image via a temp file; None on any failure.
+    Downscales huge scans (>1600px) before ONNX inference so giant 10MB PDFs
+    never trigger onnxruntime `bad allocation` or OOM on Streamlit Cloud."""
+    import io
     import tempfile
     from pathlib import Path
 
+    safe_png = png
+    try:
+        from PIL import Image
+
+        im = Image.open(io.BytesIO(png))
+        w, h = im.size
+        if max(w, h) > 1600:
+            scale = 1600.0 / max(w, h)
+            im = im.resize((max(1, int(w * scale)), max(1, int(h * scale))), Image.LANCZOS)
+            buf = io.BytesIO()
+            im.save(buf, format="PNG")
+            safe_png = buf.getvalue()
+    except Exception:
+        safe_png = png
+
     with tempfile.TemporaryDirectory(prefix="indra_") as td:
         p = Path(td) / "page.png"
-        p.write_bytes(png)
+        p.write_bytes(safe_png)
         try:
             for _i, pg in conv.convert(str(p)):
                 return getattr(pg, "markdown", "") or ""

@@ -318,7 +318,12 @@ Classification rules (language understanding applies, not memorization):
    activity profit rows marked يضاف/يخصم) → field = null.
 4. Sub-grand rows: "إجمالي الأصول غير المتداولة" → non_current_assets;
    "إجمالي الالتزامات غير المتداولة" → non_current_liabilities;
-   "إجمالي المخزون" → inventory (but "الانخفاض في قيمة المخزون" → null).
+   "إجمالي المخزون" / "أعمال تحت التنفيذ" / "وحدات تامة بغرض البيع" → inventory
+   (but "الانخفاض في قيمة المخزون" or industrial non-current "مشروعات تحت التنفيذ" → null).
+   Real-estate developers: "إيرادات النشاط / بيع وحدات" → revenue;
+   "تكلفة النشاط / الوحدات المباعة" → cost_of_revenue;
+   "موردون ومقاولون" → accounts_payable;
+   "نقدية بالصندوق ولدى البنوك" → cash.
 5. A row whose concept matches NONE of the list → field = null (do NOT force it).
 6. Numbers: copy digit-by-digit; parentheses = negative; unreadable digits →
    null with conf = "low".
@@ -518,13 +523,13 @@ exactly as printed, for EACH year column shown:
 - إجمالي الالتزامات (total liabilities)
 - إجمالي الأصول (total assets)
 - إجمالي حقوق الملكية (total equity)
-- المبيعات / الإيرادات (revenue)
-- صافي أرباح العام (net income)
+- المبيعات / الإيرادات / إيرادات النشاط / مبيعات وحدات (revenue)
+- صافي أرباح العام / صافي ربح العام (net income)
 - صافي أرباح العام قبل ضريبة الدخل (pretax income) — يُطبع أيضًا أول قائمة التدفقات
-- المخزون — قائمة المركز المالي فقط، لا تقرأ صفوف التغير في التدفقات (inventory)
+- المخزون / أعمال تحت التنفيذ / وحدات تامة بغرض البيع — قائمة المركز المالي فقط، لا تقرأ صفوف التغير في التدفقات (inventory)
 - العملاء وأوراق القبض / الذمم المدينة — قائمة المركز المالي فقط، لا تقرأ صفوف التغير في التدفقات (accounts receivable)
-- الموردون وأوراق الدفع / الذمم الدائنة — قائمة المركز المالي فقط، لا تقرأ صفوف التغير في التدفقات (accounts payable)
-- النقدية وما في حكمها — قائمة المركز المالي فقط (cash)
+- الموردون وأوراق الدفع / موردون ومقاولون / الذمم الدائنة — قائمة المركز المالي فقط، لا تقرأ صفوف التغير في التدفقات (accounts payable)
+- النقدية وما في حكمها / نقدية بالصندوق ولدى البنوك — قائمة المركز المالي فقط (cash)
 - إهلاك أصول ثابتة — إجمالي الإهلاك في قائمة التدفقات النقدية فقط (depreciation_amortization)
 - مدفوعات لشراء أصول ثابتة ومشروعات تحت التنفيذ — في قائمة التدفقات النقدية فقط (capex)
 
@@ -1761,15 +1766,44 @@ def extract_via_vision(
     _focused_local_cell_verification(data, raw, field_sources, doc_years_holder,
                                      selected, pages_png, notes)
     # ── Z3 Algebraic Checksum Attestation (التوثيق الجبري الرياضي بـ Z3) ──
-    # Closed multi-term accounting identities (A1, A2, A3, A5, A6, A9, A10, A11)
+    # Closed multi-term accounting identities (A1, A1b, A2, A3, A5, A5c, A6, A6b, A9, A10, A11)
     # where ALL terms were directly captured (zero tautology, zero conflicts)
     # provide a mathematically independent second verification layer (`z3_math`).
     try:
-        from src.analysis.formal_verifier import apply_z3_algebraic_attestation
+        from src.analysis.formal_verifier import (
+            apply_z3_algebraic_attestation,
+            recheck_derived_certainty,
+        )
 
         apply_z3_algebraic_attestation(data, notes)
     except Exception:
-        pass
+        recheck_derived_certainty = None
+
+    # ── Independent Cross-Model Vision Consensus (تحقق النموذج الثاني المستقل) ──
+    # For cells STILL unverified after local OCR + Z3 algebraic attestation, ask
+    # a STRICTLY DISTINCT Gemini model tier/ID to independently re-read ONLY the
+    # unverified labels on up to 4 statement pages (zero leakage of Model A's
+    # numbers). Digit-exact agreement records `vision_cross_model` as a second
+    # independent layer; disagreements stay gated honestly for human review.
+    if not fast_mode and caller is None:
+        try:
+            _sweep_models = [m for m, _t in (call_stats or []) if m]
+            _cm_ok = _cross_model_consensus_verify(
+                data=data,
+                field_sources=field_sources,
+                pages_png=pages_png,
+                selected=selected,
+                pool=pool,
+                sweep_models=_sweep_models,
+                notes=notes,
+                progress_cb=progress_cb,
+                deadline=deadline,
+            )
+            if _cm_ok and recheck_derived_certainty is not None:
+                recheck_derived_certainty(data)
+        except Exception as _cm_exc:
+            if notes is not None:
+                notes.append(f"Cross-model consensus skipped: {_cm_exc}")
     # ── Spatial shadow mode (FEATURE FLAG: SPATIAL_SHADOW=1) ──
     # Runs the spatial cell extractor on the rendered pages and RECORDS its
     # findings without touching any captured value or decision-log status
@@ -2764,6 +2798,401 @@ def _z3_feedback_repair_loop(
 
     data.formal_repairs = repairs
     return repairs
+
+
+CROSS_MODEL_VERIFY_PROMPT = """You are an independent second auditor reading a scanned ARABIC financial statement page.
+Read ONLY the exact printed numbers on THIS page for each requested line item below,
+for EACH year column shown (parentheses = negative; copy digits character-by-character,
+NEVER compute, estimate, or copy values from a different row):
+{field_bullets}
+
+Strict rules:
+- For Balance-Sheet stock items (inventory, accounts_receivable, accounts_payable, cash,
+  fixed_assets, debt), read ONLY from a Balance Sheet (قائمة المركز المالي) — return null
+  if this page is a Cash Flow statement (قائمة التدفقات النقدية).
+- For Cash-Flow items (operating_cash_flow, investing_cash_flow, financing_cash_flow,
+  capex, depreciation_amortization), read ONLY from the Cash Flow statement.
+- Return null for any item NOT explicitly printed on this page.
+
+Return ONLY JSON:
+{{"years": [{years_hint}], "values": {{{json_template}}}}}
+Cross-check both attached image variants (standard cleanup + adaptive-threshold) carefully.
+"""
+
+
+def _call_distinct_model(
+    pool: APIKeyPool,
+    prompt: str,
+    images: list[bytes],
+    exclude_models: set[str],
+    call_stats: list[tuple[str, float]] | None = None,
+) -> tuple[str, str]:
+    """Invoke a STRICTLY distinct Gemini model outside `exclude_models`.
+
+    Returns `(raw_text, model_name)`. Raises RuntimeError if no distinct healthy
+    model can succeed — never falls back to a model inside `exclude_models`.
+    """
+    import time
+    from src.ai.gemini_agent import classify_gemini_error
+    from src.ai.key_pool import classify_quota_scope
+
+    last_error = "no distinct model available"
+    max_attempts = max(len(pool.states) * max(1, len(pool.models) - len(exclude_models)), 1)
+    tried_exhausted = 0
+    for _ in range(min(max_attempts, 14)):
+        picked = pool.pick_distinct_model(exclude_models=exclude_models)
+        if picked is None:
+            break
+        state, model = picked
+        if model in exclude_models:
+            break
+        t0 = time.perf_counter()
+        try:
+            raw = _call_vision(state.key, model, prompt, images)
+            elapsed = time.perf_counter() - t0
+            if call_stats is not None:
+                call_stats.append((model, elapsed))
+            pool.reset_transient(model)
+            pool.mark_success(state.key)
+            pool.record_call(model, elapsed)
+            return raw, model
+        except Exception as exc:
+            tried_exhausted += 1
+            fail_ms = (time.perf_counter() - t0) * 1000.0
+            kind = classify_gemini_error(exc)
+            if kind == "quota":
+                scope, cd_s = classify_quota_scope(exc)
+                if scope == "rpm":
+                    pool.mark_rpm_limited(state.key, model, cd_s)
+                else:
+                    pool.mark_quota_exhausted(state.key, model)
+                pool.record_failover(fail_ms)
+                last_error = f"quota on {model}"
+            elif kind == "auth":
+                pool.mark_dead(state.key, str(exc)[:200])
+                pool.record_failover(fail_ms)
+                last_error = f"auth rejected on {state.masked}"
+            elif kind == "model":
+                low_exc = str(exc).lower()
+                global_404 = "no longer available" in low_exc or "models/" in low_exc
+                pool.mark_model_unavailable(state.key, model, str(exc)[:200], all_keys=global_404)
+                pool.record_failover(fail_ms)
+                last_error = f"model {model} unavailable"
+            else:
+                pool.mark_transient_failure(model)
+                pool.record_failover(fail_ms)
+                last_error = str(exc)[:200]
+    raise RuntimeError(f"Cross-model distinct vision call unavailable ({last_error}).")
+
+
+_CROSS_MODEL_PRIORITY = (
+    "net_income", "pretax_income", "operating_income", "net_activity_profit",
+    "revenue", "cost_of_revenue", "gross_profit", "income_tax_expense",
+    "total_assets", "current_assets", "non_current_assets",
+    "total_liabilities", "current_liabilities", "non_current_liabilities", "equity",
+    "operating_cash_flow", "investing_cash_flow", "financing_cash_flow",
+    "cash", "inventory", "accounts_receivable", "accounts_payable", "fixed_assets",
+    "long_term_debt", "short_term_debt", "short_term_credit_facilities",
+    "current_portion_lt_debt", "bank_overdraft",
+    "current_lease_liabilities", "non_current_lease_liabilities",
+    "capex", "depreciation_amortization", "interest_expense",
+    "selling_expenses", "admin_expenses", "other_operating_expenses",
+    "retained_earnings", "capital", "dividends_from_subsidiaries",
+)
+
+_CROSS_MODEL_EXPENSE_FIELDS = frozenset({
+    "cost_of_revenue", "income_tax_expense", "selling_expenses",
+    "admin_expenses", "other_operating_expenses", "operating_expenses",
+    "interest_expense", "depreciation_amortization", "capex",
+})
+
+_CROSS_MODEL_BS_STOCK_FIELDS = frozenset({
+    "inventory", "accounts_receivable", "accounts_payable", "cash",
+    "fixed_assets", "current_assets", "non_current_assets", "total_assets",
+    "current_liabilities", "non_current_liabilities", "total_liabilities",
+    "equity", "retained_earnings", "capital",
+    "long_term_debt", "short_term_debt", "short_term_credit_facilities",
+    "current_portion_lt_debt", "bank_overdraft",
+    "current_lease_liabilities", "non_current_lease_liabilities", "total_debt",
+})
+
+
+def _cross_model_consensus_verify(
+    data: FinancialData,
+    field_sources: dict[str, list[int]],
+    pages_png: list[bytes],
+    selected: list[int],
+    pool: APIKeyPool | None,
+    sweep_models: list[str] | None = None,
+    notes: list[str] | None = None,
+    progress_cb=None,
+    deadline: float | None = None,
+    max_pages: int = 4,
+    time_budget_s: float = 65.0,
+    distinct_caller=None,
+) -> int:
+    """Independent Cross-Model Consensus verification pass for remaining UNVERIFIED cells.
+
+    Guarantees:
+      1. Strictly uses a DIFFERENT Gemini model ID than the primary sweep model
+         (prefers full Flash vs Flash-Lite contrast). Same-model repeats are forbidden.
+      2. Zero prompt leakage: Model B never receives Model A's extracted numbers.
+      3. Strict digit-exact consensus: only exact digit agreement attests a cell
+         with layer `vision_cross_model`. Disagreements stay gated for human review
+         and NEVER silently overwrite `data.values`.
+      4. Bounded cost: at most `max_pages` (default 4) pages executed in parallel.
+
+    Returns count of newly cross-model-attested `(field, year)` cells.
+    """
+    import os
+    import time as _time
+    from collections import Counter
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from src.analysis.comparison import LABELS_AR
+    from src.extraction.normalizer import _digit_close, build_decision_log
+
+    if os.getenv("CROSS_MODEL_VERIFY", "1") != "1":
+        return 0
+    if distinct_caller is None and (pool is None or not pool.has_usable_pairs()):
+        return 0
+
+    years = sorted(y for y in (data.years or []) if isinstance(y, int))
+    if not years or not selected:
+        return 0
+
+    try:
+        decisions = build_decision_log(data)
+    except Exception:
+        return 0
+
+    derived_map = getattr(data, "derived", {}) or {}
+    unverified_targets: dict[str, set[int]] = {}
+    for d in decisions:
+        f, y = d.get("field"), d.get("year")
+        if d.get("status") != "UNVERIFIED" or d.get("final") is None:
+            continue
+        if (f, y) in derived_map:
+            continue  # never ask Vision to read a synthetically derived cell
+        if not isinstance(y, int):
+            continue
+        unverified_targets.setdefault(f, set()).add(y)
+
+    if not unverified_targets:
+        return 0
+
+    # Determine models to exclude so Model B is genuinely distinct from the primary sweep
+    sweep_list = [m for m in (sweep_models or []) if m]
+    all_sweep_set = set(sweep_list)
+    dominant_model = Counter(sweep_list).most_common(1)[0][0] if sweep_list else None
+    exclude_set = set(all_sweep_set)
+    if distinct_caller is None and pool is not None:
+        if pool.pick_distinct_model(exclude_models=exclude_set) is None:
+            # If the sweep happened to touch every model, at minimum exclude the dominant model
+            exclude_set = {dominant_model} if dominant_model else set()
+            if not exclude_set or pool.pick_distinct_model(exclude_models=exclude_set) is None:
+                return 0  # No genuinely distinct healthy model available
+
+    # Map each unverified field to its primary (lowest) source page in `selected`
+    selected_set = set(selected)
+    cf_only_pages = (
+        {p for f in ("operating_cash_flow", "investing_cash_flow", "financing_cash_flow")
+         for p in (field_sources.get(f) or [])}
+        - {p for f in ("total_assets", "equity", "current_assets")
+           for p in (field_sources.get(f) or [])}
+    )
+    page_to_fields: dict[int, list[str]] = {}
+    prio_rank = {f: i for i, f in enumerate(_CROSS_MODEL_PRIORITY)}
+    for f in sorted(unverified_targets, key=lambda k: prio_rank.get(k, 999)):
+        src_pages = sorted({p for p in (field_sources.get(f) or []) if p in selected_set})
+        if f in _CROSS_MODEL_BS_STOCK_FIELDS:
+            src_pages = [p for p in src_pages if p not in cf_only_pages]
+        if not src_pages:
+            continue
+        primary_p = src_pages[0]
+        page_to_fields.setdefault(primary_p, []).append(f)
+
+    if not page_to_fields:
+        return 0
+
+    # Prioritize core statement pages (p <= 12) and highest-impact unverified count
+    ranked_pages = sorted(
+        page_to_fields.items(),
+        key=lambda kv: (
+            0 if kv[0] <= 12 else 1,
+            -sum(3 if prio_rank.get(f, 999) < 18 else 1 for f in kv[1]),
+            kv[0],
+        ),
+    )[:max_pages]
+
+    t0 = _time.time()
+    eff_deadline = min(deadline, t0 + time_budget_s) if deadline is not None else (t0 + time_budget_s)
+    if eff_deadline - t0 < 8.0:
+        return 0
+
+    if progress_cb:
+        pg_list = [p for p, _ in ranked_pages]
+        progress_cb(f"🤝 تحقق النموذج الثاني المستقل (Cross-Model Consensus) للصفحات {pg_list}…")
+
+    by_page_png = dict(zip(selected, pages_png))
+    years_hint = ", ".join(str(y) for y in years[-2:])
+
+    def _verify_page(page_no: int, fields_on_p: list[str]) -> tuple[int, str | None, dict[str, dict[int, float]], str]:
+        if _time.time() > eff_deadline - 3.0:
+            return page_no, None, {}, "budget"
+        target_f = fields_on_p[:14]  # keep prompt tight for accurate digit copying
+        bullets = "\n".join(
+            f"- {f} ({LABELS_AR.get(f, f)})" for f in target_f
+        )
+        json_tpl = ", ".join(f'"{f}": [v1, v2]' for f in target_f)
+        prompt = CROSS_MODEL_VERIFY_PROMPT.format(
+            field_bullets=bullets,
+            years_hint=years_hint,
+            json_template=json_tpl,
+        )
+        src_png = by_page_png[page_no]
+        img = preprocess_image(src_png, max_side=2200)
+        img_bin = preprocess_image(src_png, max_side=2200, binarize=True)
+        try:
+            if distinct_caller is not None:
+                raw_text, used_model = distinct_caller(page_no, prompt, [img, img_bin], exclude_set)
+            else:
+                raw_text, used_model = _call_distinct_model(
+                    pool, prompt, [img, img_bin], exclude_models=exclude_set
+                )
+            if used_model in exclude_set:
+                return page_no, None, {}, "same_model_rejected"
+            parsed_json = _loads_relaxed(raw_text)
+        except Exception as exc:
+            return page_no, None, {}, str(exc)[:140]
+
+        resp_years = [extract_year(y) for y in (parsed_json.get("years") or [])]
+        resp_years = [y for y in resp_years if y]
+        if not resp_years:
+            resp_years = list(years[-2:])
+        vals_block = parsed_json.get("values") or parsed_json.get("totals") or {}
+        out_map: dict[str, dict[int, float]] = {}
+        if isinstance(vals_block, dict):
+            for f, arr in vals_block.items():
+                if f not in target_f or not isinstance(arr, list):
+                    continue
+                for idx, raw_v in enumerate(arr):
+                    if idx >= len(resp_years):
+                        break
+                    num = parse_number(raw_v)
+                    if num is None:
+                        continue
+                    if float(num).is_integer() and 0 <= num <= 3:
+                        continue
+                    out_map.setdefault(f, {})[resp_years[idx]] = float(num)
+        return page_no, used_model, out_map, ""
+
+    page_results: list[tuple[int, str | None, dict[str, dict[int, float]], str]] = []
+    workers = min(3, len(ranked_pages))
+    if workers <= 1 or distinct_caller is not None:
+        for pno, flist in ranked_pages:
+            page_results.append(_verify_page(pno, flist))
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            futs = [ex.submit(_verify_page, pno, flist) for pno, flist in ranked_pages]
+            for fut in as_completed(futs):
+                try:
+                    page_results.append(fut.result())
+                except Exception:
+                    pass
+
+    order_next = max(
+        (o for cands in (getattr(data, "candidates", {}) or {}).values()
+         for ys in cands.values() for _v, o in ys),
+        default=0,
+    ) + 1
+    votes = getattr(data, "vote_outcomes", None)
+    if not isinstance(votes, dict):
+        data.vote_outcomes = {}
+        votes = data.vote_outcomes
+
+    attested_count = 0
+    disagreed_count = 0
+    models_used: set[str] = set()
+
+    for page_no, used_model, out_map, _err in sorted(page_results, key=lambda r: r[0]):
+        if not used_model or not out_map:
+            continue
+        models_used.add(used_model)
+        is_cf_page = page_no in cf_only_pages
+        for f, by_y in out_map.items():
+            if is_cf_page and f in _CROSS_MODEL_BS_STOCK_FIELDS:
+                continue
+            target_years = unverified_targets.get(f) or set()
+            for y, val_b in by_y.items():
+                if y not in target_years:
+                    continue
+                captured = data.get(f, y)
+                if captured is None:
+                    continue
+                # Sign handling: balance-sheet stocks & expenses allow print-sign convention
+                # (parentheses vs magnitude), while income/cash-flow signs must match strictly!
+                cmp_b = val_b
+                if f in _CROSS_MODEL_BS_STOCK_FIELDS:
+                    cmp_b = abs(val_b)
+                elif f in _CROSS_MODEL_EXPENSE_FIELDS:
+                    cmp_b = -abs(val_b) if captured < 0 else abs(val_b)
+                if _digit_close(cmp_b, captured):
+                    cand_list = data.candidates.setdefault(f, {}).setdefault(y, [])
+                    layer_list = data.candidate_layers.setdefault(f, {}).setdefault(y, [])
+                    label_list = data.candidate_labels.setdefault(f, {}).setdefault(y, [])
+                    if len(layer_list) < len(cand_list):
+                        fb_lyr = layer_list[0] if layer_list else "vision"
+                        layer_list.extend([fb_lyr] * (len(cand_list) - len(layer_list)))
+                    elif len(layer_list) > len(cand_list):
+                        del layer_list[len(cand_list):]
+                    if not any(
+                        v is not None and _digit_close(v, captured) and lyr == "vision_cross_model"
+                        for (v, _o), lyr in zip(cand_list, layer_list)
+                    ):
+                        cand_list.append((captured, order_next))
+                        label_list.append(f"cross_model:{used_model}")
+                        layer_list.append("vision_cross_model")
+                        order_next += 1
+                    data.bump_confidence(f, y, 2)
+                    vo = votes.get((f, y))
+                    if isinstance(vo, dict):
+                        wl = list(vo.get("winner_layers") or [])
+                        if not wl:
+                            wl.append("vision")
+                        if "vision_cross_model" not in wl:
+                            wl.append("vision_cross_model")
+                        vo["winner_layers"] = sorted(set(wl))
+                    else:
+                        existing_lyrs = {
+                            lyr for (v, _o), lyr in zip(cand_list, layer_list)
+                            if v is not None and _digit_close(v, captured) and lyr
+                        }
+                        existing_lyrs.add("vision_cross_model")
+                        if len(existing_lyrs) < 2:
+                            existing_lyrs.add("vision")
+                        votes[(f, y)] = {
+                            "winner": captured,
+                            "votes": max(2, len(existing_lyrs)),
+                            "total": len(cand_list),
+                            "witnesses": len(existing_lyrs),
+                            "winner_layers": sorted(existing_lyrs),
+                            "replaced": captured,
+                            "dissent": [],
+                            "contested": False,
+                        }
+                    attested_count += 1
+                else:
+                    # Honest disagreement: never promote and never silently overwrite
+                    disagreed_count += 1
+
+    if notes is not None and (attested_count or disagreed_count):
+        m_str = ", ".join(sorted(models_used))
+        notes.append(
+            f"التحقق المتقاطع بنموذج ثانٍ مستقل ({m_str}): تم توثيق {attested_count} خانة "
+            f"بتطابق رقمي كامل (100% digit-exact)"
+            + (f" — وبقيت {disagreed_count} خانة محجوبة للمراجعة البشرية لاختلاف القراءتين." if disagreed_count else ".")
+        )
+    return attested_count
 
 
 def run_spatial_shadow(data, page_items, notes=None, fields=None,

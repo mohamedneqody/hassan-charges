@@ -449,6 +449,41 @@ class APIKeyPool:
                 return state, model
         return None
 
+    def pick_distinct_model(
+        self, exclude_models: set[str] | None = None
+    ) -> tuple[KeyState, str] | None:
+        """Pick a healthy (key, model) pair whose model is STRICTLY outside
+        `exclude_models`, preferring a different model tier (e.g. full Flash
+        when the primary pass ran on Flash-Lite, or vice versa).
+
+        Returns None when no distinct healthy model is available — callers
+        must NEVER treat a same-model repeat as an independent cross-model
+        verification witness.
+        """
+        excluded = {m for m in (exclude_models or set()) if m}
+        with self._lock:
+            ordered = [m for m in self._ordered_models_unlocked() if m not in excluded]
+            if not ordered or not self.states:
+                return None
+            # Prefer a contrasting architecture/tier when available
+            excluded_all_lite = bool(excluded) and all("lite" in m.lower() for m in excluded)
+            excluded_no_lite = bool(excluded) and all("lite" not in m.lower() for m in excluded)
+            if excluded_all_lite:
+                ordered.sort(key=lambda m: (1 if "lite" in m.lower() else 0, -MODEL_RANK.get(m, MODEL_RANK_DEFAULT)))
+            elif excluded_no_lite:
+                ordered.sort(key=lambda m: (0 if "lite" in m.lower() else 1, -MODEL_RANK.get(m, MODEL_RANK_DEFAULT)))
+            n_keys = len(self.states)
+            for model in ordered:
+                for offset in range(n_keys):
+                    state = self.states[(self._counter + offset) % n_keys]
+                    if state.dead:
+                        continue
+                    if not self._usable_model(state, model):
+                        continue
+                    self._counter = (self._counter + offset + 1) % max(1, n_keys * len(self.models))
+                    return state, model
+        return None
+
     # --------------------------------------------------------------- marking
 
     def _find(self, key: str) -> KeyState | None:

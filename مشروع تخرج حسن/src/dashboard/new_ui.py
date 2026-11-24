@@ -88,7 +88,7 @@ _T = {
 _GATE_EN = {
     "use": "Verified — decisive",
     "use_disclosed": "Verified (disclosed) — decisive",
-    "not_decisive": "Needs review — blocked",
+    "not_decisive": "Needs review — in ratios (held from official score)",
     "missing": "Not captured",
 }
 
@@ -1030,6 +1030,8 @@ def sec_statements(vm: dict, raw: bytes | None) -> None:
                     .replace("['local_ocr']", "طبقة القراءة المحلية")
                     .replace("(['z3_math'])", "(طبقة الإثبات الجبري Z3)")
                     .replace("['z3_math']", "طبقة الإثبات الجبري Z3")
+                    .replace("(['vision_cross_model'])", "(طبقة تحقق النموذج الثاني المستقل)")
+                    .replace("['vision_cross_model']", "طبقة تحقق النموذج الثاني المستقل")
                 )
                 reason_html = (
                     f'<div class="fs-stmt-reason">'
@@ -1481,11 +1483,11 @@ def sec_health(vm: dict, results: dict) -> None:
     st.subheader(_T["health"][lang])
     blocked = _health_blocked_fields(vm, results)
     hs = compute_health_score(results["curr_metrics"], blocked_fields=blocked)
+    hs_est = compute_health_score(results["curr_metrics"], blocked_fields=None) if blocked else hs
 
-    if hs.total is not None:
-        st.markdown(build_health_html(hs, lang=lang), unsafe_allow_html=True)
+    def _render_health_visuals(score_obj, key_suffix: str) -> None:
         _cfg = {"displayModeBar": False}
-        fig_rad = charts.health_radar_chart(hs, lang=lang)
+        fig_rad = charts.health_radar_chart(score_obj, lang=lang)
         _sec_banner(
             "🎯 التمثيل البصري لمؤشر الصحة المالية"
             if is_ar
@@ -1500,31 +1502,97 @@ def sec_health(vm: dict, results: dict) -> None:
             hc1, hc2 = st.columns(2)
             with hc1:
                 st.plotly_chart(
-                    charts.health_gauge(hs, lang=lang),
+                    charts.health_gauge(score_obj, lang=lang),
                     use_container_width=True,
-                    key="health_gauge_official",
+                    key=f"health_gauge_{key_suffix}",
                     config=_cfg,
                 )
             with hc2:
                 st.plotly_chart(
                     fig_rad,
                     use_container_width=True,
-                    key="health_radar_official",
+                    key=f"health_radar_{key_suffix}",
                     config=_cfg,
                 )
         else:
             st.plotly_chart(
-                charts.health_gauge(hs, lang=lang),
+                charts.health_gauge(score_obj, lang=lang),
                 use_container_width=True,
-                key="health_gauge_official",
+                key=f"health_gauge_{key_suffix}",
                 config=_cfg,
             )
-        if getattr(hs, "policy", ""):
-            st.caption(hs.policy)
+
+    has_blocked_gap = bool(
+        blocked
+        and hs_est.total is not None
+        and (
+            hs.total is None
+            or not hs.complete
+            or len(hs_est.missing_pillars) < len(hs.missing_pillars)
+        )
+    )
+
+    if hs.total is not None:
+        active_hs = hs
+        key_sfx = "official"
+        if has_blocked_gap:
+            off_cov = round(hs.coverage * 100)
+            est_cov = round(hs_est.coverage * 100)
+            opt_off = (
+                f"🛡️ الدرجة الرسمية (الموثّقة فقط — {int(round(hs.total))}/100 · تغطية {off_cov}%)"
+                if is_ar
+                else f"🛡️ Official Score (verified only — {int(round(hs.total))}/100 · {off_cov}% cov)"
+            )
+            opt_est = (
+                f"🔍 التقدير الشامل الاستكشافي (كل الأرقام الملتقطة — {int(round(hs_est.total))}/100 · تغطية {est_cov}%)"
+                if is_ar
+                else f"🔍 Exploratory Full Estimate (all captured — {int(round(hs_est.total))}/100 · {est_cov}% cov)"
+            )
+            mode_choice = st.radio(
+                "وضع عرض الدرجة الصحية" if is_ar else "Health Score display mode",
+                [opt_off, opt_est],
+                horizontal=True,
+                key="health_view_mode_partial",
+            )
+            if mode_choice == opt_est:
+                active_hs = hs_est
+                key_sfx = "exploratory_full"
+                st.info(
+                    "🔍 **عرض استكشافي تجريبي غير معتمد رسمياً:** يشمل كل الأرقام الملتقطة (بما فيها البنود التي حالتها «يحتاج مراجعة» والمحسوبة بالفعل في جدول المؤشرات). "
+                    "الدرجة الرسمية المعتمدة في التقارير النهائية تبقى وفق بوابة الصدق حتى توثيق البنود المعلقة."
+                    if is_ar
+                    else "🔍 **Unofficial exploratory view:** includes all extracted figures (including needs-review items already shown in Financial Metrics). Official exported reports remain governed by the Honesty Gate."
+                )
+        st.markdown(build_health_html(active_hs, lang=lang), unsafe_allow_html=True)
+        _render_health_visuals(active_hs, key_sfx)
+        if getattr(active_hs, "policy", ""):
+            st.caption(active_hs.policy)
         return
 
-    hs_est = compute_health_score(results["curr_metrics"], blocked_fields=None)
     if hs_est.total is not None:
+        est_cov = round(hs_est.coverage * 100)
+        opt_est = (
+            f"🔍 التقدير الشامل الاستكشافي (كل الأرقام الملتقطة — {int(round(hs_est.total))}/100 · تغطية {est_cov}%)"
+            if is_ar
+            else f"🔍 Exploratory Full Estimate ({int(round(hs_est.total))}/100 · {est_cov}% cov)"
+        )
+        opt_off = (
+            "🛡️ الدرجة الرسمية (محجوبة وفق بوابة الصدق)"
+            if is_ar
+            else "🛡️ Official Score (refused by Honesty Gate)"
+        )
+        mode_ref = st.radio(
+            "وضع عرض الدرجة الصحية" if is_ar else "Health Score display mode",
+            [opt_est, opt_off],
+            horizontal=True,
+            key="health_view_mode_refused",
+        )
+        if mode_ref == opt_off:
+            st.markdown(build_health_html(hs, lang=lang), unsafe_allow_html=True)
+            if getattr(hs, "policy", ""):
+                st.caption(hs.policy)
+            return
+
         st.warning(
             "🛡️ **الدرجة الصحية الرسمية محجوبة وفق سياسة تغطية البيانات** (مدخلات السيولة/المديونية بانتظار المراجعة البشرية — لا تُصدَّر كدرجة معتمدة في التقارير النهائية). "
             "يُعرض أدناه **تقدير استكشافي تجريبي غير معتمد** محسوب من القيم الأولية الملتقطة لفهم الصورة المبدئية فقط؛ "
@@ -1534,31 +1602,7 @@ def sec_health(vm: dict, results: dict) -> None:
             "Below is an **unofficial exploratory estimate** computed from preliminary extracted values for preview only; verify critical cells in Human Review to unlock the official score."
         )
         st.markdown(build_health_html(hs_est, lang=lang), unsafe_allow_html=True)
-        _cfg = {"displayModeBar": False}
-        fig_rad_est = charts.health_radar_chart(hs_est, lang=lang)
-        if fig_rad_est is not None:
-            hc1, hc2 = st.columns(2)
-            with hc1:
-                st.plotly_chart(
-                    charts.health_gauge(hs_est, lang=lang),
-                    use_container_width=True,
-                    key="health_gauge_exploratory",
-                    config=_cfg,
-                )
-            with hc2:
-                st.plotly_chart(
-                    fig_rad_est,
-                    use_container_width=True,
-                    key="health_radar_exploratory",
-                    config=_cfg,
-                )
-        else:
-            st.plotly_chart(
-                charts.health_gauge(hs_est, lang=lang),
-                use_container_width=True,
-                key="health_gauge_exploratory",
-                config=_cfg,
-            )
+        _render_health_visuals(hs_est, "exploratory")
         with st.expander(
             "🛡️ عرض تفاصيل حجب الدرجة الرسمية وفق بوابة الصدق"
             if is_ar

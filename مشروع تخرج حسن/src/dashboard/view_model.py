@@ -23,9 +23,9 @@ from src.analysis.financial_gate import decide, verification_labels  # noqa: E40
 
 # قرار البوابة → (التسمية العربية، الصنف اللوني)
 GATE_LABELS = {
-    "use": ("موثق — يدخل الحساب", "ok"),
-    "use_disclosed": ("موثق (معلن) — يدخل الحساب", "ok"),
-    "not_decisive": ("يحتاج مراجعة — محجوب عن الحسم", "pend"),
+    "use": ("موثق — يدخل الحساب الرسمي", "ok"),
+    "use_disclosed": ("موثق (معلن) — يدخل الحساب الرسمي", "ok"),
+    "not_decisive": ("يحتاج مراجعة — يدخل المؤشرات (محجوب عن الدرجة الرسمية)", "pend"),
     "missing": ("غير ملتقطة", "miss"),
 }
 

@@ -1097,7 +1097,46 @@ def apply_z3_algebraic_attestation(
                     for f in comp_f:
                         to_attest.setdefault((f, y), "A11_OPEX_SUM")
 
+        # A6b: Egyptian EAS Income Statement Activity-to-Pretax Bridge
+        # pretax_income == net_activity_profit - |interest_expense| + dividends_from_subsidiaries
+        act_fields = (
+            "pretax_income",
+            "net_activity_profit",
+            "interest_expense",
+            "dividends_from_subsidiaries",
+        )
+        if all(_is_eligible_for_z3_attestation(data, f, y) for f in act_fields):
+            pt_v = float(values["pretax_income"][y])
+            act_v = float(values["net_activity_profit"][y])
+            fin_v = float(values["interest_expense"][y])
+            div_v = float(values["dividends_from_subsidiaries"][y])
+            rhs_signed = act_v + fin_v + div_v
+            rhs_sub = act_v - abs(fin_v) + div_v
+            best_act_rhs = rhs_signed if abs(pt_v - rhs_signed) <= abs(pt_v - rhs_sub) else rhs_sub
+            scale_act = max(abs(pt_v), abs(best_act_rhs), 1.0)
+            if abs(pt_v - best_act_rhs) <= max(10.0, strict_rel_tol * scale_act):
+                for f in act_fields:
+                    to_attest.setdefault((f, y), "A6b_ACTIVITY_BRIDGE")
+
+        # A5c: Exact Gross-to-Operating Profit Bridge when all OpEx components are directly captured
+        op_field = "operating_income" if _is_eligible_for_z3_attestation(data, "operating_income", y) else (
+            "net_activity_profit" if _is_eligible_for_z3_attestation(data, "net_activity_profit", y) else None
+        )
+        if op_field and _is_eligible_for_z3_attestation(data, "gross_profit", y):
+            op_comps = [f for f in _OPEX_COMPONENT_FIELDS if _is_eligible_for_z3_attestation(data, f, y)]
+            if len(op_comps) >= 2:
+                gp_v = float(values["gross_profit"][y])
+                op_v = float(values[op_field][y])
+                op_sum = sum(abs(float(values[f][y])) for f in op_comps)
+                scale_op = max(abs(gp_v), abs(op_v), op_sum, 1.0)
+                if abs((gp_v - op_sum) - op_v) <= max(10.0, strict_rel_tol * scale_op):
+                    to_attest.setdefault(("gross_profit", y), "A5c_OP_EXACT")
+                    to_attest.setdefault((op_field, y), "A5c_OP_EXACT")
+                    for f in op_comps:
+                        to_attest.setdefault((f, y), "A5c_OP_EXACT")
+
     if not to_attest:
+        recheck_derived_certainty(data)
         return []
 
     order_next = max(
@@ -1153,26 +1192,9 @@ def apply_z3_algebraic_attestation(
         attested.append((field, year, ax_id))
         order_next += 1
 
-    # Upgrade derived_uncertain for total_liabilities & closed-identity fields
-    # when their directly-printed inputs are now mathematically attested via Z3!
-    derived_unc = getattr(data, "derived_uncertain", None)
-    if isinstance(derived_unc, set):
-        for y in years:
-            if ("total_liabilities", y) in derived_unc:
-                if (
-                    ("non_current_liabilities", y) in to_attest
-                    and ("current_liabilities", y) in to_attest
-                ):
-                    derived_unc.discard(("total_liabilities", y))
-            if ("gross_profit", y) in derived_unc:
-                if ("revenue", y) in to_attest and ("cost_of_revenue", y) in to_attest:
-                    derived_unc.discard(("gross_profit", y))
-            if ("cost_of_revenue", y) in derived_unc:
-                if ("revenue", y) in to_attest and ("gross_profit", y) in to_attest:
-                    derived_unc.discard(("cost_of_revenue", y))
-            if ("income_tax_expense", y) in derived_unc:
-                if ("pretax_income", y) in to_attest and ("net_income", y) in to_attest:
-                    derived_unc.discard(("income_tax_expense", y))
+    # Upgrade derived_uncertain for derived fields whose directly-printed
+    # inputs are now verified by >=2 independent layers (z3_math / local_ocr / cross-model).
+    recheck_derived_certainty(data, extra_attested=set(to_attest.keys()))
 
     if attested and notes is not None:
         notes.append(
@@ -1180,3 +1202,80 @@ def apply_z3_algebraic_attestation(
             f"عبر المعادلات المحاسبية المقفولة كطبقة تحقق مستقلة (z3_math)."
         )
     return attested
+
+
+def recheck_derived_certainty(
+    data,
+    extra_attested: set[tuple[str, int]] | None = None,
+) -> int:
+    """Clear `derived_uncertain` for derived fields once ALL their directly
+    captured inputs are independently verified (>=2 distinct layers).
+
+    Honest cascade: never upgrades a derived cell while any of its required
+    inputs still rests on a single unverified layer. Returns number upgraded.
+    """
+    derived_unc = getattr(data, "derived_uncertain", None)
+    if not isinstance(derived_unc, set) or not derived_unc:
+        return 0
+    attested_set = set(extra_attested or set())
+    values = getattr(data, "values", {}) or {}
+    votes = getattr(data, "vote_outcomes", {}) or {}
+    cand_layers = getattr(data, "candidate_layers", {}) or {}
+    candidates = getattr(data, "candidates", {}) or {}
+    conf_map = getattr(data, "confidence", {}) or {}
+
+    def _is_multi_layer_verified(field: str, year: int) -> bool:
+        if (field, year) in attested_set:
+            return True
+        val = values.get(field, {}).get(year)
+        if val is None:
+            return False
+        if (conf_map.get(field, {}) or {}).get(year, 0) < 2:
+            return False
+        vo = votes.get((field, year)) or {}
+        wl = set(vo.get("winner_layers") or [])
+        if len(wl) >= 2:
+            return True
+        cands = candidates.get(field, {}).get(year) or []
+        lyrs = cand_layers.get(field, {}).get(year) or []
+        matching_lyrs = {
+            lyr for (v, _o), lyr in zip(cands, lyrs)
+            if v is not None and lyr and _vals_close(v, val, ignore_sign=(field in _EXPENSE_SIGN_FIELDS))
+        }
+        return len(matching_lyrs) >= 2
+
+    years = sorted({y for _f, y in derived_unc if isinstance(y, int)})
+    upgraded = 0
+    _direct_pairs = (
+        ("total_liabilities", ("non_current_liabilities", "current_liabilities")),
+        ("gross_profit", ("revenue", "cost_of_revenue")),
+        ("cost_of_revenue", ("revenue", "gross_profit")),
+        ("income_tax_expense", ("pretax_income", "net_income")),
+        ("non_current_assets", ("total_assets", "current_assets")),
+        ("non_current_liabilities", ("total_liabilities", "current_liabilities")),
+    )
+    for y in years:
+        for target, reqs in _direct_pairs:
+            if (target, y) in derived_unc and all(_is_multi_layer_verified(r, y) for r in reqs):
+                derived_unc.discard((target, y))
+                upgraded += 1
+
+        # Debt aggregations: clear once every present debt component is multi-layer verified
+        _borrow_comps = (
+            "short_term_debt", "short_term_credit_facilities", "bank_overdraft",
+            "current_portion_lt_debt", "long_term_debt",
+        )
+        _lease_comps = ("current_lease_liabilities", "non_current_lease_liabilities")
+        present_borrow = [f for f in _borrow_comps if values.get(f, {}).get(y) is not None]
+        present_lease = [f for f in _lease_comps if values.get(f, {}).get(y) is not None]
+        if ("borrowings_excl_leases", y) in derived_unc and present_borrow:
+            if all(_is_multi_layer_verified(f, y) for f in present_borrow):
+                derived_unc.discard(("borrowings_excl_leases", y))
+                upgraded += 1
+        all_debt_present = present_borrow + present_lease
+        if all_debt_present and all(_is_multi_layer_verified(f, y) for f in all_debt_present):
+            for df in ("financial_debt_incl_leases", "total_debt"):
+                if (df, y) in derived_unc:
+                    derived_unc.discard((df, y))
+                    upgraded += 1
+    return upgraded

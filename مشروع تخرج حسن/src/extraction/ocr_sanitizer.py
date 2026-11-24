@@ -168,7 +168,9 @@ _LABEL_PATTERNS: dict[str, list[str]] = {
     "operating_income": [
         r"صافي\s+ربح?\s+النشاط",
         r"صافي\s+أرباح?\s+النشاط",
+        r"صافي\s+(?:ربح|أرباح)\s+التشغيل",
         r"الربح\s+التشغيلي",
+        r"ربح\s+النشاط",
         r"نتيجة\s+النشاط",
         r"operating (?:profit|income|result)",
     ],

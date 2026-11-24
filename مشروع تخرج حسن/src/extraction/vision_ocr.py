@@ -1205,7 +1205,30 @@ def extract_via_vision(
     def _build_batches(order: list[int]) -> list[tuple[list[int], list[bytes]]]:
         runs: list[list[int]] = []
         for p in order:
-            if runs and (p == runs[-1][-1] + 1 and len(runs[-1]) < VISION_BATCH_SIZE):
+            # Primary financial statement pages (p <= 12) hold dense 20-40 row
+            # Arabic tables; bundling 3 of them into one call causes 20-35s
+            # latency, 504 timeouts, or JSON truncation of Page 6 (Income Statement).
+            # Reading dense early statement pages individually in parallel is both
+            # faster and immune to cross-page output truncation.
+            is_dense_stmt = (
+                caller is None
+                and p <= 12
+                and (
+                    (local_reads and p in local_reads and local_reads[p].has_table)
+                    or not local_reads
+                )
+            )
+            max_chunk = 1 if is_dense_stmt else VISION_BATCH_SIZE
+            if (
+                runs
+                and max_chunk > 1
+                and len(runs[-1]) < max_chunk
+                and p == runs[-1][-1] + 1
+                and not (caller is None and runs[-1][-1] <= 12 and (
+                    (local_reads and runs[-1][-1] in local_reads and local_reads[runs[-1][-1]].has_table)
+                    or not local_reads
+                ))
+            ):
                 runs[-1].append(p)
             else:
                 runs.append([p])
@@ -1337,7 +1360,10 @@ def extract_via_vision(
         else:
             dry_waves += 1
         last_captured = captured_now
-        if dry_waves >= 2:
+        has_is_anchor = bool(
+            accumulated.values.get("revenue") or accumulated.values.get("net_income")
+        )
+        if dry_waves >= 2 and (has_is_anchor or done_pages >= min(n_pages, 14)):
             # ملاحظة: لا نضع stopped_early هنا — الصفحات الفاشلة قد تكون
             # قوائمًا فشلت عابرةً (503) وتستحق إعادة القراءة المحدودة
             notes.append(
@@ -1360,7 +1386,10 @@ def extract_via_vision(
     # Skipped when early-stop fired (those pages are notes) or when the pool
     # is already dead — retrying then only adds minutes with zero chance.
     failed_pages = (
-        [p for p in selected if p not in ok_pages]
+        sorted(
+            [p for p in selected if p not in ok_pages],
+            key=lambda p: (0 if p <= 12 else 1, p),
+        )
         if not stopped_early
         else []
     )
@@ -1461,6 +1490,51 @@ def extract_via_vision(
             if len(caps_acc) == len(parts):
                 caps_acc[:] = [caps_acc[i] for i in order_idx]
         accumulated = merge_parsed(parts, [], part_layers=["vision"] * len(parts))
+
+    # Income-Statement rescue pass: if BOTH revenue and net_income are still
+    # missing after the initial sweep + retry (e.g., transient 503/truncation
+    # on the P&L page), re-read up to 4 early table pages (p <= 10) individually
+    # at 2000px using the literal v2 prompt before failing with InsufficientData.
+    if (
+        caller is None
+        and pool.has_usable_pairs()
+        and not accumulated.values.get("revenue")
+        and not accumulated.values.get("net_income")
+    ):
+        _by_png = dict(zip(selected, pages_png))
+        _early_cand = [
+            p for p in sorted(_by_png)
+            if p <= 10
+            and (not local_reads or p not in local_reads or local_reads[p].has_table or local_reads[p].text_len >= 600)
+        ][:4]
+        for _ep in _early_cand:
+            if _time.time() > deadline or not pool.has_usable_pairs():
+                break
+            try:
+                _rtxt = _call_with_rotation(
+                    pool,
+                    _single_prompt(_ep),
+                    [preprocess_image(_by_png[_ep], max_side=2000)],
+                    call_stats,
+                )
+                _rpages = _parse_vision_json(_rtxt)
+                _before_is = len(parts)
+                _absorb_batch(
+                    _rpages, [_ep], parts, ok_pages, notes,
+                    currency_holder, doc_years_holder, field_sources,
+                    gap_sink, caps_acc,
+                )
+                _added_is = len(parts) - _before_is
+                if _added_is > 0:
+                    part_pages.extend([_ep] * _added_is)
+                    if caps_acc and len(caps_acc) < len(parts):
+                        caps_acc.extend([[] for _ in range(len(parts) - len(caps_acc))])
+                accumulated = merge_parsed(parts, [], part_layers=["vision"] * len(parts))
+                if accumulated.values.get("revenue") or accumulated.values.get("net_income"):
+                    notes.append(f"Income-Statement rescue succeeded on page {_ep}.")
+                    break
+            except Exception:
+                continue
 
     # Focused double-read of the four core balance-sheet totals: replaces
     # captures that disagree with a fresh, focused read of their source page

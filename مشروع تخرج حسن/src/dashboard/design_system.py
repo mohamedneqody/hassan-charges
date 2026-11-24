@@ -681,10 +681,10 @@ html, body, .stApp {{
 [data-testid="stFileUploaderDropzoneInstructions"] {{
   display: none !important;
 }}
-[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] button > * {{
+[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] > button > * {{
   display: none !important;
 }}
-[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] button::after {{
+[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] > button::after {{
   content: "{drop_btn_text}";
   font-size: .95rem !important;
   font-weight: 700 !important;
@@ -720,8 +720,8 @@ html, body, .stApp {{
   box-shadow: 0 16px 36px -18px rgba(98, 85, 231, .4) !important;
   transform: translateY(-2px);
 }}
-[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] button,
-[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] a {{
+[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] > button,
+[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] > a {{
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;

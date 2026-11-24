@@ -681,10 +681,10 @@ html, body, .stApp {{
 [data-testid="stFileUploaderDropzoneInstructions"] {{
   display: none !important;
 }}
-[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] > button > * {{
+[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] button[data-testid="stBaseButton-secondary"] > * {{
   display: none !important;
 }}
-[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] > button::after {{
+[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] button[data-testid="stBaseButton-secondary"]::after {{
   content: "{drop_btn_text}";
   font-size: .95rem !important;
   font-weight: 700 !important;
@@ -720,7 +720,7 @@ html, body, .stApp {{
   box-shadow: 0 16px 36px -18px rgba(98, 85, 231, .4) !important;
   transform: translateY(-2px);
 }}
-[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] > button,
+[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] button[data-testid="stBaseButton-secondary"],
 [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] > a {{
   display: inline-flex !important;
   align-items: center !important;
@@ -2012,6 +2012,22 @@ section[data-testid="stSidebar"] .stButton > button[data-testid="stBaseButton-pr
 .fs-insight-card:hover {{
   transform: translateY(-2px);
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+}}
+.fs-card {{
+  background: var(--fs-surface);
+  border: var(--fs-border);
+  border-radius: var(--fs-radius);
+  padding: var(--fs-sp-4) var(--fs-sp-6);
+  box-shadow: var(--fs-shadow-sm);
+  margin-bottom: var(--fs-sp-3);
+}}
+.fs-stats-grid .fs-kpi {{
+  align-items: flex-start;
+  text-align: start;
+  padding: var(--fs-sp-4) var(--fs-sp-4);
+}}
+.fs-stats-grid .fs-kpi-val {{
+  font-size: 1.75rem;
 }}
 
 /* == Accessibility: prefers-reduced-motion == */

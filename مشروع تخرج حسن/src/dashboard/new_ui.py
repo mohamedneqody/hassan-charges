@@ -639,8 +639,19 @@ def _render_overview_visuals_and_table(vm: dict, results: dict, is_ar: bool, lan
     def _fmt_money(v: float | None) -> str:
         if v is None:
             return "—"
-        txt = cell_value_display(v, sc, cur) if is_ar else f"{cur}{humanize(v, sc)}"
-        return f'<bdi dir="ltr">{esc(txt)}</bdi>'
+        if is_ar:
+            raw_h = humanize(abs(v), sc)
+            word_map = {"B": "مليار", "M": "مليون", "K": "ألف"}
+            num_part, unit_word = raw_h, ""
+            for suf, w in word_map.items():
+                if raw_h.endswith(suf):
+                    num_part = raw_h[: -len(suf)]
+                    unit_word = f" {w}"
+                    break
+            sign_s = "-" if v < 0 else ""
+            return f'<bdi dir="ltr">{sign_s}{esc(num_part)}</bdi>{esc(unit_word)} {esc(cur)}'
+        sign_s = "-" if v < 0 else ""
+        return f'<bdi dir="ltr">{sign_s}{esc(cur)}{esc(humanize(abs(v), sc))}</bdi>'
 
     body_rows: list[str] = []
     for sec_title, items in sections:
@@ -751,7 +762,7 @@ def _render_formal_certificate(vm: dict, is_ar: bool) -> None:
         )
 
     st.markdown(
-        f'<div class="fs-card" style="border-right:4px solid {border_accent};margin-top:14px;">'
+        f'<div class="fs-card" style="border-inline-start:4px solid {border_accent};margin-top:14px;">'
         f'<div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;">'
         f'<div style="font-size:16px;font-weight:800;color:#0F172A;">🛡️ {_h(title)}</div>'
         f'<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">'

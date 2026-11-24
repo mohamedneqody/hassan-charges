@@ -317,3 +317,41 @@ def test_z3_egyptian_4term_bs_and_expense_sign_convention():
     assert log["total_liabilities"] == "VERIFIED_DERIVED"
     assert log["revenue"] == "VERIFIED_EXACT"
     assert log["gross_profit"] == "VERIFIED_EXACT"
+
+
+def test_z3_attestation_updates_vote_outcomes_and_pads_missing_candidate_layers():
+    from src.analysis.formal_verifier import apply_z3_algebraic_attestation
+    from src.extraction.normalizer import build_decision_log
+
+    # Reproduces the exact bug from the 2021/2023 live caches:
+    # 1. total_assets/net_income already have vote_outcomes with winner_layers=['vision']
+    # 2. income_tax_expense had candidates populated WITHOUT candidate_layers (empty list [])
+    d = _mk_scanned_data({
+        "total_assets": {2021: 14_614_683_997.0},
+        "non_current_assets": {2021: 11_713_284_905.0},
+        "current_assets": {2021: 2_901_399_092.0},
+        "pretax_income": {2021: 391_633_505.0},
+        "income_tax_expense": {2021: -103_480_837.0},
+        "net_income": {2021: 288_152_668.0},
+    })
+    d.vote_outcomes[("total_assets", 2021)] = {
+        "winner": 14_614_683_997.0, "votes": 2, "total": 2, "witnesses": 2,
+        "winner_layers": ["vision"], "replaced": 14_614_683_997.0,
+        "dissent": [], "contested": False,
+    }
+    d.vote_outcomes[("net_income", 2021)] = {
+        "winner": 288_152_668.0, "votes": 2, "total": 2, "witnesses": 2,
+        "winner_layers": ["vision"], "replaced": 288_152_668.0,
+        "dissent": [], "contested": False,
+    }
+    # Simulate empty candidate_layers on income_tax_expense
+    d.candidate_layers["income_tax_expense"][2021] = []
+
+    attested = apply_z3_algebraic_attestation(d)
+    assert len(attested) == 6
+    assert d.vote_outcomes[("total_assets", 2021)]["winner_layers"] == ["vision", "z3_math"]
+    assert d.vote_outcomes[("net_income", 2021)]["winner_layers"] == ["vision", "z3_math"]
+
+    log = {e["field"]: e["status"] for e in build_decision_log(d)}
+    for f in ("total_assets", "non_current_assets", "current_assets", "pretax_income", "income_tax_expense", "net_income"):
+        assert log[f] == "VERIFIED_EXACT", f"{f} stuck as {log[f]}"

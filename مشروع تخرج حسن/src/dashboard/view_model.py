@@ -195,11 +195,22 @@ def executive_summary(results: dict, vm: dict, lang: str = "ar") -> list[str]:
     def _cur_txt(val: float) -> str:
         return cell_value_display(val, sc, cur) if is_ar else f"{cur}{humanize(val, sc)}"
 
-    # 1) تغطية البوابة
+    # 1) تغطية البوابة (تمييز واضح بين القوائم الأساسية وإجمالي البنود التفصيلية)
     total = vm["cell_count"]
     dec = vm["decisive_count"]
+    _core_set = {
+        "revenue", "cost_of_revenue", "gross_profit", "operating_income",
+        "pretax_income", "net_income", "total_assets", "current_assets",
+        "non_current_assets", "total_liabilities", "current_liabilities",
+        "non_current_liabilities", "equity", "cash", "operating_cash_flow",
+        "investing_cash_flow", "financing_cash_flow",
+    }
+    core_cells = [c for c in (vm.get("cells") or []) if c.get("field") in _core_set]
+    core_dec = sum(1 for c in core_cells if c.get("gate") in ("use", "use_disclosed"))
+    core_tot = len(core_cells)
     if total:
         pct_cov = round(dec / total * 100)
+        core_pct = round(core_dec / core_tot * 100) if core_tot else pct_cov
         if dec >= total:
             facts.append(
                 f"تغطية التوثيق: {dec} من {total} خانة حاسمة "
@@ -209,12 +220,20 @@ def executive_summary(results: dict, vm: dict, lang: str = "ar") -> list[str]:
                 f"({pct_cov}%) — all cells verified with zero pending items."
             )
         else:
+            core_note_ar = (
+                f"القوائم الأساسية الموثّقة: {core_dec}/{core_tot} ({core_pct}%) · "
+                if core_tot else ""
+            )
+            core_note_en = (
+                f"Core statements verified: {core_dec}/{core_tot} ({core_pct}%) · "
+                if core_tot else ""
+            )
             facts.append(
-                f"تغطية التوثيق: {dec} من {total} خانة حاسمة "
-                f"({pct_cov}%) — الباقي يحتاج مراجعة بشرية قبل الاعتماد النهائي."
+                f"{core_note_ar}إجمالي كل الخانات (شاملة الإيضاحات التفصيلية): {dec} من {total} "
+                f"({pct_cov}%) — المتبقي متاح للمراجعة البشرية بالدليل المصوّر."
                 if is_ar
-                else f"Verification coverage: {dec} of {total} decisive cells "
-                f"({pct_cov}%) — remaining cells require human review before final sign-off."
+                else f"{core_note_en}All cells (incl. sub-notes): {dec} of {total} "
+                f"({pct_cov}%) — remaining items available for human review."
             )
 
     # 2) الإيراد والربح (إن توفرا)

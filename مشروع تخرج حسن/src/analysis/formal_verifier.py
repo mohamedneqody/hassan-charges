@@ -1107,27 +1107,39 @@ def apply_z3_algebraic_attestation(
     ) + 1
 
     attested: list[tuple[str, int, str]] = []
-    votes = getattr(data, "votes", None) or {}
+    votes = getattr(data, "vote_outcomes", None)
+    if not isinstance(votes, dict):
+        votes = getattr(data, "votes", None) or {}
     for (field, year), ax_id in sorted(to_attest.items(), key=lambda kv: (kv[0][1], kv[0][0])):
         val = float(values[field][year])
-        existing_layers = (getattr(data, "candidate_layers", {}) or {}).get(field, {}).get(year) or []
-        if "z3_math" in existing_layers:
-            continue
-        data.candidates.setdefault(field, {}).setdefault(year, []).append((val, order_next))
-        data.candidate_labels.setdefault(field, {}).setdefault(year, []).append(f"z3_math:{ax_id}")
-        data.candidate_layers.setdefault(field, {}).setdefault(year, []).append("z3_math")
+        cand_list = data.candidates.setdefault(field, {}).setdefault(year, [])
+        layer_list = data.candidate_layers.setdefault(field, {}).setdefault(year, [])
+        label_list = data.candidate_labels.setdefault(field, {}).setdefault(year, [])
+        # Align existing candidates with their primary layer ("vision") so
+        # zip(cands, layers_all) never sees ["z3_math"] alone (length-1 bug!).
+        if len(layer_list) < len(cand_list):
+            fallback_layer = layer_list[0] if layer_list else "vision"
+            layer_list.extend([fallback_layer] * (len(cand_list) - len(layer_list)))
+        elif len(layer_list) > len(cand_list):
+            del layer_list[len(cand_list):]
+        if "z3_math" not in layer_list:
+            cand_list.append((val, order_next))
+            label_list.append(f"z3_math:{ax_id}")
+            layer_list.append("z3_math")
         data.bump_confidence(field, year, 2)
         data.identity_ok[(field, year)] = True
         if (field, year) in votes and isinstance(votes[(field, year)], dict):
             wl = list(votes[(field, year)].get("winner_layers") or [])
+            if not wl:
+                wl.append("vision")
             if "z3_math" not in wl:
                 wl.append("z3_math")
-                votes[(field, year)]["winner_layers"] = sorted(set(wl))
+            votes[(field, year)]["winner_layers"] = sorted(set(wl))
         attested.append((field, year, ax_id))
         order_next += 1
 
-    # Upgrade derived_uncertain for total_liabilities when BOTH directly-printed
-    # liability halves (NCL & CL) are now mathematically attested via A1b_BS_4TERM!
+    # Upgrade derived_uncertain for total_liabilities & closed-identity fields
+    # when their directly-printed inputs are now mathematically attested via Z3!
     derived_unc = getattr(data, "derived_uncertain", None)
     if isinstance(derived_unc, set):
         for y in years:
@@ -1137,6 +1149,15 @@ def apply_z3_algebraic_attestation(
                     and ("current_liabilities", y) in to_attest
                 ):
                     derived_unc.discard(("total_liabilities", y))
+            if ("gross_profit", y) in derived_unc:
+                if ("revenue", y) in to_attest and ("cost_of_revenue", y) in to_attest:
+                    derived_unc.discard(("gross_profit", y))
+            if ("cost_of_revenue", y) in derived_unc:
+                if ("revenue", y) in to_attest and ("gross_profit", y) in to_attest:
+                    derived_unc.discard(("cost_of_revenue", y))
+            if ("income_tax_expense", y) in derived_unc:
+                if ("pretax_income", y) in to_attest and ("net_income", y) in to_attest:
+                    derived_unc.discard(("income_tax_expense", y))
 
     if attested and notes is not None:
         notes.append(

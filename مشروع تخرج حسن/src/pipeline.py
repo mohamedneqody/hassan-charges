@@ -98,11 +98,24 @@ def run_pipeline(file_name: str, raw: bytes, company: str, progress_cb=None, pag
         return out
 
     key = extraction_key(file_name, raw, page_range, fast_mode)
+
+    def _values_have_core(values: dict | None) -> bool:
+        """True when revenue OR net income carries at least two fiscal years.
+        A result without it is a degraded/failed extraction and must never be
+        cached (it would replay the same failure for every later upload)."""
+        for fld in ("revenue", "net_income"):
+            by_year = (values or {}).get(fld) or {}
+            if sum(1 for v in by_year.values() if v is not None) >= 2:
+                return True
+        return False
+
     # v5: قرار البوابة المخزون (كاش) — None في المسار الحي
     _cached_log = None
     _cached_bbox = {}
     _cached_labels = {}
     cached = load_cached_extraction(key)
+    if cached is not None and not _values_have_core(cached.get("values")):
+        cached = None  # poisoned/degraded cache entry — re-extract fresh
     if cached is not None:
         from src.extraction.normalizer import FinancialData
 
@@ -136,6 +149,8 @@ def run_pipeline(file_name: str, raw: bytes, company: str, progress_cb=None, pag
         try:
             from src.extraction.normalizer import build_decision_log as _bdl
 
+            if not _values_have_core(data.values):
+                raise RuntimeError("degraded extraction (no revenue/net income) — not cached")
             store_extraction(key, {
                 "values": data.values,
                 "notes": data.notes,
@@ -185,8 +200,14 @@ def run_pipeline(file_name: str, raw: bytes, company: str, progress_cb=None, pag
         for field_name in ("revenue", "net_income")
     )
     if not has_core:
+        _why = [
+            str(n)[:160] for n in (data.notes or [])
+            if any(k in str(n).lower() for k in ("failed", "exhausted", "budget", "unavailable", "stopp"))
+        ][:2]
         raise InsufficientDataError(
             "no Revenue or Net Income values were recognized for both years."
+            + (" Cause: " + " | ".join(_why) if _why else "")
+            + " — please retry once; transient Gemini overload is not cached."
         )
 
     prev_metrics = compute_year_metrics(prev_year, data.values, prev_year=None)

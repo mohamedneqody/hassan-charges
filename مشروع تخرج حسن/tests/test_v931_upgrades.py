@@ -59,7 +59,7 @@ def test_real_estate_eas_aliases_match_accurately(raw_label: str, expected_field
         "الانخفاض في قيمة المخزون",          # Impairment reserve
         "التغير في أعمال تحت التنفيذ",       # Cash-flow working capital delta
         "عملاء دفعات مقدمة",                 # Customer advances (liability, not AR!)
-        "إيرادات تشغيل أخرى",                # Other operating revenue (not core revenue)
+        "إيرادات متنوعة أخرى",               # Other non-operating revenue (never hijacks core revenue!)
         "إجمالي الالتزامات وحقوق الملكية",   # Grand total exclusion
     ],
 )
@@ -370,3 +370,143 @@ def test_gate_label_and_partial_health_score_toggle(monkeypatch):
     # In exploratory full mode, Profitability is unlocked (no longer blocked!)
     joined_md = "\n".join(md_out)
     assert "درجة كلية مكتملة الأركان" in joined_md
+
+
+# ---------------------------------------------------------------------------
+# 4. v9.32 Root-Cause Fixes Toward 100% Coverage
+# ---------------------------------------------------------------------------
+
+def test_v932_cross_statement_sign_alignment_and_single_page_preservation():
+    """Multi-page opposite-sign echoes (P&L parentheses vs Note positive table)
+    align cleanly to primary sign, while single-page / page-less sign conflicts
+    remain strictly gated as CONFLICT."""
+    from src.extraction.normalizer import build_decision_log, merge_parsed, reconcile
+
+    # Case 1: >=2 distinct pages (Page 6 P&L + Page 12 Note) -> sign aligned, NOT CONFLICT
+    d_multi = merge_parsed(
+        [{2022: {"admin_expenses": -383_519_092.0}},
+         {2022: {"admin_expenses": 383_519_092.0}}],
+        [],
+        part_layers=["vision", "local_ocr"],
+    )
+    d_multi.field_sources = {"admin_expenses": [6, 12]}
+    reconcile(d_multi)
+    assert d_multi.values["admin_expenses"][2022] == pytest.approx(-383_519_092.0)
+    log_multi = build_decision_log(d_multi)
+    assert log_multi[0]["status"] == "VERIFIED_EXACT"
+
+    # Case 2: Single-page / page-less opposite sign -> MUST remain CONFLICT ("تعارض الإشارة")
+    d_single = merge_parsed(
+        [{2022: {"admin_expenses": -383_519_092.0}},
+         {2022: {"admin_expenses": 383_519_092.0}}],
+        [],
+        part_layers=["text", "text"],
+    )
+    reconcile(d_single)
+    log_single = build_decision_log(d_single)
+    assert log_single[0]["status"] == "CONFLICT"
+    assert "تعارض الإشارة" in log_single[0]["reason"]
+
+
+def test_v932_note_thousand_truncation_healed_and_fixed_assets_cf_vetoed():
+    from src.extraction.normalizer import match_field, merge_parsed, reconcile
+
+    # Cash-flow disposal / gain / depreciation lines must NEVER match fixed_assets
+    assert match_field("أرباح رأسمالية من بيع أصول ثابتة") is None
+    assert match_field("متحصلات من بيع أصول ثابتة") is None
+    assert match_field("مدفوعات لشراء أصول ثابتة") == "capex"
+    assert match_field("الأصول الثابتة (بالصافي)") == "fixed_assets"
+    assert match_field("إيرادات تشغيل أخرى") == "other_operating_income"
+
+    # Page 6 smudged `-299,648,000` healed to Note 7 exact `-299,648,555` (preserving replaced value)
+    d = merge_parsed(
+        [{2021: {"admin_expenses": -299_648_000.0}},
+         {2021: {"admin_expenses": 299_648_555.0}}],
+        [],
+        part_layers=["vision", "vision"],
+    )
+    d.field_sources = {"admin_expenses": [6, 12]}
+    reconcile(d)
+    assert d.values["admin_expenses"][2021] == pytest.approx(-299_648_555.0)
+    assert (-299_648_000.0) in d.replaced_values[("admin_expenses", 2021)]
+
+
+def test_v932_z3_attests_6_term_operating_bridge_with_other_op_income():
+    from src.analysis.formal_verifier import apply_z3_algebraic_attestation
+    from src.extraction.normalizer import FinancialData, build_decision_log
+
+    # Exact Ezz Steel 2022 6-term Operating Income equation (0.00 EGP residual!)
+    vals = {
+        "gross_profit": {2022: 1_632_142_979.0},
+        "selling_expenses": {2022: -48_052_831.0},
+        "admin_expenses": {2022: -383_519_092.0},
+        "other_operating_expenses": {2022: -25_399_046.0},
+        "other_operating_income": {2022: 82_788_593.0},
+        "operating_income": {2022: 1_257_960_603.0},
+    }
+    data = FinancialData(
+        values={f: dict(by_y) for f, by_y in vals.items()},
+        document_profile={"kind": "SCANNED_NO_TEXT", "text_layer_trusted": False},
+    )
+    for idx, (f, by_y) in enumerate(vals.items(), start=1):
+        for y, v in by_y.items():
+            data.candidates.setdefault(f, {})[y] = [(v, idx)]
+            data.candidate_layers.setdefault(f, {})[y] = ["vision"]
+            data.candidate_labels.setdefault(f, {})[y] = [f"v:{f}"]
+            data.bump_confidence(f, y, 1)
+
+    attested = apply_z3_algebraic_attestation(data, [])
+    attested_fields = {f for f, _y, ax in attested if ax == "A5c_OP_EXACT"}
+    assert attested_fields == set(vals.keys())
+    log = {e["field"]: e["status"] for e in build_decision_log(data)}
+    assert all(st == "VERIFIED_EXACT" for st in log.values())
+
+
+def test_v932_optional_non_disclosed_rd_not_counted_as_missing_failure():
+    from src.dashboard.components.chrome import build_metrics_table_html
+    from src.dashboard.view_model import build_view_model, executive_summary
+    from src.pipeline import run_pipeline
+
+    csv_text = "\n".join([
+        "Item,2023,2024",
+        "Revenue,1000000,1200000",
+        "Cost of Revenue,-600000,-700000",
+        "Gross Profit,400000,500000",
+        "Selling Expenses,-50000,-60000",
+        "Administrative Expenses,-80000,-90000",
+        "Operating Income,270000,350000",
+        "Interest Expense,-20000,-25000",
+        "Pretax Income,250000,325000",
+        "Income Tax Expense,-50000,-65000",
+        "Net Income,200000,260000",
+        "Fixed Assets,500000,550000",
+        "Inventory,150000,180000",
+        "Accounts Receivable,120000,140000",
+        "Cash,230000,280000",
+        "Current Assets,500000,600000",
+        "Total Assets,1000000,1150000",
+        "Accounts Payable,100000,120000",
+        "Current Liabilities,200000,240000",
+        "Long Term Debt,200000,210000",
+        "Total Liabilities,400000,450000",
+        "Equity,600000,700000",
+        "Depreciation and Amortization,30000,35000",
+        "Operating Cash Flow,240000,300000",
+        "Capex,-60000,-70000",
+        "Investing Cash Flow,-60000,-70000",
+        "Financing Cash Flow,-50000,-180000",
+    ])
+    res = run_pipeline("complete_no_rd.csv", csv_text.encode("utf-8"), "")
+    vm = build_view_model(res, currency="ج.م")
+    rd_row = next(r for r in vm["metrics"] if r["key"] == "rd_pct")
+    assert rd_row["not_disclosed"] is True
+    assert rd_row["verif"] == "غير مفصح بالقوائم"
+
+    facts = executive_summary(res, vm, lang="ar")
+    assert any("100% مكتملة" in f and "غير مفصح عنها" in f for f in facts)
+    assert not any("مؤشرات غير قابلة للحساب لعدم توفر مدخلاتها" in f for f in facts)
+
+    tbl_html, _ = build_metrics_table_html(vm["metrics"], 2023, 2024, 1, "ج.م", lang="ar")
+    assert "غير مفصح" in tbl_html
+    assert "لا ينطبق" in tbl_html
+

@@ -213,6 +213,15 @@ _FIELD_NEGATIVE_PATTERNS: dict[str, tuple[str, ...]] = {
         "مجمع", "accumulated", "رصيد اول", "رصيد اخر",
         "في اول العام", "في اخر العام", "في نهايه العام",
     ),
+    # الأصول الثابتة (رصيد الميزانية) — يُمنع تسلل سطور التدفقات النقدية أو الدخل
+    # مثل «أرباح/خسائر رأسمالية من بيع أصول ثابتة» أو «متحصلات بيع أصول ثابتة» أو «إهلاك أصول ثابتة»
+    "fixed_assets": (
+        "اهلاك", "استهلاك", "مجمع", "اضمحلال",
+        "بيع", "ارباح", "خساير", "راسماليه",
+        "مدفوعات", "متحصلات", "شراء", "اقتناء", "اضافات", "تخريد", "استبعادات",
+        "مشروعات تحت التنفيذ",
+        "disposal", "gain", "loss", "proceeds", "purchase", "additions", "depreciation",
+    ),
 }
 
 # A raw cell containing a percent sign is a ratio, never an absolute amount.
@@ -814,12 +823,101 @@ def _majority_vote(data: FinancialData) -> None:
             data.candidates[field][year] = [(best_val, 0)]
 
 
+_CROSS_STATEMENT_SIGN_FIELDS = frozenset({
+    "cost_of_revenue",
+    "selling_expenses",
+    "admin_expenses",
+    "other_operating_expenses",
+    "operating_expenses",
+    "rd_expenses",
+    "interest_expense",
+    "income_tax_expense",
+    "depreciation_amortization",
+    "dividends_from_subsidiaries",
+    "bank_overdraft",
+    "other_operating_income",
+})
+
+
 def reconcile(data: FinancialData) -> None:
     """Choose the value for each disputed field that satisfies the most
     accounting identities. Statements legitimately violate identities
     (other income, discontinued ops), so identities are SCORED, never forced:
     the combo satisfying the most wins, ties keep first-occurrence order."""
     import itertools
+
+    # 1) Cross-statement sign-convention alignment + Note tail-precision refinement:
+    #    a) In multi-page PDFs (`len(pages) >= 2`), primary statements print expenses
+    #       in parentheses `(-383,519,092)` while Note schedules print positive tables
+    #       `(+383,519,092)`, or P&L prints `+750M` dividends while Cash Flow deducts
+    #       `(-750M)`, or BS prints `+2.65M` overdraft while Cash Note subtracts `(-2.65M)`.
+    #       When ALL candidates across >=2 distinct pages have the EXACT same magnitude,
+    #       align their signs to the primary statement's capture so cross-page echoes
+    #       never trigger a false sign-conflict (single-page / page-less sign conflicts
+    #       remain strictly gated!).
+    #    b) When Page 6 smudges the last 3 digits to `000` (e.g. `-299,648,000`) while
+    #       the dedicated Note table on Page 12 prints the exact same leading thousands
+    #       with non-zero units (`299,648,555`), adopt the full-precision Note magnitude
+    #       with the primary statement's sign and preserve the truncated read in `replaced_values`.
+    fs_pages_map = getattr(data, "field_sources", {}) or {}
+    for field, by_year in list(data.candidates.items()):
+        distinct_pages = sorted(set(fs_pages_map.get(field, [])))
+        if len(distinct_pages) < 2:
+            continue
+        for year, cands in list(by_year.items()):
+            non_null = [(v, o) for v, o in cands if v is not None]
+            if len(non_null) < 2:
+                continue
+            primary = data.values.get(field, {}).get(year)
+            if primary is None or primary == 0:
+                primary = non_null[0][0]
+            if primary == 0:
+                continue
+            primary_sign = -1.0 if primary < 0 else 1.0
+
+            # Case (a): exact same magnitude across >=2 pages, opposite signs
+            if field in _CROSS_STATEMENT_SIGN_FIELDS:
+                mags = [abs(v) for v, _ in non_null]
+                has_pos = any(v > 0 for v, _ in non_null)
+                has_neg = any(v < 0 for v, _ in non_null)
+                if has_pos and has_neg and all(_digit_close(m, mags[0]) for m in mags[1:]):
+                    aligned_val = primary_sign * mags[0]
+                    data.candidates[field][year] = [
+                        (aligned_val if v is not None else v, o) for v, o in cands
+                    ]
+                    data.values.setdefault(field, {})[year] = aligned_val
+                    data.notes.append(
+                        f"Cross-statement sign convention aligned for '{field}' in {year} "
+                        f"({aligned_val:,.0f} across pages {distinct_pages})."
+                    )
+                    continue
+
+            # Case (b): exact thousand-prefix match where primary ends in `000` (margin smudge)
+            # and the companion Note schedule carries the exact last 3 digits
+            if field in ("admin_expenses", "selling_expenses", "other_operating_expenses", "cost_of_revenue"):
+                mags = [round(abs(v)) for v, _ in non_null]
+                if len(set(mags)) == 2:
+                    m_trunc = min(mags, key=lambda m: 0 if (m % 1000 == 0) else 1)
+                    m_exact = max(mags, key=lambda m: 1 if (m % 1000 != 0) else 0)
+                    if (
+                        m_trunc >= 1_000_000
+                        and m_trunc % 1000 == 0
+                        and m_exact % 1000 != 0
+                        and (m_trunc // 1000) == (m_exact // 1000)
+                    ):
+                        healed_val = primary_sign * float(m_exact)
+                        old_val = data.values.get(field, {}).get(year)
+                        if old_val is not None and not _digit_close(old_val, healed_val):
+                            data.replaced_values = getattr(data, "replaced_values", {})
+                            data.replaced_values.setdefault((field, year), []).append(old_val)
+                        data.values.setdefault(field, {})[year] = healed_val
+                        data.candidates[field][year] = [
+                            (healed_val if v is not None else v, o) for v, o in cands
+                        ]
+                        data.notes.append(
+                            f"Refined thousand-truncated '{field}' in {year} from {old_val:,.0f} "
+                            f"to Note schedule exact value {healed_val:,.0f} (pages {distinct_pages})."
+                        )
 
     _majority_vote(data)
 

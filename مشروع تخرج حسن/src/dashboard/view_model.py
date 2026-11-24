@@ -124,13 +124,31 @@ def cell_rows(results: dict) -> list[dict]:
     return rows
 
 
+_OPTIONAL_DISCLOSURE_INPUTS = {
+    "rd_pct": "rd_expenses",
+}
+
+
 def build_view_model(results: dict, currency: str = "$") -> dict:
     """نموذج العرض الكامل: ميتا + صفوف الخانات + صفوف المؤشرات بحالة
     التحقق (أسوأ حالة لمدخلات كل مؤشر — نفس ما تعرضه Excel)."""
-    verif = verification_labels(results.get("decision_log") or [])
+    dec_log = results.get("decision_log") or []
+    verif = dict(verification_labels(dec_log))
+    captured_fields = {
+        e.get("field") for e in dec_log if e.get("field") and e.get("final") is not None
+    }
     cells = cell_rows(results)
     metric_rows = []
     for r in results.get("rows", []):
+        opt_input = _OPTIONAL_DISCLOSURE_INPUTS.get(r.key)
+        is_not_disclosed = bool(
+            opt_input
+            and r.previous is None
+            and r.current is None
+            and opt_input not in captured_fields
+        )
+        if is_not_disclosed:
+            verif[r.key] = "غير مفصح بالقوائم"
         metric_rows.append({
             "key": r.key,
             "label": r.label_ar or r.label,
@@ -142,6 +160,7 @@ def build_view_model(results: dict, currency: str = "$") -> dict:
             "change_pct": r.change_pct, "status": r.status,
             "trend": r.trend_symbol,
             "verif": verif.get(r.key, "—"),
+            "not_disclosed": is_not_disclosed,
         })
     pending = [e for e in (results.get("decision_log") or [])
                if _gate_of(e.get("status", "MISSING")) in
@@ -311,20 +330,46 @@ def executive_summary(results: dict, vm: dict, lang: str = "ar") -> list[str]:
             else f"Health score refused under data-coverage policy — missing pillars: {blocked_names}."
         )
 
-    # 5) المؤشرات غير القابلة للحساب — معلنة
-    na = [(r.label_ar or r.label) if is_ar else r.label for r in rows.values()
-          if r.previous is None and r.current is None]
-    if na:
+    # 5) المؤشرات غير القابلة للحساب مقابل البنود الاختيارية غير المفصح عنها بالقوائم
+    captured_fields_ov = {
+        e.get("field") for e in (results.get("decision_log") or [])
+        if e.get("field") and e.get("final") is not None
+    }
+    na_missing: list[str] = []
+    na_optional: list[str] = []
+    for r in rows.values():
+        if r.previous is not None or r.current is not None:
+            continue
+        disp = (r.label_ar or r.label) if is_ar else r.label
+        opt_f = _OPTIONAL_DISCLOSURE_INPUTS.get(r.key)
+        if opt_f and opt_f not in captured_fields_ov:
+            na_optional.append(disp)
+        else:
+            na_missing.append(disp)
+    if na_missing:
         if is_ar:
             facts.append(
-                f"مؤشرات غير قابلة للحساب لعدم توفر مدخلاتها ({len(na)}): "
-                + "، ".join(na[:8]) + ("، …" if len(na) > 8 else "") + "."
+                f"مؤشرات غير قابلة للحساب لعدم توفر مدخلاتها ({len(na_missing)}): "
+                + "، ".join(na_missing[:8]) + ("، …" if len(na_missing) > 8 else "") + "."
             )
         else:
             facts.append(
-                f"Metrics unavailable due to missing inputs ({len(na)}): "
-                + ", ".join(na[:8]) + (", …" if len(na) > 8 else "") + "."
+                f"Metrics unavailable due to missing inputs ({len(na_missing)}): "
+                + ", ".join(na_missing[:8]) + (", …" if len(na_missing) > 8 else "") + "."
             )
+    elif rows:
+        if is_ar:
+            opt_tail = (
+                f" (بنود اختيارية غير مفصح عنها بقوائم الشركة ولا تنطبق: {'، '.join(na_optional)})"
+                if na_optional else ""
+            )
+            facts.append(f"تغطية المؤشرات المالية القابلة للحساب من القوائم: 100% مكتملة{opt_tail}.")
+        else:
+            opt_tail = (
+                f" (optional items not disclosed in statements: {', '.join(na_optional)})"
+                if na_optional else ""
+            )
+            facts.append(f"Computable financial ratio coverage: 100% complete{opt_tail}.")
     return facts
 
 

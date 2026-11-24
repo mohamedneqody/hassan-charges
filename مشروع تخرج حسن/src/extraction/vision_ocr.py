@@ -1473,7 +1473,27 @@ def extract_via_vision(
                             try:
                                 parsed = parse_table(frame, gap_sink=gap_sink)
                                 if parsed:
-                                    parts.append(parsed)
+                                    _cf_k_r = {"operating_cash_flow", "investing_cash_flow", "financing_cash_flow", "capex"}
+                                    _bs_anc_r = {"total_assets", "equity"}
+                                    _bs_str_r = {
+                                        "inventory", "accounts_receivable", "accounts_payable", "cash",
+                                        "total_assets", "current_assets", "total_liabilities",
+                                        "current_liabilities", "equity", "fixed_assets",
+                                        "long_term_debt", "short_term_debt", "short_term_credit_facilities",
+                                        "current_portion_lt_debt", "non_current_lease_liabilities",
+                                        "current_lease_liabilities",
+                                    }
+                                    _all_f_r = {f for ym in parsed.values() for f in ym}
+                                    if (_all_f_r & _cf_k_r) and not (_all_f_r & _bs_anc_r):
+                                        for ym in parsed.values():
+                                            for bf in list(ym.keys()):
+                                                if bf in _bs_str_r:
+                                                    ym.pop(bf, None)
+                                    if any(ym for ym in parsed.values()):
+                                        parts.append(parsed)
+                                        for ym in parsed.values():
+                                            for bf in ym:
+                                                field_sources.setdefault(bf, []).append(pn)
                             except Exception as exc:
                                 notes.append(f"Vision page skipped ({exc}).")
                     if not company_holder.get("name") and page.get("company"):
@@ -2412,7 +2432,7 @@ def _absorb_semantic_page(
         if field is None:
             # Check newly added OpEx/AP canonical fields that the semantic prompt may leave null
             fallback_field = match_field(label)
-            if fallback_field in ("admin_expenses", "other_operating_expenses"):
+            if fallback_field in ("admin_expenses", "other_operating_expenses", "other_operating_income"):
                 field = fallback_field
             else:
                 # الصف بلا تصنيف — سجل الفجوات إن كان يحمل أرقامًا
@@ -2896,7 +2916,7 @@ _CROSS_MODEL_PRIORITY = (
     "current_portion_lt_debt", "bank_overdraft",
     "current_lease_liabilities", "non_current_lease_liabilities",
     "capex", "depreciation_amortization", "interest_expense",
-    "selling_expenses", "admin_expenses", "other_operating_expenses",
+    "selling_expenses", "admin_expenses", "other_operating_expenses", "other_operating_income",
     "retained_earnings", "capital", "dividends_from_subsidiaries",
 )
 
@@ -2927,8 +2947,8 @@ def _cross_model_consensus_verify(
     notes: list[str] | None = None,
     progress_cb=None,
     deadline: float | None = None,
-    max_pages: int = 4,
-    time_budget_s: float = 65.0,
+    max_pages: int = 6,
+    time_budget_s: float = 75.0,
     distinct_caller=None,
 ) -> int:
     """Independent Cross-Model Consensus verification pass for remaining UNVERIFIED cells.
@@ -3008,8 +3028,11 @@ def _cross_model_consensus_verify(
             src_pages = [p for p in src_pages if p not in cf_only_pages]
         if not src_pages:
             continue
-        primary_p = src_pages[0]
-        page_to_fields.setdefault(primary_p, []).append(f)
+        # Register up to 2 source pages (e.g. primary statement + Note schedule) so
+        # whichever page prints the row clearest can confirm it digit-exactly
+        for cand_p in src_pages[:2]:
+            if f not in page_to_fields.setdefault(cand_p, []):
+                page_to_fields[cand_p].append(f)
 
     if not page_to_fields:
         return 0
@@ -3035,13 +3058,34 @@ def _cross_model_consensus_verify(
 
     by_page_png = dict(zip(selected, pages_png))
     years_hint = ", ".join(str(y) for y in years[-2:])
+    cand_labels_map = getattr(data, "candidate_labels", {}) or {}
+
+    def _printed_hint(f: str) -> str:
+        base_ar = LABELS_AR.get(f, f)
+        raw_set: list[str] = []
+        for _y, lbls in (cand_labels_map.get(f) or {}).items():
+            for lb in (lbls or []):
+                s = str(lb or "").strip()
+                if (
+                    s
+                    and ":" not in s
+                    and not any(ch.isdigit() for ch in s)
+                    and s not in raw_set
+                    and s != base_ar
+                ):
+                    raw_set.append(s)
+        if raw_set:
+            return f"{base_ar} — مطبوع باسم: «{raw_set[0][:60]}»"
+        if f == "capex":
+            return f"{base_ar} — ابحث في أنشطة الاستثمار عن «مدفوعات لشراء أصول ثابتة ومشروعات تحت التنفيذ»"
+        return base_ar
 
     def _verify_page(page_no: int, fields_on_p: list[str]) -> tuple[int, str | None, dict[str, dict[int, float]], str]:
         if _time.time() > eff_deadline - 3.0:
             return page_no, None, {}, "budget"
-        target_f = fields_on_p[:14]  # keep prompt tight for accurate digit copying
+        target_f = fields_on_p[:24]  # cover full Balance Sheet / P&L / CF page without truncating AP or Fixed Assets
         bullets = "\n".join(
-            f"- {f} ({LABELS_AR.get(f, f)})" for f in target_f
+            f"- {f} ({_printed_hint(f)})" for f in target_f
         )
         json_tpl = ", ".join(f'"{f}": [v1, v2]' for f in target_f)
         prompt = CROSS_MODEL_VERIFY_PROMPT.format(
@@ -3129,14 +3173,15 @@ def _cross_model_consensus_verify(
                 captured = data.get(f, y)
                 if captured is None:
                     continue
-                # Sign handling: balance-sheet stocks & expenses allow print-sign convention
-                # (parentheses vs magnitude), while income/cash-flow signs must match strictly!
+                # Sign handling: balance-sheet stocks, expenses, and CF-deducted subsidiary dividends
+                # allow cross-statement print-sign convention; net/pretax/operating/CF totals match sign strictly!
                 cmp_b = val_b
                 if f in _CROSS_MODEL_BS_STOCK_FIELDS:
                     cmp_b = abs(val_b)
-                elif f in _CROSS_MODEL_EXPENSE_FIELDS:
+                elif f in _CROSS_MODEL_EXPENSE_FIELDS or (is_cf_page and f == "dividends_from_subsidiaries"):
                     cmp_b = -abs(val_b) if captured < 0 else abs(val_b)
                 if _digit_close(cmp_b, captured):
+                    target_years.discard(y)
                     cand_list = data.candidates.setdefault(f, {}).setdefault(y, [])
                     layer_list = data.candidate_layers.setdefault(f, {}).setdefault(y, [])
                     label_list = data.candidate_labels.setdefault(f, {}).setdefault(y, [])

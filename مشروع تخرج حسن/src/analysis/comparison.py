@@ -186,6 +186,7 @@ LABELS_AR: dict[str, str] = {
     "selling_expenses": "مصاريف البيع والتسويق",
     "admin_expenses": "المصروفات العمومية والإدارية",
     "other_operating_expenses": "مصروفات تشغيل أخرى",
+    "other_operating_income": "إيرادات تشغيل أخرى",
     "rd_expenses": "مصاريف البحث والتطوير",
     "operating_income": "الربح التشغيلي",
     "net_activity_profit": "صافي أرباح النشاط",

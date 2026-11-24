@@ -36,6 +36,7 @@ _VERIF_EN = {
     "مشتق معلن": "Derived (disclosed)",
     "يحتاج مراجعة": "Needs review",
     "تعارض — محجوب": "Conflict — blocked",
+    "غير مفصح بالقوائم": "Not disclosed in statements",
     "غير متوفر": "Unavailable",
 }
 
@@ -610,8 +611,10 @@ def build_metrics_table_html(
     )
     rows_html = []
     for r, label_txt, cat_val, v_kind, v_glyph, v_lbl in filtered:
-        prev_txt = _fmt_metric_val(r.get("prev"), r.get("kind", "ratio"))
-        curr_txt = _fmt_metric_val(r.get("curr"), r.get("kind", "ratio"))
+        is_nd = bool(r.get("not_disclosed") and r.get("prev") is None and r.get("curr") is None)
+        nd_cell = "غير مفصح" if is_ar else "Not disclosed"
+        prev_txt = nd_cell if is_nd else _fmt_metric_val(r.get("prev"), r.get("kind", "ratio"))
+        curr_txt = nd_cell if is_nd else _fmt_metric_val(r.get("curr"), r.get("kind", "ratio"))
         chg = r.get("change_pct")
         chg_txt = f"{chg:+.1f}%" if chg is not None else "—"
         st_name = r.get("status") or "N/A"
@@ -622,6 +625,11 @@ def build_metrics_table_html(
         )
         t_sym = r.get("trend") or "–"
         t_cls = {"▲": "trend-up", "▼": "trend-down", "→": "trend-flat"}.get(t_sym, "trend-flat")
+        assess_html = (
+            f'<span class="fs-gate miss">○ {esc("لا ينطبق" if is_ar else "N/A (not disclosed)")}</span>'
+            if is_nd
+            else status_badge(st_name, lang=lang)
+        )
         rows_html.append(
             "<tr>"
             f'<td class="cat">{esc(cat_val)}</td>'
@@ -630,7 +638,7 @@ def build_metrics_table_html(
             f'<td class="num"><b><bdi dir="ltr">{esc(curr_txt)}</bdi></b></td>'
             f'<td class="num {chg_cls}"><bdi dir="ltr">{esc(chg_txt)}</bdi></td>'
             f'<td class="{t_cls}">{esc(t_sym)}</td>'
-            f"<td>{status_badge(st_name, lang=lang)}</td>"
+            f"<td>{assess_html}</td>"
             f'<td><span class="fs-gate {v_kind}">{v_glyph} {esc(v_lbl)}</span></td>'
             "</tr>"
         )

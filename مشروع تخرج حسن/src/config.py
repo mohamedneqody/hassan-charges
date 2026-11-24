@@ -583,6 +583,13 @@ FIELD_ALIASES: dict[str, list[str]] = {
         "مصاريف تشغيل أخرى", "مصاريف تشغيل اخري",
         "مصروفات تشغيلية أخرى", "مصاريف تشغيلية أخرى",
     ],
+    "other_operating_income": [
+        "other operating income", "other operating revenues",
+        # Arabic
+        "إيرادات تشغيل أخرى", "ايرادات تشغيل اخري",
+        "إيرادات تشغيلية أخرى", "ايرادات تشغيلية اخري",
+        "الإيرادات التشغيلية الأخرى", "إيرادات التشغيل الأخرى",
+    ],
     "rd_expenses": [
         "research and development", "research and development expenses",
         "r d", "rd expenses",

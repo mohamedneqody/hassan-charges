@@ -23,7 +23,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]  # src/extraction/… → project root
 CACHE_DIR = PROJECT_ROOT / "cache"
 SEED_CACHE_DIR = PROJECT_ROOT / "data" / "seed_cache"
-CACHE_SCHEMA_VERSION = 8
+CACHE_SCHEMA_VERSION = 10
 
 _LOCK = threading.Lock()
 

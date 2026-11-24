@@ -1118,18 +1118,29 @@ def apply_z3_algebraic_attestation(
                 for f in act_fields:
                     to_attest.setdefault((f, y), "A6b_ACTIVITY_BRIDGE")
 
-        # A5c: Exact Gross-to-Operating Profit Bridge when all OpEx components are directly captured
+        # A5c: Exact Gross-to-Operating Profit Bridge when OpEx components (+ optional Other Operating Income) are directly captured
         op_field = "operating_income" if _is_eligible_for_z3_attestation(data, "operating_income", y) else (
             "net_activity_profit" if _is_eligible_for_z3_attestation(data, "net_activity_profit", y) else None
         )
         if op_field and _is_eligible_for_z3_attestation(data, "gross_profit", y):
             op_comps = [f for f in _OPEX_COMPONENT_FIELDS if _is_eligible_for_z3_attestation(data, f, y)]
+            has_other_inc = _is_eligible_for_z3_attestation(data, "other_operating_income", y)
+            other_inc_v = abs(float(values["other_operating_income"][y])) if has_other_inc else 0.0
             if len(op_comps) >= 2:
                 gp_v = float(values["gross_profit"][y])
                 op_v = float(values[op_field][y])
                 op_sum = sum(abs(float(values[f][y])) for f in op_comps)
                 scale_op = max(abs(gp_v), abs(op_v), op_sum, 1.0)
-                if abs((gp_v - op_sum) - op_v) <= max(10.0, strict_rel_tol * scale_op):
+                # Check both with and without other_operating_income (when present)
+                lhs_with_inc = gp_v - op_sum + other_inc_v
+                lhs_no_inc = gp_v - op_sum
+                if has_other_inc and abs(lhs_with_inc - op_v) <= max(10.0, strict_rel_tol * scale_op):
+                    to_attest.setdefault(("gross_profit", y), "A5c_OP_EXACT")
+                    to_attest.setdefault((op_field, y), "A5c_OP_EXACT")
+                    to_attest.setdefault(("other_operating_income", y), "A5c_OP_EXACT")
+                    for f in op_comps:
+                        to_attest.setdefault((f, y), "A5c_OP_EXACT")
+                elif abs(lhs_no_inc - op_v) <= max(10.0, strict_rel_tol * scale_op):
                     to_attest.setdefault(("gross_profit", y), "A5c_OP_EXACT")
                     to_attest.setdefault((op_field, y), "A5c_OP_EXACT")
                     for f in op_comps:
@@ -1250,7 +1261,10 @@ def recheck_derived_certainty(
         ("total_liabilities", ("non_current_liabilities", "current_liabilities")),
         ("gross_profit", ("revenue", "cost_of_revenue")),
         ("cost_of_revenue", ("revenue", "gross_profit")),
+        ("revenue", ("gross_profit", "cost_of_revenue")),
         ("income_tax_expense", ("pretax_income", "net_income")),
+        ("pretax_income", ("net_income", "income_tax_expense")),
+        ("net_income", ("pretax_income", "income_tax_expense")),
         ("non_current_assets", ("total_assets", "current_assets")),
         ("non_current_liabilities", ("total_liabilities", "current_liabilities")),
     )

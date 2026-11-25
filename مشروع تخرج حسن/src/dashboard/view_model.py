@@ -34,11 +34,15 @@ FIELD_ORDER = [
     "selling_expenses", "admin_expenses", "other_operating_expenses", "operating_income",
     "finance_income", "interest_expense", "fx_gain_loss", "dividends_from_subsidiaries",
     "pretax_income", "income_tax_expense", "net_income",
-    "fixed_assets", "non_current_assets", "inventory", "accounts_receivable", "cash",
-    "current_assets", "total_assets", "accounts_payable",
+    "fixed_assets", "projects_under_construction", "investments_in_subsidiaries",
+    "other_investments", "deferred_tax_assets", "non_current_assets",
+    "inventory", "accounts_receivable", "other_receivables", "supplier_advances", "cash",
+    "current_assets", "total_assets", "accounts_payable", "customer_advances",
+    "other_payables", "provisions",
     "bank_overdraft", "short_term_credit_facilities", "short_term_debt",
     "current_portion_lt_debt", "current_lease_liabilities", "current_liabilities",
-    "long_term_debt", "non_current_lease_liabilities", "non_current_liabilities",
+    "long_term_debt", "long_term_notes_payable", "non_current_lease_liabilities",
+    "deferred_tax_liabilities", "non_current_liabilities",
     "total_liabilities", "total_debt",
     "capital", "treasury_shares", "reserves", "asset_revaluation_reserve",
     "retained_earnings", "equity",
@@ -193,6 +197,7 @@ def build_view_model(results: dict, currency: str = "$") -> dict:
         "notes_text": results.get("notes_text") or {},
         "human_reviews": results.get("human_reviews") or {},
         "formal_certificate": results.get("formal_certificate") or None,
+        "quota_interrupted": bool(results.get("quota_interrupted")),
     }
 
 

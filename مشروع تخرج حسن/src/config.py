@@ -331,6 +331,37 @@ FIELD_ALIASES: dict[str, list[str]] = {
         "التزامات تأجير تمويلي", "التزامات التأجير التمويلي",
         "التزامات عقود تأجير غير متداولة", "التزامات تأجير غير متداولة",
     ],
+    "long_term_notes_payable": [
+        "long term notes payable", "non current notes payable",
+        # Arabic — بند أوراق دفع ضمن الالتزامات غير المتداولة (مستقل عن «موردون وأوراق دفع»)
+        "اوراق دفع", "أوراق دفع",
+        "اوراق دفع طويلة الاجل", "أوراق دفع طويلة الأجل",
+    ],
+    "deferred_tax_liabilities": [
+        "deferred tax liabilities", "deferred tax liability",
+        # Arabic
+        "التزامات ضريبية مؤجلة", "إلتزامات ضريبية مؤجلة",
+        "التزامات ضريبة مؤجلة", "ضرائب مؤجلة التزامات",
+    ],
+    "customer_advances": [
+        "advances from customers", "customer advances", "unearned revenue",
+        # Arabic — بند الالتزامات المتداولة (منفصل تماماً عن رصيد العملاء المدين)
+        "عملاء دفعات مقدمة", "عملاء - دفعات مقدمة",
+        "دفعات مقدمة من العملاء", "دفعات مقدمه من عملاء",
+        "دفعات مقدمة من عملاء",
+    ],
+    "other_payables": [
+        "other payables", "other credit balances", "creditors and accrued expenses",
+        # Arabic
+        "دائنون وأرصدة دائنة أخرى", "دائنون وارصده داينه اخري",
+        "دانئنون وأرصدة دائنة أخرى", "أرصدة دائنة أخرى",
+        "ارصده داينه اخري", "دائنون ومصروفات مستحقة",
+    ],
+    "provisions": [
+        "provisions", "short term provisions",
+        # Arabic — بند المخصصات المتداولة بالميزانية فقط (مخصصات الإيضاح/الاضمحلال محجوبة بفيتو)
+        "مخصصات", "المخصصات", "مخصصات متداولة",
+    ],
     # توزيعات أرباح من الشركات التابعة — بند مؤثر في تفسير نمو الأرباح
     "dividends_from_subsidiaries": [
         "dividends from subsidiaries", "income from subsidiaries",
@@ -481,6 +512,19 @@ FIELD_ALIASES: dict[str, list[str]] = {
         "deferred tax assets", "deferred tax asset",
         # Arabic
         "أصول ضريبية مؤجلة", "اصول ضريبية مؤجلة", "اصول ضريبيه موجله",
+    ],
+    "other_receivables": [
+        "other receivables", "debtors and other debit balances", "sundry debtors",
+        # Arabic
+        "مدينون وأرصدة مدينة أخرى", "مدينون وارصده مدينه اخري",
+        "أرصدة مدينة أخرى", "ارصده مدينه اخري", "مدينون وأرصدة مدينة",
+        "ذمم مدينة أخرى",
+    ],
+    "supplier_advances": [
+        "advances to suppliers", "supplier advances", "prepayments to suppliers",
+        # Arabic
+        "موردون دفعات مقدمة", "موردون - دفعات مقدمة",
+        "دفعات مقدمة للموردين", "دفعات مقدمه لموردين",
     ],
     "non_current_liabilities": [
         "non current liabilities", "non-current liabilities",

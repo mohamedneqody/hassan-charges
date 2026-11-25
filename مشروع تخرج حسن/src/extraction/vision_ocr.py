@@ -93,7 +93,7 @@ def _render_pages(raw: bytes, max_pages: int, notes: list[str], indices: list[in
     return pages
 
 
-def preprocess_image(png: bytes, max_side: int | None = None, binarize: bool = False) -> bytes:
+def preprocess_image(png: bytes, max_side: int | None = None, binarize: bool = False, denoise: bool = True) -> bytes:
     """OpenCV cleanup for better machine reading: grayscale, cap resolution,
     deskew (small angles only), CLAHE contrast, light denoise, border crop.
 
@@ -101,6 +101,8 @@ def preprocess_image(png: bytes, max_side: int | None = None, binarize: bool = F
     variant sent alongside the standard one in verification reads — faded
     digits that survive CLAHE often vanish in, or only appear under, the
     adaptive threshold; reading BOTH in one call breaks repeated misreads).
+    denoise=False skips medianBlur(3) to preserve 1-2px stroke gaps in small
+    Arabic-Indic digits (e.g. ٥ vs ٠, ٢ vs ٧) during Z3 repair reads.
     Any failure returns the original image — never raises."""
     try:
         import cv2
@@ -131,7 +133,8 @@ def preprocess_image(png: bytes, max_side: int | None = None, binarize: bool = F
                                      flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
 
         img = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(img)
-        img = cv2.medianBlur(img, 3)
+        if denoise:
+            img = cv2.medianBlur(img, 3)
 
         # crop empty borders (keep a small margin)
         thr = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
@@ -149,7 +152,8 @@ def preprocess_image(png: bytes, max_side: int | None = None, binarize: bool = F
                 img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 31, 10
             )
 
-        ok, jpeg = cv2.imencode(".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY])
+        jpeg_q = JPEG_QUALITY if denoise else min(96, max(JPEG_QUALITY, 94))
+        ok, jpeg = cv2.imencode(".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), jpeg_q])
         return jpeg.tobytes() if ok else png
     except Exception:
         return png
@@ -447,70 +451,85 @@ def _call_with_rotation(
     from src.ai.gemini_agent import classify_gemini_error
     from src.ai.key_pool import classify_quota_scope
 
-    if not pool.has_usable_pairs():
+    last_error = "no attempt was made"
+    max_attempts = max(pool.total_pairs, 1)
+    for wait_cycle in range(2):
+        if not pool.has_usable_pairs():
+            wait_s = pool.shortest_cooldown_wait() if hasattr(pool, "shortest_cooldown_wait") else None
+            if wait_cycle == 0 and wait_s is not None and 0.0 < wait_s <= 25.0:
+                time.sleep(min(wait_s + 0.5, 25.0))
+            else:
+                break
+        if not pool.has_usable_pairs():
+            break
+        for sweep in range(2):
+            transient_only = True
+            for _ in range(max_attempts):
+                picked = pool.pick()
+                if picked is None:
+                    break
+                state, model = picked
+                t0 = time.perf_counter()
+                try:
+                    raw = _call_vision(state.key, model, prompt, images)
+                    elapsed = time.perf_counter() - t0
+                    if call_stats is not None:
+                        call_stats.append((model, elapsed))
+                    pool.reset_transient(model)
+                    pool.mark_success(state.key)
+                    pool.record_call(model, elapsed)
+                    return raw
+                except Exception as exc:
+                    fail_ms = (time.perf_counter() - t0) * 1000.0
+                    kind = classify_gemini_error(exc)
+                    if kind == "quota":
+                        scope, cd_s = classify_quota_scope(exc)
+                        if scope == "rpm":
+                            pool.mark_rpm_limited(state.key, model, cd_s)
+                            last_error = f"RPM rate limit for {model} on {state.masked}"
+                        else:
+                            pool.mark_quota_exhausted(state.key, model)
+                            last_error = f"quota exhausted for {model} on {state.masked}"
+                        pool.record_failover(fail_ms)
+                        transient_only = False
+                    elif kind == "auth":
+                        pool.mark_dead(state.key, str(exc)[:200])
+                        pool.record_failover(fail_ms)
+                        last_error = f"key {state.masked} rejected"
+                        transient_only = False
+                    elif kind == "model":
+                        low_exc = str(exc).lower()
+                        global_404 = "no longer available" in low_exc or "models/" in low_exc
+                        pool.mark_model_unavailable(
+                            state.key, model, str(exc)[:200], all_keys=global_404
+                        )
+                        pool.record_failover(fail_ms)
+                        last_error = f"model {model} unavailable"
+                        transient_only = False
+                    else:
+                        # عابر (503 high demand / 504 timeout): تبريد ناعم سريع
+                        pool.mark_transient_failure(model)
+                        pool.record_failover(fail_ms)
+                        last_error = str(exc)[:250]
+            if (
+                sweep == 0
+                and transient_only
+                and pool.has_usable_pairs()
+            ):
+                time.sleep(1.5)  # brief pause on transient demand spike, then retry
+            else:
+                break
+        if wait_cycle == 0 and not pool.has_usable_pairs():
+            wait_s2 = pool.shortest_cooldown_wait() if hasattr(pool, "shortest_cooldown_wait") else None
+            if wait_s2 is not None and 0.0 < wait_s2 <= 25.0:
+                time.sleep(min(wait_s2 + 0.5, 25.0))
+                continue
+        break
+    if not pool.has_usable_pairs() and last_error == "no attempt was made":
         raise RuntimeError(
             "all API key/model pairs are exhausted or unavailable "
             "(daily free-tier quota resets after midnight US Pacific)."
         )
-    last_error = "no attempt was made"
-    max_attempts = max(pool.total_pairs, 1)
-    for sweep in range(2):
-        transient_only = True
-        for _ in range(max_attempts):
-            picked = pool.pick()
-            if picked is None:
-                break
-            state, model = picked
-            t0 = time.perf_counter()
-            try:
-                raw = _call_vision(state.key, model, prompt, images)
-                elapsed = time.perf_counter() - t0
-                if call_stats is not None:
-                    call_stats.append((model, elapsed))
-                pool.reset_transient(model)
-                pool.mark_success(state.key)
-                pool.record_call(model, elapsed)
-                return raw
-            except Exception as exc:
-                fail_ms = (time.perf_counter() - t0) * 1000.0
-                kind = classify_gemini_error(exc)
-                if kind == "quota":
-                    scope, cd_s = classify_quota_scope(exc)
-                    if scope == "rpm":
-                        pool.mark_rpm_limited(state.key, model, cd_s)
-                        last_error = f"RPM rate limit for {model} on {state.masked}"
-                    else:
-                        pool.mark_quota_exhausted(state.key, model)
-                        last_error = f"quota exhausted for {model} on {state.masked}"
-                    pool.record_failover(fail_ms)
-                    transient_only = False
-                elif kind == "auth":
-                    pool.mark_dead(state.key, str(exc)[:200])
-                    pool.record_failover(fail_ms)
-                    last_error = f"key {state.masked} rejected"
-                    transient_only = False
-                elif kind == "model":
-                    low_exc = str(exc).lower()
-                    global_404 = "no longer available" in low_exc or "models/" in low_exc
-                    pool.mark_model_unavailable(
-                        state.key, model, str(exc)[:200], all_keys=global_404
-                    )
-                    pool.record_failover(fail_ms)
-                    last_error = f"model {model} unavailable"
-                    transient_only = False
-                else:
-                    # عابر (503 high demand / 504 timeout): تبريد ناعم سريع
-                    pool.mark_transient_failure(model)
-                    pool.record_failover(fail_ms)
-                    last_error = str(exc)[:250]
-        if (
-            sweep == 0
-            and transient_only
-            and pool.has_usable_pairs()
-        ):
-            time.sleep(1.5)  # brief pause on transient demand spike, then retry
-        else:
-            break
     # RuntimeError, not ExtractionError: the caller (batch handler) prefixes
     # context, and extract_via_vision aggregates reasons — a nested
     # ExtractionError here would double-wrap the user-facing message.
@@ -576,6 +595,37 @@ def _parse_verify_json(text: str) -> dict:
     return out
 
 
+def _call_verify_prefer_distinct(
+    pool: APIKeyPool,
+    prompt: str,
+    images: list[bytes],
+    sweep_models: list[str] | None = None,
+    call_stats: list[tuple[str, float]] | None = None,
+) -> tuple[str, str | None]:
+    """Call a genuinely DISTINCT Gemini model from `sweep_models` when possible
+    so focused 2200px dual-variant verification doubles as independent Cross-Model
+    Consensus (cutting duplicate page calls in half with zero accuracy loss).
+    Falls back to `_call_with_rotation` when no distinct tier is usable.
+    """
+    from collections import Counter
+
+    sweep_list = [m for m in (sweep_models or []) if m]
+    if sweep_list and pool is not None:
+        all_set = set(sweep_list)
+        dom = Counter(sweep_list).most_common(1)[0][0]
+        excl = all_set if pool.pick_distinct_model(exclude_models=all_set) is not None else {dom}
+        if pool.pick_distinct_model(exclude_models=excl) is not None:
+            try:
+                raw_txt, used_m = _call_distinct_model(
+                    pool, prompt, images, exclude_models=excl, call_stats=call_stats,
+                )
+                return raw_txt, used_m
+            except Exception:
+                pass
+    raw_txt = _call_with_rotation(pool, prompt, images, call_stats=call_stats)
+    return raw_txt, None
+
+
 def _verify_core_fields(
     data: FinancialData,
     parts: list,
@@ -589,6 +639,9 @@ def _verify_core_fields(
     local_reads=None,
     deadline: float | None = None,
     confidence: dict | None = None,
+    sweep_models: list[str] | None = None,
+    call_stats: list[tuple[str, float]] | None = None,
+    cross_model_hits: dict[tuple[str, int], tuple[float, str]] | None = None,
 ) -> None:
     """Focused double-read of the core statement totals (balance sheet + the
     revenue / net-income anchors).
@@ -682,12 +735,15 @@ def _verify_core_fields(
         img = preprocess_image(src_png, max_side=2200)
         img_bin = preprocess_image(src_png, max_side=2200, binarize=True)
         prompt = VERIFY_PROMPT
+        _used_verify_model: str | None = None
         try:
-            raw_text = (
-                caller("k", "m", prompt, [img, img_bin])
-                if caller is not None
-                else _call_with_rotation(pool, prompt, [img, img_bin])
-            )
+            if caller is not None:
+                raw_text = caller("k", "m", prompt, [img, img_bin])
+            else:
+                raw_text, _used_verify_model = _call_verify_prefer_distinct(
+                    pool, prompt, [img, img_bin],
+                    sweep_models=sweep_models, call_stats=call_stats,
+                )
             verified = _parse_verify_json(raw_text)
         except Exception as exc:
             if notes is not None:
@@ -703,6 +759,9 @@ def _verify_core_fields(
             "inventory", "accounts_receivable", "accounts_payable", "cash",
             "fixed_assets", "total_assets", "current_assets", "total_liabilities",
             "current_liabilities", "equity",
+            "other_receivables", "supplier_advances", "customer_advances",
+            "other_payables", "provisions", "long_term_notes_payable",
+            "deferred_tax_liabilities",
         }
         _cf_only_pages = (
             {p for f in ("operating_cash_flow", "investing_cash_flow", "financing_cash_flow")
@@ -737,6 +796,12 @@ def _verify_core_fields(
                         # captured value already has two independent votes
                         key_c = (field, year)
                         conf[key_c] = max(conf.get(key_c, 0), 2)
+                        if (
+                            cross_model_hits is not None
+                            and _used_verify_model
+                            and abs(value - captured) <= max(1.0, 1e-6 * abs(captured))
+                        ):
+                            cross_model_hits[(field, year)] = (captured, _used_verify_model)
                         continue
                 # Digit-exact verification: a 0.5% tolerance let digit
                 # transpositions through (26.5M on 13.2B = 0.2% — "matched").
@@ -746,6 +811,8 @@ def _verify_core_fields(
                 else:
                     key_c = (field, year)
                     conf[key_c] = max(conf.get(key_c, 0), 2)  # focused read agrees
+                    if cross_model_hits is not None and _used_verify_model:
+                        cross_model_hits[(field, year)] = (captured, _used_verify_model)
 
         if not disputes:
             continue
@@ -1083,6 +1150,9 @@ def _verify_cf_fields(
     local_reads=None,
     deadline: float | None = None,
     confidence: dict | None = None,
+    sweep_models: list[str] | None = None,
+    call_stats: list[tuple[str, float]] | None = None,
+    cross_model_hits: dict[tuple[str, int], tuple[float, str]] | None = None,
 ) -> None:
     """Focused double-read of the three net-cash totals — the cash-flow
     statement was the last line without a verification layer, yet its rows
@@ -1128,12 +1198,15 @@ def _verify_cf_fields(
         src_png = pages_png[selected.index(page_number)]
         img = preprocess_image(src_png, max_side=2200)
         img_bin = preprocess_image(src_png, max_side=2200, binarize=True)
+        _used_cf_model: str | None = None
         try:
-            raw_text = (
-                caller("k", "m", VERIFY_CF_PROMPT, [img, img_bin])
-                if caller is not None
-                else _call_with_rotation(pool, VERIFY_CF_PROMPT, [img, img_bin])
-            )
+            if caller is not None:
+                raw_text = caller("k", "m", VERIFY_CF_PROMPT, [img, img_bin])
+            else:
+                raw_text, _used_cf_model = _call_verify_prefer_distinct(
+                    pool, VERIFY_CF_PROMPT, [img, img_bin],
+                    sweep_models=sweep_models, call_stats=call_stats,
+                )
             verified = _parse_verify_cf_json(raw_text)
         except Exception as exc:
             notes.append(f"Cash-flow verification of page {page_number} failed: {exc}")
@@ -1159,6 +1232,12 @@ def _verify_cf_fields(
                         if confidence is not None:
                             key_c = (field, year)
                             confidence[key_c] = max(confidence.get(key_c, 0), 2)
+                        if (
+                            cross_model_hits is not None
+                            and _used_cf_model
+                            and abs(value - captured) <= max(1.0, 1e-6 * abs(captured))
+                        ):
+                            cross_model_hits[(field, year)] = (captured, _used_cf_model)
                         continue  # captured value has two independent votes
                 if abs(value - captured) > max(1.0, 1e-6 * abs(captured)):
                     for part in parts:
@@ -1172,9 +1251,12 @@ def _verify_cf_fields(
                             f"✓ Verified by focused CF re-read: {field} in {year} "
                             f"{captured:,.0f} → {value:,.0f}."
                         )
-                elif confidence is not None:
-                    key_c = (field, year)
-                    confidence[key_c] = max(confidence.get(key_c, 0), 2)
+                else:
+                    if confidence is not None:
+                        key_c = (field, year)
+                        confidence[key_c] = max(confidence.get(key_c, 0), 2)
+                    if cross_model_hits is not None and _used_cf_model:
+                        cross_model_hits[(field, year)] = (captured, _used_cf_model)
 
 
 def extract_via_vision(
@@ -1324,6 +1406,7 @@ def extract_via_vision(
     confidence: dict = {}                     # (field, year) -> agreeing reads
     failure_reasons: list[str] = []           # why vision reads failed (for the final error)
     stopped_early = False
+    quota_interrupted = False
     done_pages = 0
 
     def _run_batch(chunk: list[int], imgs: list[bytes]) -> list[dict]:
@@ -1367,11 +1450,16 @@ def extract_via_vision(
                 f"proceeding with the {done_pages}/{n_pages} pages read so far."
             )
             break
-        if not batches[wave_start : wave_start + wave_size] or (
-            wave_start > 0 and not pool.has_usable_pairs()
-        ):
+        if not batches[wave_start : wave_start + wave_size]:
+            break
+        if wave_start > 0 and not pool.has_usable_pairs():
+            wait_sw = pool.shortest_cooldown_wait() if hasattr(pool, "shortest_cooldown_wait") else None
+            if wait_sw is not None and 0.0 < wait_sw <= 25.0 and _time.time() + wait_sw < deadline:
+                _time.sleep(min(wait_sw + 0.5, 25.0))
+        if wave_start > 0 and not pool.has_usable_pairs():
             # Pool died mid-run (all pairs quota-exhausted): stop sweeping,
             # remaining batches cannot succeed.
+            quota_interrupted = True
             notes.append(
                 "Stopping the vision sweep: all API key/model pairs are now "
                 "exhausted or unavailable."
@@ -1461,6 +1549,7 @@ def extract_via_vision(
         else []
     )
     if failed_pages and not pool.has_usable_pairs():
+        quota_interrupted = True
         notes.append(
             "Skipping the retry pass: all API key/model pairs are exhausted "
             "or unavailable."
@@ -1669,6 +1758,9 @@ def extract_via_vision(
     # carries SIGNS (outflows negative). Runs BEFORE the expensive core
     # third-opinion stage: a real run once exhausted the whole time budget
     # on that stage and CFO shipped unverified with a wrong capture.
+    _sweep_models_v = [m for m, _t in (call_stats or []) if m]
+    _unified_cm_hits: dict[tuple[str, int], tuple[float, str]] = {}
+
     if not fast_mode:
         _verify_cf_fields(
             merge_parsed(parts, []),
@@ -1683,6 +1775,9 @@ def extract_via_vision(
             local_reads=local_reads,
             deadline=verify_deadline,
             confidence=confidence,
+            sweep_models=_sweep_models_v,
+            call_stats=call_stats,
+            cross_model_hits=_unified_cm_hits,
         )
 
     # Focused double-read of the four core balance-sheet totals: replaces
@@ -1703,6 +1798,9 @@ def extract_via_vision(
             local_reads=local_reads,
             deadline=verify_deadline,
             confidence=confidence,
+            sweep_models=_sweep_models_v,
+            call_stats=call_stats,
+            cross_model_hits=_unified_cm_hits,
         )
 
     # التسريع — ملاحظة توقيت المراحل: تشخيص صادق أين ذهب الزمن (تظهر في
@@ -1829,6 +1927,20 @@ def extract_via_vision(
             progress_cb=progress_cb,
             deadline=deadline,
         )
+    if _unified_cm_hits:
+        _cm_unified_models: set[str] = set()
+        _cm_unified_cnt = 0
+        for (_uf, _uy), (_uval, _umodel) in _unified_cm_hits.items():
+            _cur_uv = data.get(_uf, _uy)
+            if _cur_uv is not None and abs(_cur_uv - _uval) <= max(1.0, 1e-6 * abs(_uval)):
+                if _record_cross_model_layer(data, _uf, _uy, _cur_uv, _umodel):
+                    _cm_unified_models.add(_umodel)
+                    _cm_unified_cnt += 1
+        if _cm_unified_cnt and notes is not None:
+            notes.append(
+                f"التحقق المدمج بنموذج ثانٍ مستقل ({', '.join(sorted(_cm_unified_models))}): "
+                f"تم توثيق {_cm_unified_cnt} خانة محورية ضمن إعادة القراءة المركزة."
+            )
     if __import__("os").environ.get("INDRA_DEBUG_PARTS"):
         import json as _json
         from pathlib import Path as _Path
@@ -1886,6 +1998,15 @@ def extract_via_vision(
         except Exception as _cm_exc:
             if notes is not None:
                 notes.append(f"Cross-model consensus skipped: {_cm_exc}")
+    if not fast_mode and caller is None and not pool.has_usable_pairs():
+        try:
+            from src.extraction.normalizer import build_decision_log as _bdl_q
+
+            if any(e.get("status") in ("UNVERIFIED", "CROP_ONLY") for e in _bdl_q(data)):
+                quota_interrupted = True
+        except Exception:
+            pass
+    data.extraction_quota_interrupted = quota_interrupted
     # ── Spatial shadow mode (FEATURE FLAG: SPATIAL_SHADOW=1) ──
     # Runs the spatial cell extractor on the rendered pages and RECORDS its
     # findings without touching any captured value or decision-log status
@@ -2103,11 +2224,14 @@ def _focused_local_cell_verification(data, raw, field_sources, doc_years,
         )
         if _is_cf_only_page:
             _bs_stocks = {
-                "inventory", "accounts_receivable", "accounts_payable",
+                "inventory", "accounts_receivable", "other_receivables",
+                "supplier_advances", "customer_advances",
+                "accounts_payable", "other_payables", "provisions",
                 "fixed_assets", "cash", "current_assets", "non_current_assets",
                 "total_assets", "current_liabilities", "non_current_liabilities",
                 "total_liabilities", "equity", "retained_earnings", "capital",
-                "long_term_debt", "short_term_credit_facilities",
+                "long_term_debt", "long_term_notes_payable",
+                "deferred_tax_liabilities", "short_term_credit_facilities",
                 "current_portion_lt_debt", "current_lease_liabilities",
                 "non_current_lease_liabilities", "total_debt",
             }
@@ -2648,10 +2772,14 @@ def _absorb_batch(
                 _cf_k = {"operating_cash_flow", "investing_cash_flow", "financing_cash_flow", "capex"}
                 _bs_anchor = {"total_assets", "equity"}
                 _bs_strip = {
-                    "inventory", "accounts_receivable", "accounts_payable", "cash",
+                    "inventory", "accounts_receivable", "other_receivables",
+                    "supplier_advances", "customer_advances",
+                    "accounts_payable", "other_payables", "provisions", "cash",
                     "total_assets", "current_assets", "total_liabilities",
                     "current_liabilities", "equity", "fixed_assets",
-                    "long_term_debt", "short_term_debt", "short_term_credit_facilities",
+                    "long_term_debt", "long_term_notes_payable",
+                    "deferred_tax_liabilities", "short_term_debt",
+                    "short_term_credit_facilities",
                     "current_portion_lt_debt", "non_current_lease_liabilities",
                     "current_lease_liabilities",
                     "capital", "treasury_shares", "reserves", "asset_revaluation_reserve",
@@ -2697,7 +2825,7 @@ for EACH year column shown (parentheses = negative; copy exact printed digits, N
 Return ONLY JSON:
 {{"years": [{years_hint}], "values": {{{json_template}}}}}
 Use null if a field is NOT printed on this page or is printed as a dash ("---" / "—", NEVER 0).
-Cross-check both attached image variants (standard cleanup + adaptive-threshold) carefully — watch Arabic digits ٦ vs ١, ٢ vs ٦, and ٠ vs ٥.
+Inspect BOTH attached high-resolution images digit-by-digit — watch Arabic digits ٦ vs ١, ٢ vs ٧, ٠ vs ٥, and exact zero count (e.g. hundreds of millions vs tens of millions).
 """
 
 
@@ -2758,12 +2886,18 @@ def _z3_feedback_repair_loop(
         if caller is None and not pool.has_usable_pairs():
             break
 
-        # Pick first untried (year, violated_axiom_tuple) diagnosis
+        # Pick first untried (year, statement_hint, violated_axiom_tuple) diagnosis
         diag = None
         violated_y = []
         target_key = None
         for d in cert.fault_diagnoses:
-            vy = [ax for ax in cert.axioms if ax.year == d.year and ax.status == "VIOLATED"]
+            d_ax_ids = set(d.violated_axioms or [])
+            vy_stmt = [
+                ax for ax in cert.axioms
+                if ax.year == d.year and ax.status == "VIOLATED"
+                and (not d_ax_ids or ax.axiom_id in d_ax_ids)
+            ]
+            vy = vy_stmt or [ax for ax in cert.axioms if ax.year == d.year and ax.status == "VIOLATED"]
             tkey = (d.year, d.statement_hint, tuple(sorted(ax.axiom_id for ax in vy)))
             if tkey not in tried_targets:
                 diag = d
@@ -2774,15 +2908,33 @@ def _z3_feedback_repair_loop(
             break
         tried_targets.add(target_key)
 
-        target_fields: list[str] = []
+        def _is_verified_cell(fld: str) -> bool:
+            conf_v = data.confidence.get(fld, {}).get(diag.year, 0) if hasattr(data, "confidence") else 0
+            lyrs_v = set((data.candidate_layers.get(fld, {}) or {}).get(diag.year, []) or [])
+            return conf_v >= 2 or len(lyrs_v) >= 2
+
+        stmt_suspects: list[str] = []
         for d in cert.fault_diagnoses:
             if d.year == diag.year and d.statement_hint == diag.statement_hint:
-                if d.suspect_field not in target_fields:
-                    target_fields.append(d.suspect_field)
+                if d.suspect_field not in stmt_suspects:
+                    stmt_suspects.append(d.suspect_field)
+        # Prioritize unverified/conflicting fields first, both in counterfactual suspects and axiom peers
+        stmt_suspects.sort(key=lambda fld: (1 if _is_verified_cell(fld) else 0,))
+        target_fields: list[str] = stmt_suspects[:6]
+        unverified_cand: list[str] = []
+        verified_cand: list[str] = []
         for ax in violated_y:
             for f in ax.fields:
-                if f not in target_fields and len(target_fields) < 5:
-                    target_fields.append(f)
+                if f in target_fields or f in unverified_cand or f in verified_cand:
+                    continue
+                if _is_verified_cell(f):
+                    verified_cand.append(f)
+                else:
+                    unverified_cand.append(f)
+        for f in unverified_cand + verified_cand:
+            if len(target_fields) >= 6:
+                break
+            target_fields.append(f)
         # Balance-sheet axioms A1 (TL+E=TA) and A2 (CA+NCA=TA) are coupled on the same page:
         # include coupled totals so a paired single-digit slip (e.g. CA & TA both off by 10 EGP)
         # can be repaired together in one 2400px read without trading an A1 error for an A2 error.
@@ -2832,8 +2984,8 @@ def _z3_feedback_repair_loop(
 
         try:
             src_png = pages_png[selected.index(page_number)]
-            img = preprocess_image(src_png, max_side=2400)
-            img_bin = preprocess_image(src_png, max_side=2400, binarize=True)
+            img = preprocess_image(src_png, max_side=3000, denoise=False)
+            img_bin = preprocess_image(src_png, max_side=2400, binarize=True, denoise=False)
             if caller is not None:
                 raw_text = caller("k", "m", prompt, [img, img_bin])
             else:
@@ -3088,10 +3240,11 @@ _CROSS_MODEL_PRIORITY = (
     "total_assets", "current_assets", "non_current_assets",
     "total_liabilities", "current_liabilities", "non_current_liabilities", "equity",
     "operating_cash_flow", "investing_cash_flow", "financing_cash_flow",
-    "cash", "inventory", "accounts_receivable", "accounts_payable", "fixed_assets",
-    "long_term_debt", "short_term_debt", "short_term_credit_facilities",
-    "current_portion_lt_debt", "bank_overdraft",
-    "current_lease_liabilities", "non_current_lease_liabilities",
+    "cash", "inventory", "accounts_receivable", "other_receivables", "supplier_advances",
+    "accounts_payable", "customer_advances", "other_payables", "provisions",
+    "fixed_assets", "long_term_debt", "long_term_notes_payable", "short_term_debt",
+    "short_term_credit_facilities", "current_portion_lt_debt", "bank_overdraft",
+    "current_lease_liabilities", "non_current_lease_liabilities", "deferred_tax_liabilities",
     "capex", "depreciation_amortization", "finance_income", "interest_expense", "fx_gain_loss",
     "selling_expenses", "admin_expenses", "other_operating_expenses", "other_operating_income",
     "retained_earnings", "capital", "reserves", "treasury_shares", "asset_revaluation_reserve",
@@ -3105,14 +3258,82 @@ _CROSS_MODEL_EXPENSE_FIELDS = frozenset({
 })
 
 _CROSS_MODEL_BS_STOCK_FIELDS = frozenset({
-    "inventory", "accounts_receivable", "accounts_payable", "cash",
+    "inventory", "accounts_receivable", "other_receivables", "supplier_advances",
+    "accounts_payable", "customer_advances", "other_payables", "provisions", "cash",
     "fixed_assets", "current_assets", "non_current_assets", "total_assets",
     "current_liabilities", "non_current_liabilities", "total_liabilities",
     "equity", "retained_earnings", "capital", "reserves",
-    "long_term_debt", "short_term_debt", "short_term_credit_facilities",
+    "long_term_debt", "long_term_notes_payable", "deferred_tax_liabilities",
+    "short_term_debt", "short_term_credit_facilities",
     "current_portion_lt_debt", "bank_overdraft",
     "current_lease_liabilities", "non_current_lease_liabilities", "total_debt",
 })
+
+
+def _record_cross_model_layer(
+    data: FinancialData,
+    field: str,
+    year: int,
+    captured: float,
+    used_model: str,
+) -> bool:
+    """Record an independent `vision_cross_model` witness on `(field, year)`."""
+    from src.extraction.normalizer import _digit_close
+
+    if captured is None or not used_model:
+        return False
+    votes = getattr(data, "vote_outcomes", None)
+    if not isinstance(votes, dict):
+        data.vote_outcomes = {}
+        votes = data.vote_outcomes
+    order_next = max(
+        (o for cands in (getattr(data, "candidates", {}) or {}).values()
+         for ys in cands.values() for _v, o in ys),
+        default=0,
+    ) + 1
+    cand_list = data.candidates.setdefault(field, {}).setdefault(year, [])
+    layer_list = data.candidate_layers.setdefault(field, {}).setdefault(year, [])
+    label_list = data.candidate_labels.setdefault(field, {}).setdefault(year, [])
+    if len(layer_list) < len(cand_list):
+        fb_lyr = layer_list[0] if layer_list else "vision"
+        layer_list.extend([fb_lyr] * (len(cand_list) - len(layer_list)))
+    elif len(layer_list) > len(cand_list):
+        del layer_list[len(cand_list):]
+    if not any(
+        v is not None and _digit_close(v, captured) and lyr == "vision_cross_model"
+        for (v, _o), lyr in zip(cand_list, layer_list)
+    ):
+        cand_list.append((captured, order_next))
+        label_list.append(f"cross_model:{used_model}")
+        layer_list.append("vision_cross_model")
+    data.bump_confidence(field, year, 2)
+    vo = votes.get((field, year))
+    if isinstance(vo, dict):
+        wl = list(vo.get("winner_layers") or [])
+        if not wl:
+            wl.append("vision")
+        if "vision_cross_model" not in wl:
+            wl.append("vision_cross_model")
+        vo["winner_layers"] = sorted(set(wl))
+    else:
+        existing_lyrs = {
+            lyr for (v, _o), lyr in zip(cand_list, layer_list)
+            if v is not None and _digit_close(v, captured) and lyr
+        }
+        existing_lyrs.add("vision_cross_model")
+        if len(existing_lyrs) < 2:
+            existing_lyrs.add("vision")
+        votes[(field, year)] = {
+            "winner": captured,
+            "votes": max(2, len(existing_lyrs)),
+            "total": len(cand_list),
+            "witnesses": len(existing_lyrs),
+            "winner_layers": sorted(existing_lyrs),
+            "replaced": captured,
+            "dissent": [],
+            "contested": False,
+        }
+    return True
 
 
 def _cross_model_consensus_verify(
@@ -3322,16 +3543,6 @@ def _cross_model_consensus_verify(
                 except Exception:
                     pass
 
-    order_next = max(
-        (o for cands in (getattr(data, "candidates", {}) or {}).values()
-         for ys in cands.values() for _v, o in ys),
-        default=0,
-    ) + 1
-    votes = getattr(data, "vote_outcomes", None)
-    if not isinstance(votes, dict):
-        data.vote_outcomes = {}
-        votes = data.vote_outcomes
-
     attested_count = 0
     disagreed_count = 0
     models_used: set[str] = set()
@@ -3360,50 +3571,8 @@ def _cross_model_consensus_verify(
                     cmp_b = -abs(val_b) if captured < 0 else abs(val_b)
                 if _digit_close(cmp_b, captured):
                     target_years.discard(y)
-                    cand_list = data.candidates.setdefault(f, {}).setdefault(y, [])
-                    layer_list = data.candidate_layers.setdefault(f, {}).setdefault(y, [])
-                    label_list = data.candidate_labels.setdefault(f, {}).setdefault(y, [])
-                    if len(layer_list) < len(cand_list):
-                        fb_lyr = layer_list[0] if layer_list else "vision"
-                        layer_list.extend([fb_lyr] * (len(cand_list) - len(layer_list)))
-                    elif len(layer_list) > len(cand_list):
-                        del layer_list[len(cand_list):]
-                    if not any(
-                        v is not None and _digit_close(v, captured) and lyr == "vision_cross_model"
-                        for (v, _o), lyr in zip(cand_list, layer_list)
-                    ):
-                        cand_list.append((captured, order_next))
-                        label_list.append(f"cross_model:{used_model}")
-                        layer_list.append("vision_cross_model")
-                        order_next += 1
-                    data.bump_confidence(f, y, 2)
-                    vo = votes.get((f, y))
-                    if isinstance(vo, dict):
-                        wl = list(vo.get("winner_layers") or [])
-                        if not wl:
-                            wl.append("vision")
-                        if "vision_cross_model" not in wl:
-                            wl.append("vision_cross_model")
-                        vo["winner_layers"] = sorted(set(wl))
-                    else:
-                        existing_lyrs = {
-                            lyr for (v, _o), lyr in zip(cand_list, layer_list)
-                            if v is not None and _digit_close(v, captured) and lyr
-                        }
-                        existing_lyrs.add("vision_cross_model")
-                        if len(existing_lyrs) < 2:
-                            existing_lyrs.add("vision")
-                        votes[(f, y)] = {
-                            "winner": captured,
-                            "votes": max(2, len(existing_lyrs)),
-                            "total": len(cand_list),
-                            "witnesses": len(existing_lyrs),
-                            "winner_layers": sorted(existing_lyrs),
-                            "replaced": captured,
-                            "dissent": [],
-                            "contested": False,
-                        }
-                    attested_count += 1
+                    if _record_cross_model_layer(data, f, y, captured, used_model):
+                        attested_count += 1
                 else:
                     # Honest disagreement: never promote and never silently overwrite
                     disagreed_count += 1

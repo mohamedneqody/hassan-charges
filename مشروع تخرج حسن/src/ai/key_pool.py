@@ -185,17 +185,23 @@ def classify_quota_scope(exc: Exception) -> tuple[str, float]:
     text = str(exc).lower()
     # Explicit daily exhaustion / zero-quota tier -> 24h depletion
     if any(tok in text for tok in (
-        "perday", "per_day", "requestsperday", "daily", "limit: 0", "limit:0",
+        "perday", "per_day", "per day", "requestsperday", "daily", "limit: 0", "limit:0",
     )):
         return "rpd", float(DEPLETION_RESET_SECONDS)
 
-    retry_m = re.search(r"retry\s+in\s+(\d+(?:\.\d+)?)\s*s", text)
+    retry_m = re.search(
+        r"retry(?:delay|_in|_after|\s+in|\s+after)[\":\s=]*(\d+(?:\.\d+)?)\s*s",
+        text,
+    )
     retry_s = float(retry_m.group(1)) if retry_m else None
 
     # Explicit per-minute rate limit -> short cooldown (do NOT ban pair for 24h)
     if any(tok in text for tok in (
-        "perminute", "per_minute", "requestsperminute", "tokensperminute",
-        "permodelperminute", " rpm", "(rpm)", " tpm", "(tpm)",
+        "perminute", "per_minute", "per minute",
+        "requestsperminute", "tokensperminute",
+        "permodelperminute", "generaterequestsperminute",
+        "requests per minute", "tokens per minute",
+        " rpm", "(rpm)", " tpm", "(tpm)",
     )):
         cd = max(10.0, min((retry_s + 2.0) if retry_s is not None else RPM_COOLDOWN_SECONDS, 90.0))
         return "rpm", cd
@@ -667,6 +673,25 @@ class APIKeyPool:
                     if self._usable_model(state, model):
                         return True
             return False
+
+    def shortest_cooldown_wait(self) -> float | None:
+        """Seconds until the earliest non-depleted pair wakes from RPM/transient cooldown."""
+        with self._lock:
+            now = time.time()
+            waits: list[float] = []
+            for m in self.models:
+                m_until = self._model_cooldown.get(m, 0.0)
+                for s in self.states:
+                    if s.dead or m in s.unavailable:
+                        continue
+                    dep = s.depleted.get(m)
+                    if dep is not None and (now - dep) <= self.depletion_reset_seconds:
+                        continue
+                    r_until = s.rpm_cooldown.get(m, 0.0)
+                    wake = max(m_until, r_until)
+                    if wake > now:
+                        waits.append(wake - now)
+            return min(waits) if waits else None
 
     # ------------------------------------------------------------------ env
 

@@ -348,6 +348,15 @@ def sec_overview(vm: dict, results: dict) -> None:
             unsafe_allow_html=True,
         )
 
+    if vm.get("quota_interrupted"):
+        st.error(
+            "⚠️ انقطع المسح أو التحقق في منتصف التحليل بسبب نفاد حصة مفاتيح Gemini (`0/49`) — "
+            "النتائج المعروضة جزئية ولم تُحفظ في الكاش. انتظر دقيقة أو حدّث المفاتيح ثم اضغط «🔄 إعادة ضبط مسبح المفاتيح» و«تحليل جديد»."
+            if is_ar
+            else "⚠️ Extraction/verification stopped mid-run because Gemini pool capacity reached 0/49 — "
+            "shown results are partial and were NOT cached. Wait briefly or reset keys and re-run."
+        )
+
     st.subheader(_T["summary"][lang])
     facts = executive_summary(results, vm, lang=lang)
     if facts:

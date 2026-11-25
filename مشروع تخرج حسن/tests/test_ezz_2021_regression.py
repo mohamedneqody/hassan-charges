@@ -718,10 +718,12 @@ class TestEzz2023Round2Defects:
         assert match_field("عملاء") == "accounts_receivable"
 
     def test_customer_prepayments_never_feeds_receivables(self):
-        """«عملاء دفعات مقدمة» التزام (بلا قيود) — لا يلتقط لصافي العملاء."""
+        """«عملاء دفعات مقدمة» التزام متداول مستقل (v9.34) — لا يلتقط لصافي العملاء، وبند التغير بالتدفقات يُستبعد."""
         from src.extraction.normalizer import match_field
 
-        assert match_field("عملاء دفعات مقدمة") is None
+        assert match_field("عملاء دفعات مقدمة") == "customer_advances"
+        assert match_field("عملاء دفعات مقدمة") != "accounts_receivable"
+        assert match_field("التغير في عملاء دفعات مقدمة") is None
 
     def test_parenthetical_cf_labels_map(self):
         """صيغة عز المطبوعة «(المستخدمة في) / الناتجة من أنشطة...» —

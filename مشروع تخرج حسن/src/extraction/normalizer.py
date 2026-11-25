@@ -241,6 +241,24 @@ _FIELD_NEGATIVE_PATTERNS: dict[str, tuple[str, ...]] = {
     ),
     "other_investments": ("التغير في", "الزياده في", "النقص في", "مدفوعات", "متحصلات", "ارباح", "خساير"),
     "deferred_tax_assets": ("التزامات", "صافي الضريبة", "قائمة الدخل", "محملة", "التغير في"),
+    "other_receivables": (
+        "اضمحلال", "الاضمحلال", "مخصص", "خساير", "الائتمانيه",
+        "التغير في", "الزياده في", "النقص في", "داينون", "داينه", "دفعات مقدمه",
+    ),
+    "supplier_advances": ("عملا", "العملا", "التغير في", "الزياده في", "النقص في", "مدفوعات", "اضمحلال"),
+    "customer_advances": ("موردون", "موردين", "التغير في", "الزياده في", "النقص في", "اضمحلال", "متحصلات"),
+    "other_payables": (
+        "مدينون", "مدينه", "موردون", "عملا",
+        "التغير في", "الزياده في", "النقص في", "مدفوعات",
+    ),
+    "provisions": (
+        "اضمحلال", "انخفاض", "هبوط", "خساير", "الائتمانيه",
+        "ضريبه", "ضرايب", "العملا", "الموردين", "المخزون",
+        "مكون", "المكون", "مستخدم", "رد مخصص",
+        "التغير في", "الزياده في", "النقص في",
+    ),
+    "long_term_notes_payable": ("موردون", "موردين", "مقاولون", "عملا", "قبض", "مدفوعات", "متحصلات", "التغير في"),
+    "deferred_tax_liabilities": ("اصول", "أصول", "قايمه الدخل", "الدخل الشامل", "التغير في", "الزياده في", "النقص في"),
 }
 
 # A raw cell containing a percent sign is a ratio, never an absolute amount.
@@ -265,6 +283,8 @@ _GENERIC_ALIAS_VETOES: dict[str, tuple[str, ...]] = {
     "current_liabilities": ("non current", "non-current"),
     "current_assets": ("non current", "non-current"),
     "total_liabilities": ("non current", "non-current", "current"),
+    "other_payables": ("creditors",),
+    "provisions": ("depreciation", "impairment", "credit", "tax", "used", "charged", "reversed"),
 }
 
 # A generic alias must match at WORD BOUNDARIES — «ebit» inside «debit»,
@@ -289,10 +309,12 @@ def _alias_matches(norm: str, alias: str) -> bool:
 # header above the row disambiguates). Generic accounting structure.
 _CURRENT_SECTION_FIELDS = frozenset({
     "accounts_payable", "current_liabilities", "inventory", "cash",
-    "accounts_receivable",
+    "accounts_receivable", "other_receivables", "supplier_advances",
+    "customer_advances", "other_payables", "provisions",
 })
 _NONCURRENT_SECTION_FIELDS = frozenset({
     "long_term_debt", "non_current_lease_liabilities",
+    "long_term_notes_payable", "deferred_tax_liabilities",
 })
 
 
@@ -489,6 +511,8 @@ class FinancialData:
     # | NATIVE_SPREADSHEET_CELL | VISION_MODEL) — the fallback source label
     # for values without cell-level provenance
     extraction_source: str = "SCANNED_OCR"
+    # True when a Gemini pool / quota exhaustion interrupted sweep or verify stages
+    extraction_quota_interrupted: bool = False
 
     def bump_confidence(self, field_name: str, year: int, level: int) -> None:
         if level > self.confidence.get(field_name, {}).get(year, 0):
@@ -739,6 +763,9 @@ _ABSOLUTE_FIELDS = {
     "non_current_assets", "non_current_liabilities", "capital", "reserves",
     "projects_under_construction", "investments_in_subsidiaries",
     "other_investments", "deferred_tax_assets",
+    "other_receivables", "supplier_advances", "customer_advances",
+    "other_payables", "provisions", "long_term_notes_payable",
+    "deferred_tax_liabilities",
 }
 
 

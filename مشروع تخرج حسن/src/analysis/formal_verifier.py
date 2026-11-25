@@ -151,14 +151,17 @@ class ProofCertificate:
 
 _BS_FIELDS = {
     "total_assets", "non_current_assets", "current_assets", "fixed_assets",
-    "inventory", "accounts_receivable", "cash",
+    "projects_under_construction", "investments_in_subsidiaries",
+    "other_investments", "deferred_tax_assets",
+    "inventory", "accounts_receivable", "other_receivables", "supplier_advances", "cash",
     "total_liabilities", "non_current_liabilities", "current_liabilities",
-    "accounts_payable", "equity", "retained_earnings", "capital",
+    "accounts_payable", "customer_advances", "other_payables", "provisions",
+    "equity", "retained_earnings", "capital",
     "treasury_shares", "reserves", "asset_revaluation_reserve",
-    "total_debt", "long_term_debt", "short_term_debt",
+    "total_debt", "long_term_debt", "long_term_notes_payable", "short_term_debt",
     "short_term_credit_facilities", "bank_overdraft",
     "current_portion_lt_debt", "current_lease_liabilities",
-    "non_current_lease_liabilities",
+    "non_current_lease_liabilities", "deferred_tax_liabilities",
 }
 _IS_FIELDS = {
     "revenue", "cost_of_revenue", "gross_profit", "operating_expenses",
@@ -179,11 +182,24 @@ _FIELD_AR = {
     "fixed_assets": "الأصول الثابتة",
     "inventory": "المخزون",
     "accounts_receivable": "العملاء وأوراق القبض",
+    "other_receivables": "مدينون وأرصدة مدينة أخرى",
+    "supplier_advances": "موردون — دفعات مقدمة",
     "cash": "النقدية وما في حكمها",
     "total_liabilities": "إجمالي الالتزامات",
     "non_current_liabilities": "الالتزامات غير المتداولة",
     "current_liabilities": "الالتزامات المتداولة",
     "accounts_payable": "الموردون وأوراق الدفع",
+    "customer_advances": "عملاء — دفعات مقدمة",
+    "other_payables": "دائنون وأرصدة دائنة أخرى",
+    "provisions": "مخصصات",
+    "long_term_debt": "قروض طويلة الأجل",
+    "long_term_notes_payable": "أوراق دفع طويلة الأجل",
+    "non_current_lease_liabilities": "التزامات تأجير تمويلي غير متداولة",
+    "deferred_tax_liabilities": "التزامات ضريبية مؤجلة",
+    "short_term_credit_facilities": "بنوك — تسهيلات ائتمانية",
+    "bank_overdraft": "بنوك — سحب على المكشوف",
+    "current_portion_lt_debt": "أقساط قروض طويلة الأجل مستحقة خلال عام",
+    "current_lease_liabilities": "التزامات تأجير تمويلي متداولة",
     "equity": "إجمالي حقوق الملكية",
     "capital": "رأس المال المدفوع",
     "treasury_shares": "أسهم خزينة",
@@ -246,19 +262,20 @@ def _whole_currency_tol(
     rel_tol: float,
     integer_tol: float | None = None,
 ) -> float:
-    """Tighten tolerance to `integer_tol` (e.g. 5 EGP) when BOTH sides of an
-    equation are exact whole-currency integers ≥ 100,000, while preserving
-    `rel_tol` for fractional statements (millions/thousands)."""
+    """Tighten tolerance to `integer_tol` (e.g. 5 EGP) when a whole-currency
+    statement (>= 100k integers) is checked — also catching single fractional-digit
+    OCR comma-to-dot slips (.88) when magnitudes exceed 10M."""
     scale = max(abs(lhs), abs(rhs), 1.0)
     base = max(10.0, rel_tol * scale)
-    if (
-        integer_tol is not None
-        and abs(lhs) >= 100_000.0
-        and abs(rhs) >= 100_000.0
-        and abs(lhs - round(lhs)) < 1e-6
-        and abs(rhs - round(rhs)) < 1e-6
-    ):
-        return min(base, float(integer_tol))
+    if integer_tol is not None and abs(lhs) >= 100_000.0 and abs(rhs) >= 100_000.0:
+        lhs_int = abs(lhs - round(lhs)) < 1e-6
+        rhs_int = abs(rhs - round(rhs)) < 1e-6
+        if (lhs_int and rhs_int) or (
+            abs(lhs) >= 10_000_000.0
+            and abs(rhs) >= 10_000_000.0
+            and (lhs_int or rhs_int)
+        ):
+            return min(base, float(integer_tol))
     return base
 
 
@@ -333,8 +350,15 @@ def _diagnose_with_z3(
     # Collect all fields present this year that participate in linear axioms
     relevant = [
         "total_assets", "non_current_assets", "current_assets",
+        "fixed_assets", "projects_under_construction", "investments_in_subsidiaries",
+        "other_investments", "deferred_tax_assets",
+        "inventory", "accounts_receivable", "other_receivables", "supplier_advances", "cash",
         "total_liabilities", "non_current_liabilities", "current_liabilities",
-        "equity", "inventory", "accounts_receivable", "cash", "accounts_payable",
+        "accounts_payable", "customer_advances", "other_payables", "provisions",
+        "bank_overdraft", "short_term_credit_facilities", "current_portion_lt_debt",
+        "current_lease_liabilities", "long_term_debt", "long_term_notes_payable",
+        "non_current_lease_liabilities", "deferred_tax_liabilities",
+        "equity",
         "revenue", "cost_of_revenue", "gross_profit",
         "net_activity_profit", "operating_income", "finance_income",
         "interest_expense", "fx_gain_loss", "dividends_from_subsidiaries",
@@ -347,7 +371,16 @@ def _diagnose_with_z3(
         if v is not None:
             present[f] = v
 
-    def _build_solver(drop_field: str | None = None, exact_eq: bool = False):
+    violated_ids = {ax.axiom_id for ax in violated}
+
+    def _build_solver(
+        drop_field: str | None = None,
+        exact_eq: bool = False,
+        only_axioms: set[str] | None = None,
+    ):
+        def _want(ax_id: str) -> bool:
+            return only_axioms is None or ax_id in only_axioms
+
         s = z3.Solver()
         s.set("timeout", 400)  # 400ms hard cap — deterministic & fast
         vmap = {f: z3.Real(f) for f in present}
@@ -358,11 +391,16 @@ def _diagnose_with_z3(
                 s.add(expr_l == expr_r)
             else:
                 base_eps = max(10.0, rel_tol * max(abs(scale_ref), 1.0))
+                present_terms = [present[t] for t in terms if t in present]
+                int_count = sum(1 for tv in present_terms if abs(tv - round(tv)) < 1e-6)
                 if (
                     integer_tol is not None
                     and abs(scale_ref) >= 100_000.0
-                    and terms
-                    and all(abs(present[t] - round(present[t])) < 1e-6 for t in terms if t in present)
+                    and present_terms
+                    and (
+                        int_count == len(present_terms)
+                        or (abs(scale_ref) >= 10_000_000.0 and int_count >= max(2, len(present_terms) - 1))
+                    )
                 ):
                     eps = min(base_eps, float(integer_tol))
                 else:
@@ -370,34 +408,52 @@ def _diagnose_with_z3(
                 s.add(expr_l - expr_r <= eps)
                 s.add(expr_r - expr_l <= eps)
 
-        if all(k in vmap for k in ("total_assets", "total_liabilities", "equity")):
+        if _want("A1_BS_BALANCE") and all(k in vmap for k in ("total_assets", "total_liabilities", "equity")):
             _eq_tol(vmap["total_assets"], vmap["total_liabilities"] + vmap["equity"], present["total_assets"], ("total_assets", "total_liabilities", "equity"))
-        if all(k in vmap for k in ("total_assets", "non_current_assets", "current_assets")):
+        if _want("A2_ASSETS_SUM") and all(k in vmap for k in ("total_assets", "non_current_assets", "current_assets")):
             _eq_tol(vmap["total_assets"], vmap["non_current_assets"] + vmap["current_assets"], present["total_assets"], ("total_assets", "non_current_assets", "current_assets"))
-        if all(k in vmap for k in ("total_liabilities", "non_current_liabilities", "current_liabilities")):
+        if _want("A3_LIAB_SUM") and all(k in vmap for k in ("total_liabilities", "non_current_liabilities", "current_liabilities")):
             _eq_tol(vmap["total_liabilities"], vmap["non_current_liabilities"] + vmap["current_liabilities"], present["total_liabilities"], ("total_liabilities", "non_current_liabilities", "current_liabilities"))
-        if all(k in vmap for k in ("inventory", "accounts_receivable", "cash", "current_assets")):
+        if _want("A2c_CA_SUM") and "A2c_CA_SUM" in violated_ids and "current_assets" in vmap:
+            ca_fs = tuple(k for k in ("inventory", "accounts_receivable", "other_receivables", "supplier_advances", "cash") if k in vmap)
+            if len(ca_fs) >= 4:
+                _eq_tol(vmap["current_assets"], z3.Sum([vmap[k] for k in ca_fs]), present["current_assets"], ("current_assets",) + ca_fs)
+        if _want("A3b_CL_SUM") and "A3b_CL_SUM" in violated_ids and "current_liabilities" in vmap:
+            cl_fs = tuple(k for k in ("bank_overdraft", "short_term_credit_facilities", "current_portion_lt_debt", "current_lease_liabilities", "accounts_payable", "customer_advances", "other_payables", "provisions") if k in vmap)
+            if len(cl_fs) >= 5:
+                _eq_tol(vmap["current_liabilities"], z3.Sum([vmap[k] for k in cl_fs]), present["current_liabilities"], ("current_liabilities",) + cl_fs)
+        if _want("A3c_NCL_SUM") and "A3c_NCL_SUM" in violated_ids and "non_current_liabilities" in vmap:
+            ncl_fs = tuple(k for k in ("long_term_debt", "long_term_notes_payable", "non_current_lease_liabilities", "deferred_tax_liabilities") if k in vmap)
+            if len(ncl_fs) >= 3:
+                _eq_tol(vmap["non_current_liabilities"], z3.Sum([vmap[k] for k in ncl_fs]), present["non_current_liabilities"], ("non_current_liabilities",) + ncl_fs)
+        if _want("A4_CA_BOUNDS") and all(k in vmap for k in ("inventory", "accounts_receivable", "cash", "current_assets")):
             eps = max(10.0, rel_tol * max(abs(present["current_assets"]), 1.0))
             s.add(vmap["inventory"] + vmap["accounts_receivable"] + vmap["cash"] <= vmap["current_assets"] + eps)
-        if all(k in vmap for k in ("accounts_payable", "current_liabilities")):
+        if _want("A4_AP_BOUND") and all(k in vmap for k in ("accounts_payable", "current_liabilities")):
             eps = max(10.0, rel_tol * max(abs(present["current_liabilities"]), 1.0))
             s.add(vmap["accounts_payable"] <= vmap["current_liabilities"] + eps)
-        if all(k in vmap for k in ("total_debt", "total_liabilities")):
+        if _want("A7_DEBT_BOUND") and all(k in vmap for k in ("total_debt", "total_liabilities")):
             eps = max(10.0, rel_tol * max(abs(present["total_liabilities"]), 1.0))
             s.add(vmap["total_debt"] <= vmap["total_liabilities"] + eps)
-        if all(k in vmap for k in ("revenue", "cost_of_revenue", "gross_profit")):
+        if _want("A5_GROSS_PROFIT") and all(k in vmap for k in ("revenue", "cost_of_revenue", "gross_profit")):
             cogs_var = vmap["cost_of_revenue"]
             cogs_mag = z3.If(cogs_var < 0, -cogs_var, cogs_var)
             _eq_tol(vmap["revenue"] - cogs_mag, vmap["gross_profit"], present["revenue"], ("revenue", "cost_of_revenue", "gross_profit"))
         act_f = "net_activity_profit" if "net_activity_profit" in vmap else ("operating_income" if "operating_income" in vmap else None)
-        if act_f and all(k in vmap for k in ("dividends_from_subsidiaries", "interest_expense", "pretax_income")):
+        has_div_disclosed = isinstance(values.get("dividends_from_subsidiaries"), dict) and any(
+            v is not None for v in values["dividends_from_subsidiaries"].values()
+        )
+        if _want("A6b_ACTIVITY_BRIDGE") and act_f and all(k in vmap for k in ("interest_expense", "pretax_income")) and (
+            "dividends_from_subsidiaries" in vmap or has_div_disclosed
+        ):
             fin_v = vmap["interest_expense"]
             fin_mag = z3.If(fin_v < 0, -fin_v, fin_v)
             fi_expr = z3.If(vmap["finance_income"] < 0, -vmap["finance_income"], vmap["finance_income"]) if "finance_income" in vmap else 0
             fx_expr = vmap["fx_gain_loss"] if "fx_gain_loss" in vmap else 0
+            div_expr = vmap["dividends_from_subsidiaries"] if "dividends_from_subsidiaries" in vmap else z3.RealVal("0")
             a6b_terms = tuple(k for k in (act_f, "finance_income", "interest_expense", "fx_gain_loss", "dividends_from_subsidiaries", "pretax_income") if k in present)
-            _eq_tol(vmap[act_f] + fi_expr - fin_mag + fx_expr + vmap["dividends_from_subsidiaries"], vmap["pretax_income"], max(abs(present["pretax_income"]), abs(present[act_f])), a6b_terms)
-        if all(k in vmap for k in ("pretax_income", "income_tax_expense", "net_income")):
+            _eq_tol(vmap[act_f] + fi_expr - fin_mag + fx_expr + div_expr, vmap["pretax_income"], max(abs(present["pretax_income"]), abs(present[act_f])), a6b_terms)
+        if _want("A6_NI_BRIDGE") and all(k in vmap for k in ("pretax_income", "income_tax_expense", "net_income")):
             _eq_tol(vmap["pretax_income"] + vmap["income_tax_expense"], vmap["net_income"],
                     max(abs(present["pretax_income"]), abs(present["net_income"])), ("pretax_income", "income_tax_expense", "net_income"))
         # Non-negativity of balance-sheet stocks
@@ -422,8 +478,17 @@ def _diagnose_with_z3(
             if str(atom).startswith("val_")
         ]
 
-    # Candidate fields to test for single-field counterfactual repair
-    test_fields = core_fields or [f for f in suspect_fields if f in present]
+    # Candidate fields to test for single-field counterfactual repair.
+    # When multiple disjoint axioms fail in the same year, s0.unsat_core() returns only
+    # ONE minimal conflict cluster; unioning participants of every violated axiom ensures
+    # independent broken statements are also diagnosed cleanly.
+    if len(violated_ids) > 1:
+        violated_participants = [
+            f for ax in violated for f in ax.fields if f in present
+        ]
+        test_fields = list(dict.fromkeys([*core_fields, *violated_participants]))
+    else:
+        test_fields = core_fields or [f for f in suspect_fields if f in present]
     # Rank fields that participate in MORE violated axioms first (root-cause heuristic)
     ax_by_field: dict[str, list[str]] = {}
     for ax in violated:
@@ -439,6 +504,15 @@ def _diagnose_with_z3(
         if verdict_cf != z3.sat:
             s_cf, vmap_cf = _build_solver(drop_field=f, exact_eq=False)
             verdict_cf = s_cf.check()
+        # Multi-fault isolation: when another disjoint axiom in the same year is also broken,
+        # evaluate counterfactual solvability within the subset of violated axioms touching `f`.
+        f_axioms = set(ax_by_field.get(f, []))
+        if verdict_cf != z3.sat and 0 < len(f_axioms) < len(violated_ids):
+            s_cf, vmap_cf = _build_solver(drop_field=f, exact_eq=True, only_axioms=f_axioms)
+            verdict_cf = s_cf.check()
+            if verdict_cf != z3.sat:
+                s_cf, vmap_cf = _build_solver(drop_field=f, exact_eq=False, only_axioms=f_axioms)
+                verdict_cf = s_cf.check()
         if verdict_cf == z3.sat:
             model = s_cf.model()
             raw_val = model.eval(vmap_cf[f], model_completion=True)
@@ -663,13 +737,17 @@ def verify_financial_statements(
                 integer_tol=integer_tol,
             ))
 
-        # A6b: Activity-to-Pretax Bridge when subsidiary dividends are directly captured
+        # A6b: Activity-to-Pretax Bridge when subsidiary dividends are disclosed (any year in statement)
         net_act = _val(values, "net_activity_profit", y)
         act_key = "net_activity_profit" if net_act is not None else ("operating_income" if op_inc is not None else None)
         act_val = net_act if net_act is not None else op_inc
         fin_exp = _val(values, "interest_expense", y)
         div_sub = _val(values, "dividends_from_subsidiaries", y)
-        if None not in (act_val, fin_exp, div_sub, pretax):
+        div_disclosed = isinstance(values.get("dividends_from_subsidiaries"), dict) and any(
+            v is not None for v in values["dividends_from_subsidiaries"].values()
+        )
+        if None not in (act_val, fin_exp, pretax) and (div_sub is not None or div_disclosed):
+            div_eff = div_sub if div_sub is not None else 0.0
             fin_inc = _val(values, "finance_income", y)
             fx_gl = _val(values, "fx_gain_loss", y)
             lhs_a6b = (
@@ -677,9 +755,11 @@ def verify_financial_statements(
                 + (abs(fin_inc) if fin_inc is not None else 0.0)
                 - abs(fin_exp)
                 + (fx_gl if fx_gl is not None else 0.0)
-                + div_sub
+                + div_eff
             )
-            a6b_fields = [act_key, "interest_expense", "dividends_from_subsidiaries", "pretax_income"]
+            a6b_fields = [act_key, "interest_expense", "pretax_income"]
+            if div_sub is not None:
+                a6b_fields.append("dividends_from_subsidiaries")
             if fin_inc is not None:
                 a6b_fields.append("finance_income")
             if fx_gl is not None:
@@ -692,6 +772,68 @@ def verify_financial_statements(
                 a6b_fields, tolerance,
                 integer_tol=integer_tol,
             ))
+
+        # A2c: Itemized Current Assets Sum (only when itemized CA lines like other_receivables exist)
+        _ca_fields = ("inventory", "accounts_receivable", "other_receivables", "supplier_advances", "cash")
+        _present_ca = [f for f in _ca_fields if _val(values, f, y) is not None]
+        if ca is not None and "other_receivables" in _present_ca and len(_present_ca) >= 4:
+            _ca_sum = sum(abs(_val(values, f, y)) for f in _present_ca)
+            if len(_present_ca) == 5 or abs(_ca_sum - ca) <= 0.02 * max(abs(ca), 1.0):
+                year_axioms.append(_check_equality(
+                    "A2c_CA_SUM", y,
+                    "تطابق مكونات الأصول المتداولة", "Current Assets Component Sum",
+                    "Current Assets = Inventory + AR + Other Receivables + Supplier Advances + Cash",
+                    ca, _ca_sum,
+                    ["current_assets"] + _present_ca, tolerance,
+                    integer_tol=integer_tol,
+                ))
+
+        # A3b: Itemized Current Liabilities Sum (only when itemized lines like other_payables & provisions exist)
+        _cl_fields = (
+            "bank_overdraft", "short_term_credit_facilities", "current_portion_lt_debt",
+            "current_lease_liabilities", "accounts_payable", "customer_advances",
+            "other_payables", "provisions",
+        )
+        _present_cl = [f for f in _cl_fields if _val(values, f, y) is not None]
+        if (
+            cl is not None
+            and "other_payables" in _present_cl
+            and "provisions" in _present_cl
+            and len(_present_cl) >= 6
+        ):
+            _cl_sum = sum(abs(_val(values, f, y)) for f in _present_cl)
+            if len(_present_cl) >= 7 or abs(_cl_sum - cl) <= 0.02 * max(abs(cl), 1.0):
+                year_axioms.append(_check_equality(
+                    "A3b_CL_SUM", y,
+                    "تطابق مكونات الالتزامات المتداولة", "Current Liabilities Component Sum",
+                    "Current Liabilities = Sum of Short-Term Debt, Payables, Advances, Other Payables & Provisions",
+                    cl, _cl_sum,
+                    ["current_liabilities"] + _present_cl, tolerance,
+                    integer_tol=integer_tol,
+                ))
+
+        # A3c: Itemized Non-Current Liabilities Sum (when itemized lines like LT notes & DTL exist)
+        _ncl_fields = (
+            "long_term_debt", "long_term_notes_payable",
+            "non_current_lease_liabilities", "deferred_tax_liabilities",
+        )
+        _present_ncl = [f for f in _ncl_fields if _val(values, f, y) is not None]
+        if (
+            ncl is not None
+            and "long_term_notes_payable" in _present_ncl
+            and "deferred_tax_liabilities" in _present_ncl
+            and len(_present_ncl) >= 3
+        ):
+            _ncl_sum = sum(abs(_val(values, f, y)) for f in _present_ncl)
+            if len(_present_ncl) == 4 or abs(_ncl_sum - ncl) <= 0.02 * max(abs(ncl), 1.0):
+                year_axioms.append(_check_equality(
+                    "A3c_NCL_SUM", y,
+                    "تطابق مكونات الالتزامات غير المتداولة", "Non-Current Liabilities Component Sum",
+                    "Non-Current Liabilities = LT Debt + LT Notes Payable + LT Leases + Deferred Tax Liabilities",
+                    ncl, _ncl_sum,
+                    ["non_current_liabilities"] + _present_ncl, tolerance,
+                    integer_tol=integer_tol,
+                ))
 
         # A7: Debt Bound (Total Debt <= Total Liabilities)
         if td is not None and tl is not None:
@@ -1008,9 +1150,14 @@ def verify_policy_invariants_z3() -> tuple[PolicyTheorem, ...]:
 _STRICT_EQUALITY_AXIOMS = frozenset({
     "A1_BS_BALANCE",
     "A2_ASSETS_SUM",
+    "A2b_NCA_SUM",
+    "A2c_CA_SUM",
     "A3_LIAB_SUM",
+    "A3b_CL_SUM",
+    "A3c_NCL_SUM",
     "A5_GROSS_PROFIT",
     "A6_NI_BRIDGE",
+    "A6b_ACTIVITY_BRIDGE",
 })
 
 _DEBT_COMPONENT_FIELDS = (
@@ -1268,6 +1415,52 @@ def apply_z3_algebraic_attestation(
                     to_attest.setdefault(("non_current_assets", y), "A2b_NCA_SUM")
                     for f in present_nca:
                         to_attest.setdefault((f, y), "A2b_NCA_SUM")
+
+        # A2c: Itemized Current Assets Sum (inventory + AR + other_receivables + supplier_advances + cash == current_assets)
+        ca_v = float(values["current_assets"][y]) if _is_eligible_for_z3_attestation(data, "current_assets", y) else None
+        if ca_v is not None:
+            ca_parts_f = ("inventory", "accounts_receivable", "other_receivables", "supplier_advances", "cash")
+            present_ca = [f for f in ca_parts_f if _is_eligible_for_z3_attestation(data, f, y)]
+            if "other_receivables" in present_ca and len(present_ca) >= 4:
+                ca_sum = sum(abs(float(values[f][y])) for f in present_ca)
+                ca_tol = _whole_currency_tol(ca_v, ca_sum, strict_rel_tol, integer_tol=integer_tol)
+                if abs(ca_v - ca_sum) <= ca_tol:
+                    to_attest.setdefault(("current_assets", y), "A2c_CA_SUM")
+                    for f in present_ca:
+                        to_attest.setdefault((f, y), "A2c_CA_SUM")
+
+        # A3b: Itemized Current Liabilities Sum (bank_overdraft + facilities + CPLTD + CL leases + AP + cust advances + other payables + provisions == CL)
+        cl_v = float(values["current_liabilities"][y]) if _is_eligible_for_z3_attestation(data, "current_liabilities", y) else None
+        if cl_v is not None:
+            cl_parts_f = (
+                "bank_overdraft", "short_term_credit_facilities", "current_portion_lt_debt",
+                "current_lease_liabilities", "accounts_payable", "customer_advances",
+                "other_payables", "provisions",
+            )
+            present_cl = [f for f in cl_parts_f if _is_eligible_for_z3_attestation(data, f, y)]
+            if "accounts_payable" in present_cl and "other_payables" in present_cl and len(present_cl) >= 5:
+                cl_sum = sum(abs(float(values[f][y])) for f in present_cl)
+                cl_tol = _whole_currency_tol(cl_v, cl_sum, strict_rel_tol, integer_tol=integer_tol)
+                if abs(cl_v - cl_sum) <= cl_tol:
+                    to_attest.setdefault(("current_liabilities", y), "A3b_CL_SUM")
+                    for f in present_cl:
+                        to_attest.setdefault((f, y), "A3b_CL_SUM")
+
+        # A3c: Itemized Non-Current Liabilities Sum (LT debt + LT notes payable + LT leases + DTL == NCL)
+        ncl_v = float(values["non_current_liabilities"][y]) if _is_eligible_for_z3_attestation(data, "non_current_liabilities", y) else None
+        if ncl_v is not None:
+            ncl_parts_f = (
+                "long_term_debt", "long_term_notes_payable",
+                "non_current_lease_liabilities", "deferred_tax_liabilities",
+            )
+            present_ncl = [f for f in ncl_parts_f if _is_eligible_for_z3_attestation(data, f, y)]
+            if "long_term_notes_payable" in present_ncl and "deferred_tax_liabilities" in present_ncl and len(present_ncl) >= 3:
+                ncl_sum = sum(abs(float(values[f][y])) for f in present_ncl)
+                ncl_tol = _whole_currency_tol(ncl_v, ncl_sum, strict_rel_tol, integer_tol=integer_tol)
+                if abs(ncl_v - ncl_sum) <= ncl_tol:
+                    to_attest.setdefault(("non_current_liabilities", y), "A3c_NCL_SUM")
+                    for f in present_ncl:
+                        to_attest.setdefault((f, y), "A3c_NCL_SUM")
 
         # A5c: Exact Gross-to-Operating Profit Bridge when OpEx components (+ optional Other Operating Income) are directly captured
         op_field = "operating_income" if _is_eligible_for_z3_attestation(data, "operating_income", y) else (

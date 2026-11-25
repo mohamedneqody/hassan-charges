@@ -151,6 +151,8 @@ def run_pipeline(file_name: str, raw: bytes, company: str, progress_cb=None, pag
 
             if not _values_have_core(data.values):
                 raise RuntimeError("degraded extraction (no revenue/net income) — not cached")
+            if getattr(data, "extraction_quota_interrupted", False):
+                raise RuntimeError("incomplete quota-interrupted extraction (0/49 pool exhaustion) — not cached")
             store_extraction(key, {
                 "values": data.values,
                 "notes": data.notes,
@@ -419,6 +421,7 @@ def run_pipeline(file_name: str, raw: bytes, company: str, progress_cb=None, pag
         "candidate_labels": labels,
         "document_sha256_16": hashlib.sha256(raw).hexdigest()[:16],
         "formal_certificate": formal_cert.to_dict(),
+        "quota_interrupted": bool(getattr(data, "extraction_quota_interrupted", False)),
     }
 
 

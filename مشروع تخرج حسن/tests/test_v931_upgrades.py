@@ -58,7 +58,7 @@ def test_real_estate_eas_aliases_match_accurately(raw_label: str, expected_field
         "التغير في مشروعات تحت التنفيذ",    # Cash-flow/movement CWIP line (never asset!)
         "الانخفاض في قيمة المخزون",          # Impairment reserve
         "التغير في أعمال تحت التنفيذ",       # Cash-flow working capital delta
-        "عملاء دفعات مقدمة",                 # Customer advances (liability, not AR!)
+        "التغير في عملاء دفعات مقدمة",       # Cash-flow movement (never AR!)
         "إيرادات متنوعة أخرى",               # Other non-operating revenue (never hijacks core revenue!)
         "إجمالي الالتزامات وحقوق الملكية",   # Grand total exclusion
     ],
@@ -69,6 +69,9 @@ def test_real_estate_aliases_respect_accounting_vetoes(vetoed_label: str):
     assert match_field(vetoed_label) is None
     # Industrial CWIP maps to non-current projects_under_construction, NEVER current inventory!
     assert match_field("مشروعات تحت التنفيذ") != "inventory"
+    # Customer advances map to liability customer_advances, NEVER accounts_receivable!
+    assert match_field("عملاء دفعات مقدمة") == "customer_advances"
+    assert match_field("عملاء دفعات مقدمة") != "accounts_receivable"
 
 
 def test_real_estate_end_to_end_pipeline_el_shams_style():
@@ -953,5 +956,216 @@ def test_v933_z3_repair_minimal_subset_ignores_noisy_sibling_reads():
     # Already-exact siblings must remain untouched!
     assert d.values["equity"][2021] == 6_363_686_325.0
     assert d.values["total_liabilities"][2021] == 8_250_997_672.0
+
+
+def test_v934_full_bs_sub_items_aliases_vetoes_and_a2c_a3b_a3c_z3():
+    from src.analysis.formal_verifier import (
+        apply_z3_algebraic_attestation,
+        verify_financial_statements,
+    )
+    from src.extraction.normalizer import match_field, merge_parsed
+
+    assert match_field("مدينون وأرصدة مدينة أخرى") == "other_receivables"
+    assert match_field("موردون - دفعات مقدمة") == "supplier_advances"
+    assert match_field("عملاء - دفعات مقدمة") == "customer_advances"
+    assert match_field("دائنون وأرصدة دائنة أخرى") == "other_payables"
+    assert match_field("مخصصات") == "provisions"
+    assert match_field("أوراق دفع") == "long_term_notes_payable"
+    assert match_field("إلتزامات ضريبية مؤجلة") == "deferred_tax_liabilities"
+
+    # Strict collision & veto protections
+    assert match_field("موردون وأوراق دفع") == "accounts_payable"
+    assert match_field("التزامات ضريبية مؤجلة") != "deferred_tax_assets"
+    assert match_field("مخصص اضمحلال مخزون") is None
+    assert match_field("التغير في المخصصات") is None
+    assert match_field("مدينون - خسائر ائتمانية") is None
+
+    # Ezz 2021 CA / CL / NCL exact components (+ 90-EGP swap caught in inventory!)
+    ezz_2021_bad_inv = {
+        "inventory": 906_649_767.0,  # +90 EGP swap vs printed 906,649,677!
+        "accounts_receivable": 691_267_962.0,
+        "other_receivables": 439_111_701.0,
+        "supplier_advances": 266_361_902.0,
+        "cash": 598_007_850.0,
+        "current_assets": 2_901_399_092.0,
+        # CL (exact sum = 7,027,936,368)
+        "bank_overdraft": 2_655_419.0,
+        "short_term_credit_facilities": 3_915_952_409.0,
+        "current_portion_lt_debt": 201_143_687.0,
+        "current_lease_liabilities": 73_321_230.0,
+        "accounts_payable": 1_900_777_147.0,
+        "customer_advances": 75_620_805.0,
+        "other_payables": 756_228_729.0,
+        "provisions": 102_236_942.0,
+        "current_liabilities": 7_027_936_368.0,
+        # NCL (exact sum = 1,223,061,304)
+        "long_term_debt": 663_143_468.0,
+        "long_term_notes_payable": 197_294_810.0,
+        "non_current_lease_liabilities": 291_210_861.0,
+        "deferred_tax_liabilities": 71_412_165.0,
+        "non_current_liabilities": 1_223_061_304.0,
+    }
+    cert_bad = verify_financial_statements({k: {2021: v} for k, v in ezz_2021_bad_inv.items()}, years=[2021], tolerance=1e-5, integer_tol=5.0)
+    viol = {ax.axiom_id for ax in cert_bad.axioms if ax.status == "VIOLATED"}
+    assert "A2c_CA_SUM" in viol
+    assert "A3b_CL_SUM" not in viol
+    assert "A3c_NCL_SUM" not in viol
+
+    # Fix the +90 EGP slip -> all three itemized BS sums PROVEN + z3_math attested!
+    ezz_2021_ok = dict(ezz_2021_bad_inv, inventory=906_649_677.0)
+    cert_ok = verify_financial_statements({k: {2021: v} for k, v in ezz_2021_ok.items()}, years=[2021], tolerance=1e-5, integer_tol=5.0)
+    proven = {ax.axiom_id for ax in cert_ok.axioms if ax.status == "PROVEN"}
+    assert {"A2c_CA_SUM", "A3b_CL_SUM", "A3c_NCL_SUM"}.issubset(proven)
+
+    d_ok = merge_parsed([{2021: ezz_2021_ok}], notes=[], part_layers=["vision"])
+    attested = {(f, ax) for f, _y, ax in apply_z3_algebraic_attestation(d_ok)}
+    assert ("inventory", "A2c_CA_SUM") in attested
+    assert ("other_receivables", "A2c_CA_SUM") in attested
+    assert ("accounts_payable", "A3b_CL_SUM") in attested
+    assert ("bank_overdraft", "A3b_CL_SUM") in attested
+    assert ("long_term_debt", "A3c_NCL_SUM") in attested
+    assert ("deferred_tax_liabilities", "A3c_NCL_SUM") in attested
+
+
+def test_v934_key_pool_rpm_retry_delay_cooldown_and_quota_not_cached(tmp_path, monkeypatch):
+    from src import pipeline
+    from src.ai.key_pool import APIKeyPool, classify_quota_scope
+    from src.dashboard.view_model import build_view_model
+    from src.extraction import result_cache
+    from src.extraction.normalizer import FinancialData
+
+    # 1) JSON retryDelay / requests per minute must classify as short RPM, not 24h RPD
+    scope, cd = classify_quota_scope(RuntimeError('{"error":{"code":429,"details":[{"retryDelay":"38s"}]}}'))
+    assert scope == "rpm"
+    assert abs(cd - 40.0) < 0.5
+
+    scope2, _ = classify_quota_scope(RuntimeError("Quota exceeded for quota metric 'Generate Content API requests per minute'"))
+    assert scope2 == "rpm"
+
+    # 2) shortest_cooldown_wait distinguishes recoverable RPM vs permanent 24h depletion
+    pool = APIKeyPool(["k1"], ["m1"])
+    pool._health_file = tmp_path / "h.json"
+    pool.mark_rpm_limited("k1", "m1", cooldown_seconds=12.0)
+    w = pool.shortest_cooldown_wait()
+    assert w is not None and 5.0 <= w <= 12.1
+    pool.mark_quota_exhausted("k1", "m1")
+    assert pool.shortest_cooldown_wait() is None
+
+    # 3) Truncated quota-interrupted run must NOT poison cache and surfaces flag in UI view_model
+    monkeypatch.setattr(result_cache, "CACHE_DIR", tmp_path / "cache")
+    monkeypatch.setattr(result_cache, "SEED_CACHE_DIR", tmp_path / "seed")
+    stored = {"n": 0}
+    real_store = result_cache.store_extraction
+    monkeypatch.setattr(result_cache, "store_extraction", lambda *a, **kw: (stored.__setitem__("n", stored["n"] + 1), real_store(*a, **kw)))
+
+    def interrupted_loader(*_a, **_kw):
+        return FinancialData(
+            values={
+                "revenue": {2021: 1000.0, 2022: 1200.0},
+                "net_income": {2021: 100.0, 2022: 150.0},
+            },
+            extraction_quota_interrupted=True,
+        )
+
+    monkeypatch.setattr(pipeline, "load_financial_data", interrupted_loader)
+    res = pipeline.run_pipeline("fake_scan.pdf", b"%PDF-1.4 dummy", "")
+    assert stored["n"] == 0
+    assert res["quota_interrupted"] is True
+    assert build_view_model(res)["quota_interrupted"] is True
+
+
+def test_v934_unified_verify_promotes_distinct_model_as_cross_model():
+    import io
+    from PIL import Image
+    from src.ai.key_pool import APIKeyPool
+    from src.extraction.normalizer import build_decision_log, merge_parsed
+    from src.extraction.vision_ocr import _record_cross_model_layer, _verify_core_fields
+
+    buf = io.BytesIO()
+    Image.new("RGB", (40, 40), color="white").save(buf, format="PNG")
+    tiny_png = buf.getvalue()
+
+    parts = [{2022: {"capex": -25_799_279.0}}]
+    d = merge_parsed(parts, notes=[], part_layers=["vision"])
+    d.document_profile = {"kind": "SCANNED_NO_TEXT", "text_layer_trusted": False}
+    hits: dict = {}
+    _verify_core_fields(
+        data=d,
+        parts=parts,
+        field_sources={"capex": [9]},
+        pages_png=[tiny_png],
+        selected=[9],
+        pool=APIKeyPool(["k1"], ["gemini-flash-lite-latest", "gemini-3-flash-preview"]),
+        caller=lambda *_a, **_kw: '{"years":[2022],"totals":{"capex":[-25799279]}}',
+        notes=[],
+        sweep_models=["gemini-flash-lite-latest"],
+        cross_model_hits=hits,
+    )
+    # Also simulate distinct model attestation helper directly
+    assert _record_cross_model_layer(d, "capex", 2022, -25_799_279.0, "gemini-3-flash-preview") is True
+    log = {(e["field"], e["year"]): e["status"] for e in build_decision_log(d)}
+    assert log[("capex", 2022)] == "VERIFIED_EXACT"
+
+
+def test_v934_z3_isolates_disjoint_axioms_same_year():
+    """Two simultaneous independent faults in one year (NCL + P&L) must both be diagnosed with Z3 implied targets."""
+    from src.analysis.formal_verifier import verify_financial_statements
+
+    vals = {
+        "total_assets": {2022: 15_965_646_460.0},
+        "non_current_assets": {2022: 11_716_699_082.0},
+        "current_assets": {2022: 4_248_947_378.0},
+        "total_liabilities": {2022: 9_027_315_979.0},
+        "non_current_liabilities": {2022: 720_697_780.0},
+        "current_liabilities": {2022: 8_306_618_199.0},
+        "equity": {2022: 6_938_330_481.0},
+        "long_term_debt": {2022: 363_974_291.0},
+        "long_term_notes_payable": {2022: 77_518_477.0},
+        "non_current_lease_liabilities": {2022: 209_159_419.0},
+        "deferred_tax_liabilities": {2022: 70_045_093.0},  # true 70,045,593 (-500)
+        "net_activity_profit": {2022: 1_257_960_603.0},
+        "finance_income": {2022: 48_861_075.0},
+        "interest_expense": {2022: -483_657_895.0},
+        "fx_gain_loss": {2022: -336_800_570.0},
+        "dividends_from_subsidiaries": {2022: 75_000_000.0},  # true 750,000,000
+        "pretax_income": {2022: 1_236_363_213.0},
+    }
+    cert = verify_financial_statements(
+        vals, years=[2022], tolerance=1e-5, include_policy_theorems=False, integer_tol=5.0,
+    )
+    assert cert.failed_axioms == 2
+    by_f = {d.suspect_field: d for d in cert.fault_diagnoses}
+    assert "deferred_tax_liabilities" in by_f
+    assert by_f["deferred_tax_liabilities"].z3_implied_value == pytest.approx(70_045_593.0, abs=1.0)
+    assert "dividends_from_subsidiaries" in by_f
+    assert by_f["dividends_from_subsidiaries"].z3_implied_value == pytest.approx(750_000_000.0, abs=1.0)
+
+
+def test_v934_z3_catches_decimal_typo_and_zero_dividend_sibling_year():
+    """Integer_tol catches single-term .88 comma-dot glitches on 10M+ figures, and A6b checks 0-dividend sibling years."""
+    from src.analysis.formal_verifier import verify_financial_statements
+
+    vals = {
+        "revenue": {2021: 13_169_656_008.88, 2022: 16_665_919_878.0},  # 2021 true 13,169,656,088
+        "cost_of_revenue": {2021: -11_972_033_980.0, 2022: -15_033_776_899.0},
+        "gross_profit": {2021: 1_197_622_108.0, 2022: 1_632_142_979.0},
+        "net_activity_profit": {2021: 875_232_929.0, 2022: 1_257_960_603.0},
+        "finance_income": {2021: 13_200_294.0, 2022: 48_861_075.0},  # 2021 true 13,205,294 (-5k)
+        "interest_expense": {2021: -498_011_580.0, 2022: -483_657_895.0},
+        "fx_gain_loss": {2021: 1_206_862.0, 2022: -336_800_570.0},
+        "dividends_from_subsidiaries": {2022: 750_000_000.0},  # 2021 omitted ('--') => 0
+        "pretax_income": {2021: 391_633_505.0, 2022: 1_236_363_213.0},
+    }
+    cert = verify_financial_statements(
+        vals, years=[2021, 2022], tolerance=1e-5, include_policy_theorems=False, integer_tol=5.0,
+    )
+    failed_2021 = {ax.axiom_id for ax in cert.axioms if ax.year == 2021 and ax.status == "VIOLATED"}
+    assert "A5_GROSS_PROFIT" in failed_2021
+    assert "A6b_ACTIVITY_BRIDGE" in failed_2021
+    by_f21 = {d.suspect_field: d for d in cert.fault_diagnoses if d.year == 2021}
+    assert by_f21["revenue"].z3_implied_value == pytest.approx(13_169_656_088.0, abs=1.0)
+    assert by_f21["finance_income"].z3_implied_value == pytest.approx(13_205_294.0, abs=1.0)
+
+
 
 

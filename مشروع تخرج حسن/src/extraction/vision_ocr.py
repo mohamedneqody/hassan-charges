@@ -170,6 +170,7 @@ Return ONLY JSON in this shape:
 Rules:
 1. "years" = the fiscal years printed in the page header (integers).
 2. Values must be plain numbers; a number printed in parentheses is negative.
+   A dash ("---", "—", "-") or blank cell means NOT printed — ALWAYS use null, NEVER 0.
 3. Keep every label in Arabic exactly as printed — never translate it.
 4. Copy numbers character-by-character; never compute or correct them.
 5. Distinguish rows carefully: "الربح قبل الضريبة" is PRE-tax income, and
@@ -270,6 +271,9 @@ def _parse_vision_json(text: str) -> list[dict]:
             if label is None:
                 continue
             values = [parse_number(v) for v in values]
+            # Scanned PDF dash cells ("---", "—") are occasionally transcribed as 0;
+            # on primary/note statement tables a standalone 0 is nil/not applicable -> None.
+            values = [None if (v is not None and v == 0.0) else v for v in values]
             if not any(v is not None for v in values):
                 continue  # narrative / subtotal-less rows are dropped
             rows.append([str(label).strip()] + values)
@@ -527,6 +531,7 @@ exactly as printed, for EACH year column shown:
 - صافي أرباح العام / صافي ربح العام (net income)
 - صافي أرباح العام قبل ضريبة الدخل (pretax income) — يُطبع أيضًا أول قائمة التدفقات
 - المخزون / أعمال تحت التنفيذ / وحدات تامة بغرض البيع — قائمة المركز المالي فقط، لا تقرأ صفوف التغير في التدفقات (inventory)
+- الأصول الثابتة (بالصافي) — قائمة المركز المالي فقط (fixed_assets)
 - العملاء وأوراق القبض / الذمم المدينة — قائمة المركز المالي فقط، لا تقرأ صفوف التغير في التدفقات (accounts receivable)
 - الموردون وأوراق الدفع / موردون ومقاولون / الذمم الدائنة — قائمة المركز المالي فقط، لا تقرأ صفوف التغير في التدفقات (accounts payable)
 - النقدية وما في حكمها / نقدية بالصندوق ولدى البنوك — قائمة المركز المالي فقط (cash)
@@ -538,11 +543,12 @@ Return ONLY JSON:
   "totals": {{"current_liabilities": [v1, v2], "total_liabilities": [v1, v2],
               "total_assets": [v1, v2], "equity": [v1, v2],
               "revenue": [v1, v2], "net_income": [v1, v2],
-              "pretax_income": [v1, v2],
+              "pretax_income": [v1, v2], "gross_profit": [v1, v2],
+              "fixed_assets": [v1, v2],
               "inventory": [v1, v2], "accounts_receivable": [v1, v2],
               "accounts_payable": [v1, v2], "cash": [v1, v2],
               "depreciation_amortization": [v1, v2], "capex": [v1, v2]}}}}
-Use null for any value not on the page. Parentheses = negative. Copy digits exactly.
+Use null for any value not on the page or printed as a dash ("---" / "—", NEVER 0). Parentheses = negative. Copy digits exactly.
 If TWO images of the same page are attached (standard cleanup + adaptive-threshold
 variant), cross-check between them and read from whichever shows the digits more
 clearly — faded or shaded cells often resolve in only one of the two variants.
@@ -563,7 +569,7 @@ def _parse_verify_json(text: str) -> dict:
             if i >= len(years):
                 break
             num = parse_number(v)
-            if num is not None:
+            if num is not None and num != 0.0:
                 by_year[years[i]] = num
         if by_year:
             out[str(field).strip()] = by_year
@@ -613,11 +619,11 @@ def _verify_core_fields(
     core = [
         f for f in (
             "total_assets", "total_liabilities", "current_liabilities", "equity",
-            "revenue", "net_income", "pretax_income",
+            "revenue", "net_income", "pretax_income", "gross_profit",
             # detail balances: a real run shipped inventory/AR from CF change
             # rows because the BS detail rows were never verified — same page,
             # same call, zero extra quota.
-            "inventory", "accounts_receivable", "accounts_payable", "cash",
+            "fixed_assets", "inventory", "accounts_receivable", "accounts_payable", "cash",
         )
         if f in field_sources and any(data.get(f, y) is not None for y in data.years)
     ]
@@ -695,7 +701,7 @@ def _verify_core_fields(
         verify_fields = set(core) | {"depreciation_amortization", "capex"}
         _bs_only = {
             "inventory", "accounts_receivable", "accounts_payable", "cash",
-            "total_assets", "current_assets", "total_liabilities",
+            "fixed_assets", "total_assets", "current_assets", "total_liabilities",
             "current_liabilities", "equity",
         }
         _cf_only_pages = (
@@ -807,9 +813,11 @@ def _verify_core_fields(
                     )
             else:
                 # Accounting-identity veto on verify override: if `captured`
-                # ALREADY satisfies the printed Income Statement tax identity
-                # (pretax + tax == net_income) while `winner` breaks it, never
-                # let a noisy verify read (e.g. ٦→٩) corrupt the exact capture!
+                # ALREADY satisfies a closed statement identity within 1 ppm
+                # while `winner` breaks it (>10 ppm), NEVER let a noisy
+                # 2-of-3 digit slip (e.g. 6->2 by 400k, or 088->000.88)
+                # corrupt an exact primary capture!
+                _veto_reason = None
                 if field == "net_income":
                     _pt = data.get("pretax_income", year)
                     _tx = data.get("income_tax_expense", year)
@@ -819,12 +827,66 @@ def _verify_core_fields(
                         _cap_err = min(abs(captured - _imp_a), abs(captured - _imp_b))
                         _win_err = min(abs(winner - _imp_a), abs(winner - _imp_b))
                         if _cap_err <= max(10.0, 1e-4 * abs(captured)) and _win_err > max(100.0, 1e-3 * abs(captured)):
-                            if notes is not None:
-                                notes.append(
-                                    f"✓ Accounting identity preserved sweep net_income {year} "
-                                    f"({captured:,.0f}) over disagreeing verify read ({winner:,.0f})."
-                                )
-                            continue
+                            _veto_reason = "pretax+tax=net_income"
+                elif field in ("current_liabilities", "non_current_liabilities", "total_liabilities"):
+                    _cl = captured if field == "current_liabilities" else data.get("current_liabilities", year)
+                    _ncl = captured if field == "non_current_liabilities" else data.get("non_current_liabilities", year)
+                    _tl = captured if field == "total_liabilities" else data.get("total_liabilities", year)
+                    _cl_w = winner if field == "current_liabilities" else _cl
+                    _ncl_w = winner if field == "non_current_liabilities" else _ncl
+                    _tl_w = winner if field == "total_liabilities" else _tl
+                    if None not in (_cl, _ncl, _tl):
+                        _sc = max(abs(_tl), 1.0)
+                        _cap_err = abs(abs(_cl) + abs(_ncl) - abs(_tl))
+                        _win_err = abs(abs(_cl_w) + abs(_ncl_w) - abs(_tl_w))
+                        if _cap_err <= max(10.0, 1e-6 * _sc) and _win_err > max(100.0, 1e-5 * _sc):
+                            _veto_reason = "CL+NCL=TL"
+                elif field in ("current_assets", "non_current_assets", "total_assets"):
+                    _ca = captured if field == "current_assets" else data.get("current_assets", year)
+                    _nca = captured if field == "non_current_assets" else data.get("non_current_assets", year)
+                    _ta = captured if field == "total_assets" else data.get("total_assets", year)
+                    _ca_w = winner if field == "current_assets" else _ca
+                    _nca_w = winner if field == "non_current_assets" else _nca
+                    _ta_w = winner if field == "total_assets" else _ta
+                    if None not in (_ca, _nca, _ta):
+                        _sc = max(abs(_ta), 1.0)
+                        _cap_err = abs(abs(_ca) + abs(_nca) - abs(_ta))
+                        _win_err = abs(abs(_ca_w) + abs(_nca_w) - abs(_ta_w))
+                        if _cap_err <= max(10.0, 1e-6 * _sc) and _win_err > max(100.0, 1e-5 * _sc):
+                            _veto_reason = "CA+NCA=TA"
+                elif field in ("equity", "total_liabilities", "total_assets"):
+                    _eq = captured if field == "equity" else data.get("equity", year)
+                    _tl = captured if field == "total_liabilities" else data.get("total_liabilities", year)
+                    _ta = captured if field == "total_assets" else data.get("total_assets", year)
+                    _eq_w = winner if field == "equity" else _eq
+                    _tl_w = winner if field == "total_liabilities" else _tl
+                    _ta_w = winner if field == "total_assets" else _ta
+                    if None not in (_eq, _tl, _ta):
+                        _sc = max(abs(_ta), 1.0)
+                        _cap_err = abs(_eq + abs(_tl) - abs(_ta))
+                        _win_err = abs(_eq_w + abs(_tl_w) - abs(_ta_w))
+                        if _cap_err <= max(10.0, 1e-6 * _sc) and _win_err > max(100.0, 1e-5 * _sc):
+                            _veto_reason = "TL+Equity=TA"
+                elif field in ("revenue", "cost_of_revenue", "gross_profit"):
+                    _rv = captured if field == "revenue" else data.get("revenue", year)
+                    _cg = captured if field == "cost_of_revenue" else data.get("cost_of_revenue", year)
+                    _gp = captured if field == "gross_profit" else data.get("gross_profit", year)
+                    _rv_w = winner if field == "revenue" else _rv
+                    _cg_w = winner if field == "cost_of_revenue" else _cg
+                    _gp_w = winner if field == "gross_profit" else _gp
+                    if None not in (_rv, _cg, _gp):
+                        _sc = max(abs(_rv), abs(_gp), 1.0)
+                        _cap_err = abs(abs(_rv) - abs(_cg) - _gp)
+                        _win_err = abs(abs(_rv_w) - abs(_cg_w) - _gp_w)
+                        if _cap_err <= max(10.0, 1e-6 * _sc) and _win_err > max(50.0, 1e-5 * _sc):
+                            _veto_reason = "Rev-COGS=GP"
+                if _veto_reason is not None:
+                    if notes is not None:
+                        notes.append(
+                            f"✓ Accounting identity ({_veto_reason}) preserved sweep {field} {year} "
+                            f"({captured:,.0f}) over disagreeing verify read ({winner:,.0f})."
+                        )
+                    continue
                 for part in parts:
                     if year in part and field in part[year]:
                         part[year][field] = winner  # corrected at the source
@@ -1001,7 +1063,7 @@ def _parse_verify_cf_json(text: str) -> dict:
             if i >= len(years):
                 break
             num = parse_number(v)
-            if num is not None:
+            if num is not None and num != 0.0:
                 by_year[years[i]] = num
         if by_year:
             out[str(field).strip()] = by_year
@@ -1989,8 +2051,13 @@ def _focused_local_cell_verification(data, raw, field_sources, doc_years,
                 notes.append("Focused local verification stopped at the "
                              "time budget (free local reads).")
             break
-        page_fields = sorted({f for (f, _y) in targets
-                              if page in (field_sources.get(f) or [])})
+        # Never run focused local OCR verification of primary statement cells on trailing Note pages (p >= 15)
+        # where Note schedules print additions/depreciation/sub-totals under similar labels.
+        page_fields = sorted({
+            f for (f, _y) in targets
+            if page in (field_sources.get(f) or [])
+            and (page <= 14 or f not in _CROSS_MODEL_BS_STOCK_FIELDS)
+        })
         if not page_fields:
             continue
         try:
@@ -2140,21 +2207,39 @@ def _focused_local_cell_verification(data, raw, field_sources, doc_years,
                     break
             return cur
 
-        # label segments for the page's target fields
-        from src.extraction.normalizer import match_field as _match_fld
+        # label segments for the page's target fields (ALWAYS enforce accounting vetoes!)
+        from src.extraction.normalizer import (
+            _FIELD_NEGATIVE_PATTERNS as _FLCV_NEG,
+            _GLOBAL_NEGATIVE_PATTERNS as _FLCV_GNEG,
+            match_field as _match_fld,
+            normalize_label as _norm_lbl,
+        )
         for seg in segs:
             text = (seg.text or "").strip()
             if not text or _is_number_text(text):
                 continue
+            norm_seg = _norm_lbl(text)
+            if any(gp in norm_seg for gp in _FLCV_GNEG):
+                continue
             matched_fld = _match_fld(text)
-            if matched_fld in page_fields:
+            if matched_fld is not None:
+                if matched_fld not in page_fields:
+                    continue  # strictly belonging to a different canonical field!
                 fld = matched_fld
             else:
-                fld = next((f for f in page_fields
-                            if any(kw in text.lower()
-                                   for kw in (k.lower() for k in
-                                              FIELD_ALIASES.get(f, [])
-                                              if len(k) >= 4))), None)
+                # Only match page_fields if NONE of that field's negative vetoes hit
+                fld = None
+                for cand_f in page_fields:
+                    neg_p = _FLCV_NEG.get(cand_f, ())
+                    if neg_p and any(_norm_lbl(p) in norm_seg for p in neg_p):
+                        continue
+                    if any(
+                        _norm_lbl(k) in norm_seg
+                        for k in FIELD_ALIASES.get(cand_f, [])
+                        if len(_norm_lbl(k)) >= 5
+                    ):
+                        fld = cand_f
+                        break
             if fld is None:
                 continue
             row_section = _section_at(_cy(seg))
@@ -2557,8 +2642,9 @@ def _absorb_batch(
                     "re-reads cover it.")
                 continue
             if parsed:
-                # Strip Balance-Sheet stock fields from pure Cash-Flow pages
-                # so working-capital change rows (Δ) never hijack BS balances.
+                # Enforce BOTH Balance Sheet grand anchors (`total_assets` AND `equity`)
+                # so Note pages mentioning `equity` alone (like Note 20 Treasury Shares)
+                # still get isolated as Note schedules and NEVER overwrite primary BS lines!
                 _cf_k = {"operating_cash_flow", "investing_cash_flow", "financing_cash_flow", "capex"}
                 _bs_anchor = {"total_assets", "equity"}
                 _bs_strip = {
@@ -2568,18 +2654,34 @@ def _absorb_batch(
                     "long_term_debt", "short_term_debt", "short_term_credit_facilities",
                     "current_portion_lt_debt", "non_current_lease_liabilities",
                     "current_lease_liabilities",
+                    "capital", "treasury_shares", "reserves", "asset_revaluation_reserve",
+                    "projects_under_construction", "investments_in_subsidiaries",
+                    "other_investments", "deferred_tax_assets",
                 }
                 _all_f = {f for ym in parsed.values() for f in ym}
-                if (_all_f & _cf_k) and not (_all_f & _bs_anchor):
+                _has_full_bs = _bs_anchor.issubset(_all_f)
+                _is_note_subtable = (chunk[0] >= 11) and not _has_full_bs
+                _existing_bs = {
+                    bf for bf in _bs_strip
+                    if any(bf in ym for p in parts for ym in p.values())
+                }
+                if (_all_f & _cf_k) and not _has_full_bs:
                     for ym in parsed.values():
                         for bf in list(ym.keys()):
                             if bf in _bs_strip:
                                 ym.pop(bf, None)
-                parts.append(parsed)
-                ok_pages.update(chunk)
-                for year_fields in parsed.values():
-                    for field in year_fields:
-                        field_sources.setdefault(field, []).extend(chunk)
+                elif _is_note_subtable and _existing_bs:
+                    for ym in parsed.values():
+                        for bf in list(ym.keys()):
+                            if bf in _existing_bs:
+                                ym.pop(bf, None)
+                # Drop trailing page numbers when trailing chunks carry nothing new after filtering
+                if any(ym for ym in parsed.values()):
+                    parts.append(parsed)
+                    ok_pages.update(chunk)
+                    for year_fields in parsed.values():
+                        for field in year_fields:
+                            field_sources.setdefault(field, []).extend(chunk)
         except Exception as exc:  # one bad page must not kill the run
             notes.append(f"Vision page skipped ({exc}).")
 
@@ -2594,8 +2696,8 @@ for EACH year column shown (parentheses = negative; copy exact printed digits, N
 
 Return ONLY JSON:
 {{"years": [{years_hint}], "values": {{{json_template}}}}}
-Use null if a field is NOT printed on this page. Cross-check both attached image variants
-(standard cleanup + adaptive-threshold) carefully — watch Arabic digits ٦ vs ١ and ٠ vs ٥.
+Use null if a field is NOT printed on this page or is printed as a dash ("---" / "—", NEVER 0).
+Cross-check both attached image variants (standard cleanup + adaptive-threshold) carefully — watch Arabic digits ٦ vs ١, ٢ vs ٦, and ٠ vs ٥.
 """
 
 
@@ -2609,7 +2711,7 @@ def _z3_feedback_repair_loop(
     notes: list[str] | None = None,
     progress_cb=None,
     deadline: float | None = None,
-    max_rounds: int = 2,
+    max_rounds: int = 6,
 ) -> list[dict]:
     """Deterministic Guardrail -> AI Repair Feedback Loop (Certificate-Checked).
 
@@ -2636,13 +2738,16 @@ def _z3_feedback_repair_loop(
         data.formal_repairs = repairs
         return repairs
 
-    cert = verify_financial_statements(data.values, years=years, include_policy_theorems=False)
+    cert = verify_financial_statements(
+        data.values, years=years, tolerance=1e-5, include_policy_theorems=False,
+        integer_tol=5.0,
+    )
     if cert.failed_axioms == 0 or not cert.fault_diagnoses:
         data.formal_repairs = repairs
         return repairs
 
     selected_set = set(selected)
-    tried_targets: set[tuple[int, str]] = set()
+    tried_targets: set[tuple] = set()
 
     for round_no in range(1, max_rounds + 1):
         if cert.failed_axioms == 0 or not cert.fault_diagnoses:
@@ -2653,17 +2758,22 @@ def _z3_feedback_repair_loop(
         if caller is None and not pool.has_usable_pairs():
             break
 
-        # Pick first untried (year, statement_hint) diagnosis
-        diag = next(
-            (d for d in cert.fault_diagnoses if (d.year, d.statement_hint) not in tried_targets),
-            None,
-        )
-        if diag is None:
+        # Pick first untried (year, violated_axiom_tuple) diagnosis
+        diag = None
+        violated_y = []
+        target_key = None
+        for d in cert.fault_diagnoses:
+            vy = [ax for ax in cert.axioms if ax.year == d.year and ax.status == "VIOLATED"]
+            tkey = (d.year, d.statement_hint, tuple(sorted(ax.axiom_id for ax in vy)))
+            if tkey not in tried_targets:
+                diag = d
+                violated_y = vy
+                target_key = tkey
+                break
+        if diag is None or target_key is None:
             break
-        tried_targets.add((diag.year, diag.statement_hint))
+        tried_targets.add(target_key)
 
-        # Collect suspect fields from this year's violated axioms on the same statement
-        violated_y = [ax for ax in cert.axioms if ax.year == diag.year and ax.status == "VIOLATED"]
         target_fields: list[str] = []
         for d in cert.fault_diagnoses:
             if d.year == diag.year and d.statement_hint == diag.statement_hint:
@@ -2673,6 +2783,13 @@ def _z3_feedback_repair_loop(
             for f in ax.fields:
                 if f not in target_fields and len(target_fields) < 5:
                     target_fields.append(f)
+        # Balance-sheet axioms A1 (TL+E=TA) and A2 (CA+NCA=TA) are coupled on the same page:
+        # include coupled totals so a paired single-digit slip (e.g. CA & TA both off by 10 EGP)
+        # can be repaired together in one 2400px read without trading an A1 error for an A2 error.
+        if diag.statement_hint == "balance_sheet" and "total_assets" in target_fields:
+            for bf in ("current_assets", "non_current_assets", "current_liabilities", "non_current_liabilities"):
+                if bf in data.values and diag.year in data.values[bf] and bf not in target_fields and len(target_fields) < 7:
+                    target_fields.append(bf)
         if not target_fields:
             break
 
@@ -2717,11 +2834,10 @@ def _z3_feedback_repair_loop(
             src_png = pages_png[selected.index(page_number)]
             img = preprocess_image(src_png, max_side=2400)
             img_bin = preprocess_image(src_png, max_side=2400, binarize=True)
-            raw_text = (
-                caller("k", "m", prompt, [img, img_bin])
-                if caller is not None
-                else _call_with_rotation(pool, prompt, [img, img_bin])
-            )
+            if caller is not None:
+                raw_text = caller("k", "m", prompt, [img, img_bin])
+            else:
+                raw_text = _call_with_rotation(pool, prompt, [img, img_bin])
             parsed_json = _loads_relaxed(raw_text)
         except Exception as exc:
             notes.append(f"Z3 repair round {round_no} (page {page_number}) skipped: {exc}")
@@ -2748,6 +2864,9 @@ def _z3_feedback_repair_loop(
                 proposed[(f, resp_years[idx])] = float(num)
 
         if not proposed:
+            notes.append(
+                f"ℹ حلقة التصحيح بـ Z3 (ص{page_number}): لم تعد قراءة قابلة للتحقق للحقول المستهدفة."
+            )
             continue
 
         # Build candidate values and verify via Z3 Certificate Checker
@@ -2758,32 +2877,86 @@ def _z3_feedback_repair_loop(
             if y != diag.year:
                 continue
             old_v = data.get(f, y)
-            if old_v is not None and abs(new_v - old_v) <= max(1.0, 1e-6 * abs(old_v)):
+            if old_v is not None and abs(new_v - old_v) < 1.0:
                 continue
             prev_snap[f] = old_v
             prop_snap[f] = new_v
             cand_values.setdefault(f, {})[y] = new_v
 
         if not prop_snap:
+            notes.append(
+                f"ℹ حلقة التصحيح بـ Z3 (ص{page_number}): إعادة القراءة كررت نفس القيمة المختلة "
+                f"({diag.suspect_field} {diag.year}) — أُبقي التحذير في الشهادة الرسمية."
+            )
             continue
 
-        new_cert = verify_financial_statements(cand_values, years=years, include_policy_theorems=False)
-        old_res_sum = sum(abs(ax.residual or 0.0) for ax in cert.axioms if ax.status == "VIOLATED")
-        new_res_sum = sum(abs(ax.residual or 0.0) for ax in new_cert.axioms if ax.status == "VIOLATED")
+        # Evaluate full bundle AND minimal subsets (sizes 1..3) so one noisy sibling
+        # read in the same JSON reply never forces Z3 to reject an exact 2400px fix
+        # (e.g. TA + CA exact while equity had a 1-digit slip in the same call).
+        import itertools as _it
 
-        accepted = (
-            new_cert.failed_axioms < cert.failed_axioms
-            or (
-                new_cert.failed_axioms == cert.failed_axioms
-                and old_res_sum > 0
-                and new_res_sum < 0.2 * old_res_sum
-            )
+        old_res_sum = sum(abs(ax.residual or 0.0) for ax in cert.axioms if ax.status == "VIOLATED")
+        prop_keys = list(prop_snap.keys())
+        candidate_subsets: list[tuple[str, ...]] = [tuple(prop_keys)]
+        if len(prop_keys) > 1:
+            for r in range(1, min(len(prop_keys), 4)):
+                for sub in _it.combinations(prop_keys, r):
+                    if len(sub) < len(prop_keys):
+                        candidate_subsets.append(sub)
+
+        full_cert = verify_financial_statements(
+            cand_values, years=years, tolerance=1e-5, include_policy_theorems=False,
+            integer_tol=5.0,
         )
+        best_choice = None  # ((failed_axioms, res_sum, subset_len), sub_keys, sub_cert)
+        for sub in candidate_subsets:
+            if len(sub) == len(prop_keys):
+                sub_cert = full_cert
+            else:
+                sub_vals = _copy.deepcopy(data.values)
+                for sf in sub:
+                    sub_vals.setdefault(sf, {})[diag.year] = prop_snap[sf]
+                sub_cert = verify_financial_statements(
+                    sub_vals, years=years, tolerance=1e-5, include_policy_theorems=False,
+                    integer_tol=5.0,
+                )
+            sub_res = sum(abs(ax.residual or 0.0) for ax in sub_cert.axioms if ax.status == "VIOLATED")
+            sub_ok = (
+                sub_cert.failed_axioms < cert.failed_axioms
+                or (
+                    sub_cert.failed_axioms == cert.failed_axioms
+                    and old_res_sum > 0
+                    and sub_res < 0.2 * old_res_sum
+                )
+            )
+            if sub_ok:
+                rank = (sub_cert.failed_axioms, sub_res, len(sub))
+                if best_choice is None or rank < best_choice[0]:
+                    best_choice = (rank, sub, sub_cert)
+
+        if best_choice is not None:
+            _, best_sub, new_cert = best_choice
+            prop_snap = {f: prop_snap[f] for f in best_sub}
+            prev_snap = {f: prev_snap[f] for f in best_sub}
+            accepted = True
+        else:
+            new_cert = full_cert
+            accepted = False
 
         broken_before = cert.failed_axioms
         if accepted:
             for f, new_v in prop_snap.items():
+                old_v = prev_snap.get(f)
+                if old_v is not None:
+                    data.replaced_values = getattr(data, "replaced_values", {})
+                    data.replaced_values.setdefault((f, diag.year), []).append(old_v)
                 data.values.setdefault(f, {})[diag.year] = new_v
+                # Replace stale majority candidates so downstream reconcile/attestation never reverts to broken OCR!
+                data.candidates.setdefault(f, {})[diag.year] = [(new_v, 0)]
+                data.candidate_layers.setdefault(f, {})[diag.year] = ["vision"]
+                data.candidate_labels.setdefault(f, {})[diag.year] = [f"z3_repair:{f}"]
+                if (f, diag.year) in getattr(data, "vote_outcomes", {}):
+                    data.vote_outcomes[(f, diag.year)]["winner"] = new_v
             reconcile(data)
             reason_ar = (
                 f"تم قبول التصحيح بشهادة Z3 (الانتهاكات انخفضت من {broken_before} "
@@ -2795,7 +2968,10 @@ def _z3_feedback_repair_loop(
                 )
             )
             notes.append(f"✓ حلقة التصحيح بـ Z3 (ص{page_number}): {reason_ar}")
-            cert = verify_financial_statements(data.values, years=years, include_policy_theorems=False)
+            cert = verify_financial_statements(
+                data.values, years=years, tolerance=1e-5, include_policy_theorems=False,
+                integer_tol=5.0,
+            )
         else:
             reason_ar = (
                 f"رفض المُدقّق Z3 القراءة المقترحة (الانتهاكات بقيت {new_cert.failed_axioms} "
@@ -2832,7 +3008,8 @@ Strict rules:
   if this page is a Cash Flow statement (قائمة التدفقات النقدية).
 - For Cash-Flow items (operating_cash_flow, investing_cash_flow, financing_cash_flow,
   capex, depreciation_amortization), read ONLY from the Cash Flow statement.
-- Return null for any item NOT explicitly printed on this page.
+- Return null for any item NOT explicitly printed on this page or printed as a dash
+  ("---", "—", "-") — NEVER output 0 for a dash cell.
 
 Return ONLY JSON:
 {{"years": [{years_hint}], "values": {{{json_template}}}}}
@@ -2915,9 +3092,10 @@ _CROSS_MODEL_PRIORITY = (
     "long_term_debt", "short_term_debt", "short_term_credit_facilities",
     "current_portion_lt_debt", "bank_overdraft",
     "current_lease_liabilities", "non_current_lease_liabilities",
-    "capex", "depreciation_amortization", "interest_expense",
+    "capex", "depreciation_amortization", "finance_income", "interest_expense", "fx_gain_loss",
     "selling_expenses", "admin_expenses", "other_operating_expenses", "other_operating_income",
-    "retained_earnings", "capital", "dividends_from_subsidiaries",
+    "retained_earnings", "capital", "reserves", "treasury_shares", "asset_revaluation_reserve",
+    "dividends_from_subsidiaries",
 )
 
 _CROSS_MODEL_EXPENSE_FIELDS = frozenset({
@@ -2930,7 +3108,7 @@ _CROSS_MODEL_BS_STOCK_FIELDS = frozenset({
     "inventory", "accounts_receivable", "accounts_payable", "cash",
     "fixed_assets", "current_assets", "non_current_assets", "total_assets",
     "current_liabilities", "non_current_liabilities", "total_liabilities",
-    "equity", "retained_earnings", "capital",
+    "equity", "retained_earnings", "capital", "reserves",
     "long_term_debt", "short_term_debt", "short_term_credit_facilities",
     "current_portion_lt_debt", "bank_overdraft",
     "current_lease_liabilities", "non_current_lease_liabilities", "total_debt",

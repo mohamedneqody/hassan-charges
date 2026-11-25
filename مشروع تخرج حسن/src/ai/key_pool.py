@@ -465,13 +465,15 @@ class APIKeyPool:
             ordered = [m for m in self._ordered_models_unlocked() if m not in excluded]
             if not ordered or not self.states:
                 return None
-            # Prefer a contrasting architecture/tier when available
-            excluded_all_lite = bool(excluded) and all("lite" in m.lower() for m in excluded)
-            excluded_no_lite = bool(excluded) and all("lite" not in m.lower() for m in excluded)
-            if excluded_all_lite:
-                ordered.sort(key=lambda m: (1 if "lite" in m.lower() else 0, -MODEL_RANK.get(m, MODEL_RANK_DEFAULT)))
-            elif excluded_no_lite:
-                ordered.sort(key=lambda m: (0 if "lite" in m.lower() else 1, -MODEL_RANK.get(m, MODEL_RANK_DEFAULT)))
+            # Always prefer a full (non-lite) distinct model for high-fidelity
+            # Arabic-Indic OCR cross-model verification; fall back to lite tiers
+            # only when no distinct full Flash model is available.
+            ordered.sort(
+                key=lambda m: (
+                    1 if "lite" in m.lower() else 0,
+                    -MODEL_RANK.get(m, MODEL_RANK_DEFAULT),
+                )
+            )
             n_keys = len(self.states)
             for model in ordered:
                 for offset in range(n_keys):

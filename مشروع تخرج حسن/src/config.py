@@ -361,6 +361,34 @@ FIELD_ALIASES: dict[str, list[str]] = {
         "الارباح المبقاه", "ارباح مبقاة",
         "ارباح خسائر مرحلة", "خسائر مرحلة", "فائض مرحل", "ارباح العام المرحلة",
     ],
+    "treasury_shares": [
+        "treasury shares", "treasury stock", "repurchased shares",
+        # Arabic
+        "اسهم خزينة", "اسهم خزينه", "اسهم الخزينة", "اسهم الخزينه",
+    ],
+    "reserves": [
+        "reserves", "total reserves", "statutory and other reserves",
+        # Arabic
+        "احتياطيات", "الاحتياطيات", "اجمالي احتياطيات", "اجمالي الاحتياطيات",
+    ],
+    "asset_revaluation_reserve": [
+        "asset revaluation reserve", "revaluation reserve", "revaluation surplus",
+        # Arabic
+        "ناتج تعديل تكلفة الاصول", "احتياطي اعادة تقييم الاصول",
+        "احتياطي اعادة التقييم", "فائض اعادة التقييم",
+    ],
+    "finance_income": [
+        "finance income", "interest income",
+        # Arabic
+        "فوائد دائنة", "ايرادات فوائد", "ايرادات تمويلية", "عوائد دائنة",
+    ],
+    "fx_gain_loss": [
+        "foreign exchange gain loss", "fx gain loss",
+        "currency translation differences", "foreign currency exchange differences",
+        # Arabic
+        "فروق ترجمة الارصدة والمعاملات بالعملات الاجنبية",
+        "فروق تقييم عملات اجنبية", "ارباح خسائر فروق عملة", "فروق عملة",
+    ],
     "operating_cash_flow": [
         "operating cash flow", "cash from operations", "cash flow from operations",
         "net cash from operating activities",
@@ -432,6 +460,27 @@ FIELD_ALIASES: dict[str, list[str]] = {
         "الاصول الغير متداوله", "اجمالي الاصول الغير متداوله",
         "مجموع الاصول غير المتداوله", "اجمالي الموجودات غير المتداوله",
         "الموجودات غير المتداوله",
+    ],
+    "projects_under_construction": [
+        "projects under construction", "construction in progress", "capital work in progress",
+        # Arabic — بند أصول غير متداولة (مستقل عن المخزون العقاري المتداول «أعمال تحت التنفيذ»)
+        "مشروعات تحت التنفيذ", "المشروعات تحت التنفيذ", "اصول تحت التنفيذ",
+    ],
+    "investments_in_subsidiaries": [
+        "investments in subsidiaries", "investment in subsidiaries",
+        # Arabic
+        "استثمارات في شركات تابعة", "استثمارات فى شركات تابعة",
+        "مساهمات في شركات تابعة",
+    ],
+    "other_investments": [
+        "other investments", "long term investments", "financial investments",
+        # Arabic
+        "استثمارات أخرى", "استثمارات اخري", "استثمارات مالية أخرى",
+    ],
+    "deferred_tax_assets": [
+        "deferred tax assets", "deferred tax asset",
+        # Arabic
+        "أصول ضريبية مؤجلة", "اصول ضريبية مؤجلة", "اصول ضريبيه موجله",
     ],
     "non_current_liabilities": [
         "non current liabilities", "non-current liabilities",

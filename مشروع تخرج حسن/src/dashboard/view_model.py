@@ -30,12 +30,19 @@ GATE_LABELS = {
 }
 
 FIELD_ORDER = [
-    "revenue", "cost_of_revenue", "gross_profit", "operating_income",
+    "revenue", "cost_of_revenue", "gross_profit", "other_operating_income",
+    "selling_expenses", "admin_expenses", "other_operating_expenses", "operating_income",
+    "finance_income", "interest_expense", "fx_gain_loss", "dividends_from_subsidiaries",
     "pretax_income", "income_tax_expense", "net_income",
-    "fixed_assets", "inventory", "accounts_receivable", "cash",
+    "fixed_assets", "non_current_assets", "inventory", "accounts_receivable", "cash",
     "current_assets", "total_assets", "accounts_payable",
-    "current_liabilities", "total_liabilities", "equity",
-    "operating_cash_flow", "investing_cash_flow", "financing_cash_flow",
+    "bank_overdraft", "short_term_credit_facilities", "short_term_debt",
+    "current_portion_lt_debt", "current_lease_liabilities", "current_liabilities",
+    "long_term_debt", "non_current_lease_liabilities", "non_current_liabilities",
+    "total_liabilities", "total_debt",
+    "capital", "treasury_shares", "reserves", "asset_revaluation_reserve",
+    "retained_earnings", "equity",
+    "operating_cash_flow", "investing_cash_flow", "financing_cash_flow", "capex",
 ]
 
 

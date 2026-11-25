@@ -107,7 +107,7 @@ def _default_workers() -> int:
 def read_pages(pngs: dict[int, bytes], workers: int | None = None) -> dict[int, LocalPageRead] | None:
     """OCR rendered page PNGs locally. Uses the shared singleton converter when
     workers == 1 (Streamlit Cloud low-RAM mode) or thread-local converters when
-    workers > 1 on local desktops."""
+    workers > 1 on local desktops (with clean fallback to shared converter on OOM)."""
     if not pngs or not indra_available():
         return None
     if workers is None:
@@ -120,9 +120,9 @@ def read_pages(pngs: dict[int, bytes], workers: int | None = None) -> dict[int, 
         items = list(pngs.items())
         reads: dict[int, LocalPageRead] = {}
 
-        if workers <= 1 or len(items) <= 1:
+        def _serial_fallback(target_items: list[tuple[int, bytes]]) -> None:
             conv = get_shared_converter()
-            for page, png in items:
+            for page, png in target_items:
                 with _SHARED_CONV_LOCK:
                     md = _page_markdown(conv, png)
                 if md is None:
@@ -135,6 +135,9 @@ def read_pages(pngs: dict[int, bytes], workers: int | None = None) -> dict[int, 
                     cf_hint=any(m in md for m in _CF_MARKERS),
                     markdown=md,
                 )
+
+        if workers <= 1 or len(items) <= 1:
+            _serial_fallback(items)
             gc.collect()
             return reads or None
 
@@ -151,20 +154,30 @@ def read_pages(pngs: dict[int, bytes], workers: int | None = None) -> dict[int, 
 
         def _one(item: tuple[int, bytes]) -> tuple[int, str | None]:
             page, png = item
-            return page, _page_markdown(_conv(), png)
+            try:
+                return page, _page_markdown(_conv(), png)
+            except Exception:
+                return page, None
 
-        with ThreadPoolExecutor(max_workers=max(1, min(workers, len(items)))) as ex:
-            for page, md in ex.map(_one, items):
-                if md is None:
-                    continue
-                reads[page] = LocalPageRead(
-                    page=page,
-                    has_table="<table" in md.lower(),
-                    digits=_digits_from_markdown(md),
-                    text_len=len(md),
-                    cf_hint=any(m in md for m in _CF_MARKERS),
-                    markdown=md,
-                )
+        try:
+            with ThreadPoolExecutor(max_workers=max(1, min(workers, len(items)))) as ex:
+                for page, md in ex.map(_one, items):
+                    if md is None:
+                        continue
+                    reads[page] = LocalPageRead(
+                        page=page,
+                        has_table="<table" in md.lower(),
+                        digits=_digits_from_markdown(md),
+                        text_len=len(md),
+                        cf_hint=any(m in md for m in _CF_MARKERS),
+                        markdown=md,
+                    )
+        except Exception:
+            reads.clear()
+
+        missing_items = [(p, png) for p, png in items if p not in reads]
+        if missing_items:
+            _serial_fallback(missing_items)
         return reads or None
     except Exception:
         return None

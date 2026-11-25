@@ -92,7 +92,7 @@ _CASH_MOVEMENT_PATTERNS = (
 _GLOBAL_NEGATIVE_PATTERNS = (
     "غير المسيطره", "غير المسيطرين", "حصه غير",
     "قبل التغير في", "قبل التغيرات في",
-    "الدخل الشامل", "الربح الشامل", "ناتج تعديل",
+    "الدخل الشامل", "الربح الشامل",
 )
 
 _FIELD_NEGATIVE_PATTERNS: dict[str, tuple[str, ...]] = {
@@ -219,9 +219,28 @@ _FIELD_NEGATIVE_PATTERNS: dict[str, tuple[str, ...]] = {
         "اهلاك", "استهلاك", "مجمع", "اضمحلال",
         "بيع", "ارباح", "خساير", "راسماليه",
         "مدفوعات", "متحصلات", "شراء", "اقتناء", "اضافات", "تخريد", "استبعادات",
-        "مشروعات تحت التنفيذ",
+        "مشروعات تحت التنفيذ", "ناتج تعديل",
         "disposal", "gain", "loss", "proceeds", "purchase", "additions", "depreciation",
     ),
+    "total_assets": ("ناتج تعديل",),
+    "retained_earnings": ("ناتج تعديل", "الجزء المحقق", "المحول"),
+    "treasury_shares": (
+        "اقتناء", "شراء", "بيع", "مدفوعات", "متحصلات",
+        "متوسط", "خصم عدد", "عدد", "سهم في", "للسهم", "repurchase", "purchase",
+    ),
+    "reserves": ("قانوني", "علاوه اصدار", "اخري", "مكون", "محول", "تغيير"),
+    "asset_revaluation_reserve": ("الجزء المحقق", "المحول", "ارباح مرحله", "خلال العام"),
+    "fx_gain_loss": ("غير محققه", "غير محققة", "انشطه", "تشغيل"),
+    "projects_under_construction": (
+        "مدفوعات", "لشراء", "اصول ثابته ومشروعات", "تحويلات", "اضافات",
+        "التغير في", "تغير في", "الزياده في", "النقص في", "محول", "المحول",
+    ),
+    "investments_in_subsidiaries": (
+        "توزيعات", "انشطه", "مدفوعات", "شراء",
+        "التغير في", "الزياده في", "النقص في", "اضمحلال",
+    ),
+    "other_investments": ("التغير في", "الزياده في", "النقص في", "مدفوعات", "متحصلات", "ارباح", "خساير"),
+    "deferred_tax_assets": ("التزامات", "صافي الضريبة", "قائمة الدخل", "محملة", "التغير في"),
 }
 
 # A raw cell containing a percent sign is a ratio, never an absolute amount.
@@ -715,8 +734,11 @@ _ABSOLUTE_FIELDS = {
     # — المقدار يحفظ الاتفاق مع طباعة القوائم (bank_overdraft مستثنى:
     # له دلالة إشارة حقيقية)
     "short_term_credit_facilities", "current_portion_lt_debt",
-    # عز 2023: الأرصدة غير المتداولة ورأس المال — أرصدة تُطبع موجبة
-    "non_current_assets", "non_current_liabilities", "capital",
+    # عز 2023: الأرصدة غير المتداولة ورأس المال والاحتياطيات — أرصدة تُطبع موجبة
+    # (treasury_shares و asset_revaluation_reserve يُحفظان بإشارتهما المحاسبية الفعلية)
+    "non_current_assets", "non_current_liabilities", "capital", "reserves",
+    "projects_under_construction", "investments_in_subsidiaries",
+    "other_investments", "deferred_tax_assets",
 }
 
 
@@ -836,6 +858,10 @@ _CROSS_STATEMENT_SIGN_FIELDS = frozenset({
     "dividends_from_subsidiaries",
     "bank_overdraft",
     "other_operating_income",
+    "finance_income",
+    "fx_gain_loss",
+    "treasury_shares",
+    "asset_revaluation_reserve",
 })
 
 
@@ -1307,6 +1333,106 @@ def reconcile(data: FinancialData) -> None:
                     td_map[year] = borrowings
                     data.derived[("total_debt", year)] = "borrowings excluding leases"
 
+    # P6 full activity-to-pretax bridge tie-breaker: when dividends_from_subsidiaries
+    # has competing OCR candidates (e.g. 750,000,000 vs -75,000,000), pick the candidate
+    # that closes (operating_income + finance_income - |interest_expense| + fx_gain_loss + dividends == pretax_income).
+    _bridge_years = list(data.years) or sorted({y for ys in data.values.values() for y in ys})
+    for year in _bridge_years:
+        div_cands = [v for v, _ in (data.candidates.get("dividends_from_subsidiaries", {}).get(year) or []) if v is not None]
+        if len(div_cands) >= 2:
+            pt_v = data.get("pretax_income", year)
+            op_v = data.get("operating_income", year)
+            if op_v is None:
+                op_v = data.get("net_activity_profit", year)
+            fin_v = data.get("interest_expense", year)
+            if None not in (pt_v, op_v, fin_v):
+                fi_v = abs(data.get("finance_income", year) or 0.0)
+                fx_v = data.get("fx_gain_loss", year) or 0.0
+                expected_div = pt_v - (op_v + fi_v - abs(fin_v) + fx_v)
+                if expected_div > 0 and any(_digit_close(abs(c), expected_div) for c in div_cands):
+                    cur_div = data.get("dividends_from_subsidiaries", year)
+                    data.values.setdefault("dividends_from_subsidiaries", {})[year] = expected_div
+                    data.candidates["dividends_from_subsidiaries"][year] = [(expected_div, 0)]
+                    if cur_div is not None and not _digit_close(cur_div, expected_div):
+                        data.replaced_values = getattr(data, "replaced_values", {})
+                        data.replaced_values.setdefault(("dividends_from_subsidiaries", year), []).append(cur_div)
+                    data.notes.append(
+                        f"Activity-to-Pretax bridge resolved 'dividends_from_subsidiaries' in {year} "
+                        f"to {expected_div:,.0f} (exact 1-EGP P&L match)."
+                    )
+
+        # P6 OpEx bridge tie-breaker: resolve single-digit OCR slips in admin/selling/other OpEx
+        # against (gross_profit + other_operating_income - operating_income == sum(OpEx)).
+        gp_v = data.get("gross_profit", year)
+        op_v2 = data.get("operating_income", year)
+        if op_v2 is None:
+            op_v2 = data.get("net_activity_profit", year)
+        if gp_v is not None and op_v2 is not None:
+            oinc_v = abs(data.get("other_operating_income", year) or 0.0)
+            target_opex = (gp_v + oinc_v) - op_v2
+            opex_keys = ("selling_expenses", "admin_expenses", "other_operating_expenses")
+            opex_cands = {
+                f: [v for v, _ in (data.candidates.get(f, {}).get(year) or []) if v is not None]
+                for f in opex_keys
+            }
+            present_opex = [f for f in opex_keys if opex_cands[f]]
+            if len(present_opex) >= 2 and any(len(opex_cands[f]) >= 2 for f in present_opex):
+                best_combo = None
+                for combo in itertools.product(*(opex_cands[f][:4] for f in present_opex)):
+                    res_op = abs(sum(abs(x) for x in combo) - target_opex)
+                    if res_op <= max(10.0, 1e-5 * max(abs(target_opex), 1.0)):
+                        best_combo = (res_op, combo)
+                        break
+                if best_combo is not None:
+                    for f, chosen_v in zip(present_opex, best_combo[1]):
+                        old_v = data.get(f, year)
+                        aligned_v = -abs(chosen_v) if (old_v is not None and old_v < 0) else chosen_v
+                        if old_v is not None and not _digit_close(old_v, aligned_v):
+                            data.replaced_values = getattr(data, "replaced_values", {})
+                            data.replaced_values.setdefault((f, year), []).append(old_v)
+                            data.notes.append(
+                                f"OpEx 6-term bridge resolved '{f}' in {year}: "
+                                f"{old_v:,.0f} -> {aligned_v:,.0f} (exact P&L closure)."
+                            )
+                        data.values.setdefault(f, {})[year] = aligned_v
+                        data.candidates[f][year] = [(aligned_v, 0)]
+
+        # P5 Equity 6-term tie-breaker: resolve Note/CF interference on Equity sub-items
+        # against (capital + treasury_shares + reserves + asset_revaluation_reserve + retained_earnings == equity).
+        eq_v = data.get("equity", year)
+        if eq_v is not None:
+            eq_sub = ("capital", "treasury_shares", "reserves", "asset_revaluation_reserve", "retained_earnings")
+            eq_cands = {
+                f: [v for v, _ in (data.candidates.get(f, {}).get(year) or []) if v is not None]
+                for f in eq_sub
+            }
+            present_eq = [f for f in eq_sub if eq_cands[f]]
+            if len(present_eq) >= 4 and any(len(eq_cands[f]) >= 2 for f in present_eq):
+                best_eq = None
+                for combo in itertools.product(*(eq_cands[f][:4] for f in present_eq)):
+                    s_eq = sum(
+                        (-abs(v) if f == "treasury_shares" else (abs(v) if f in ("capital", "reserves") else v))
+                        for f, v in zip(present_eq, combo)
+                    )
+                    if abs(s_eq - eq_v) <= max(10.0, 1e-5 * max(abs(eq_v), 1.0)):
+                        best_eq = combo
+                        break
+                if best_eq is not None:
+                    for f, chosen_v in zip(present_eq, best_eq):
+                        aligned_v = -abs(chosen_v) if f == "treasury_shares" else (
+                            abs(chosen_v) if f in ("capital", "reserves") else chosen_v
+                        )
+                        old_v = data.get(f, year)
+                        if old_v is not None and not _digit_close(old_v, aligned_v):
+                            data.replaced_values = getattr(data, "replaced_values", {})
+                            data.replaced_values.setdefault((f, year), []).append(old_v)
+                            data.notes.append(
+                                f"Equity 6-term bridge resolved '{f}' in {year}: "
+                                f"{old_v:,.0f} -> {aligned_v:,.0f} (exact Equity sum)."
+                            )
+                        data.values.setdefault(f, {})[year] = aligned_v
+                        data.candidates[f][year] = [(aligned_v, 0)]
+
     # ص6 printed bridge (الجسر المطبوع في قائمة الدخل): pretax =
     # net activity profit − net financing costs + dividends from
     # subsidiaries. Printed identity: 1,257,960,603 − 771,597,390 +
@@ -1340,6 +1466,61 @@ def reconcile(data: FinancialData) -> None:
             data.derived[("pretax_income", year)] = note
             data.candidates.setdefault("pretax_income", {}).setdefault(
                 year, []).append((pretax, 0))
+
+    # Whole-integer statement OCR decimal-smudge recovery (e.g. 13,169,656,000.88 -> 13,169,656,088):
+    # On audited statements printed strictly in whole currency units (>=85% integers, median >=100k),
+    # a smudged comma/zero before the last two digits turns `...088` into `...000.88`.
+    # Restore ONLY when an exact 3-term closed equation implies an exact integer whose trailing
+    # digits match the fractional tail and |implied - captured| < 1000.
+    _closed_3 = (
+        ("revenue", "cost_of_revenue", "gross_profit", lambda rv, cg, gp: (abs(gp) + abs(cg), abs(rv) - gp, abs(rv) - abs(cg))),
+        ("current_assets", "non_current_assets", "total_assets", lambda ca, nca, ta: (abs(ta) - abs(nca), abs(ta) - abs(ca), abs(ca) + abs(nca))),
+        ("current_liabilities", "non_current_liabilities", "total_liabilities", lambda cl, ncl, tl: (abs(tl) - abs(ncl), abs(tl) - abs(cl), abs(cl) + abs(ncl))),
+        ("total_liabilities", "equity", "total_assets", lambda tl, eq, ta: (abs(ta) - eq, abs(ta) - abs(tl), abs(tl) + eq)),
+    )
+    for year in _bridge_years:
+        vals_y = [
+            float(by_y[year]) for by_y in data.values.values()
+            if year in by_y and by_y[year] is not None
+        ]
+        if len(vals_y) < 8:
+            continue
+        int_frac = sum(1 for v in vals_y if abs(v - round(v)) < 1e-6) / len(vals_y)
+        sorted_mags = sorted(abs(v) for v in vals_y)
+        if int_frac < 0.85 or sorted_mags[len(sorted_mags) // 2] < 100_000.0:
+            continue
+        for f0, f1, f2, solver_fn in _closed_3:
+            v0, v1, v2 = data.get(f0, year), data.get(f1, year), data.get(f2, year)
+            if None in (v0, v1, v2):
+                continue
+            imps = solver_fn(v0, v1, v2)
+            for idx_f, (fld_i, cur_v, imp_mag) in enumerate(zip((f0, f1, f2), (v0, v1, v2), imps)):
+                frac_part = abs(cur_v) - int(abs(cur_v))
+                if abs(cur_v) < 1_000_000.0 or not (0.01 <= frac_part < 0.995):
+                    continue
+                other_vals = [x for j, x in enumerate((v0, v1, v2)) if j != idx_f]
+                if not all(abs(o - round(o)) < 1e-6 for o in other_vals):
+                    continue
+                if imp_mag <= 0 or abs(imp_mag - round(imp_mag)) >= 1e-6:
+                    continue
+                imp_int = round(imp_mag)
+                fixed_v = (-imp_int if cur_v < 0 else float(imp_int))
+                frac_digits = f"{abs(cur_v):.2f}".split(".")[1]
+                if (
+                    abs(abs(fixed_v) - abs(cur_v)) < 1000.0
+                    and str(imp_int).endswith(frac_digits)
+                    and str(imp_int)[:5] == str(int(abs(cur_v)))[:5]
+                ):
+                    data.replaced_values = getattr(data, "replaced_values", {})
+                    data.replaced_values.setdefault((fld_i, year), []).append(cur_v)
+                    data.values[fld_i][year] = fixed_v
+                    data.candidates[fld_i][year] = [(fixed_v, 0)]
+                    if (fld_i, year) in getattr(data, "vote_outcomes", {}):
+                        data.vote_outcomes[(fld_i, year)]["winner"] = fixed_v
+                    data.notes.append(
+                        f"Integer-statement decimal smudge recovery: '{fld_i}' in {year} "
+                        f"restored {cur_v:,.2f} -> {fixed_v:,.0f} (exact trailing '{frac_digits}' + closed identity)."
+                    )
 
 
 # ── Verification Decision Log (سجل قرارات التحقق) ────────────────────────────

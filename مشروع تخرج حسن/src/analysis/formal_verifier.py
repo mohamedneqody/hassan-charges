@@ -154,6 +154,7 @@ _BS_FIELDS = {
     "inventory", "accounts_receivable", "cash",
     "total_liabilities", "non_current_liabilities", "current_liabilities",
     "accounts_payable", "equity", "retained_earnings", "capital",
+    "treasury_shares", "reserves", "asset_revaluation_reserve",
     "total_debt", "long_term_debt", "short_term_debt",
     "short_term_credit_facilities", "bank_overdraft",
     "current_portion_lt_debt", "current_lease_liabilities",
@@ -163,7 +164,8 @@ _IS_FIELDS = {
     "revenue", "cost_of_revenue", "gross_profit", "operating_expenses",
     "operating_income", "pretax_income", "income_tax_expense", "net_income",
     "selling_expenses", "admin_expenses", "other_operating_expenses",
-    "interest_expense",
+    "other_operating_income", "interest_expense", "finance_income",
+    "fx_gain_loss", "dividends_from_subsidiaries",
 }
 _CF_FIELDS = {
     "operating_cash_flow", "investing_cash_flow", "financing_cash_flow",
@@ -183,10 +185,24 @@ _FIELD_AR = {
     "current_liabilities": "الالتزامات المتداولة",
     "accounts_payable": "الموردون وأوراق الدفع",
     "equity": "إجمالي حقوق الملكية",
+    "capital": "رأس المال المدفوع",
+    "treasury_shares": "أسهم خزينة",
+    "reserves": "الاحتياطيات",
+    "asset_revaluation_reserve": "ناتج تعديل تكلفة الأصول",
+    "retained_earnings": "الأرباح المرحلة",
+    "projects_under_construction": "مشروعات تحت التنفيذ",
+    "investments_in_subsidiaries": "استثمارات في شركات تابعة",
+    "other_investments": "استثمارات أخرى",
+    "deferred_tax_assets": "أصول ضريبية مؤجلة",
     "revenue": "المبيعات / الإيرادات",
     "cost_of_revenue": "تكلفة المبيعات",
     "gross_profit": "مجمل الربح",
     "operating_income": "صافي أرباح النشاط",
+    "other_operating_income": "إيرادات تشغيل أخرى",
+    "finance_income": "فوائد دائنة",
+    "interest_expense": "فوائد ومصروفات تمويلية",
+    "fx_gain_loss": "فروق ترجمة العملات الأجنبية",
+    "dividends_from_subsidiaries": "توزيعات أرباح من شركات تابعة",
     "pretax_income": "الربح قبل ضريبة الدخل",
     "income_tax_expense": "إجمالي ضريبة الدخل",
     "net_income": "صافي أرباح العام",
@@ -224,6 +240,28 @@ def _val(values: dict[str, dict[int, float]], field_name: str, year: int) -> flo
 # 1. Accounting Axiom Checker + Z3 Unsat-Core Fault Diagnosis
 # ---------------------------------------------------------------------------
 
+def _whole_currency_tol(
+    lhs: float,
+    rhs: float,
+    rel_tol: float,
+    integer_tol: float | None = None,
+) -> float:
+    """Tighten tolerance to `integer_tol` (e.g. 5 EGP) when BOTH sides of an
+    equation are exact whole-currency integers ≥ 100,000, while preserving
+    `rel_tol` for fractional statements (millions/thousands)."""
+    scale = max(abs(lhs), abs(rhs), 1.0)
+    base = max(10.0, rel_tol * scale)
+    if (
+        integer_tol is not None
+        and abs(lhs) >= 100_000.0
+        and abs(rhs) >= 100_000.0
+        and abs(lhs - round(lhs)) < 1e-6
+        and abs(rhs - round(rhs)) < 1e-6
+    ):
+        return min(base, float(integer_tol))
+    return base
+
+
 def _check_equality(
     axiom_id: str,
     year: int,
@@ -234,6 +272,7 @@ def _check_equality(
     rhs: float | None,
     fields: list[str],
     rel_tol: float,
+    integer_tol: float | None = None,
 ) -> AxiomCheck:
     if lhs is None or rhs is None:
         return AxiomCheck(
@@ -241,8 +280,7 @@ def _check_equality(
             formula=formula, status="SKIPPED", fields=fields,
             detail_ar="أحد أطراف المعادلة غير متاح في هذه السنة.",
         )
-    scale = max(abs(lhs), abs(rhs), 1.0)
-    tol = max(10.0, rel_tol * scale)
+    tol = _whole_currency_tol(lhs, rhs, rel_tol, integer_tol=integer_tol)
     residual = lhs - rhs
     ok = abs(residual) <= tol
     return AxiomCheck(
@@ -264,6 +302,7 @@ def _diagnose_with_z3(
     values: dict[str, dict[int, float]],
     violated: list[AxiomCheck],
     rel_tol: float,
+    integer_tol: float | None = None,
 ) -> list[FaultDiagnosis]:
     """Use Z3 SMT Solver (`assert_and_track` + `unsat_core` + counterfactual SAT)
     to identify the minimal set of suspect fields and compute Z3-implied values."""
@@ -297,6 +336,8 @@ def _diagnose_with_z3(
         "total_liabilities", "non_current_liabilities", "current_liabilities",
         "equity", "inventory", "accounts_receivable", "cash", "accounts_payable",
         "revenue", "cost_of_revenue", "gross_profit",
+        "net_activity_profit", "operating_income", "finance_income",
+        "interest_expense", "fx_gain_loss", "dividends_from_subsidiaries",
         "pretax_income", "income_tax_expense", "net_income",
         "total_debt",
     ]
@@ -312,20 +353,29 @@ def _diagnose_with_z3(
         vmap = {f: z3.Real(f) for f in present}
 
         # Hard accounting axioms (encoded over Z3 Reals; exact for counterfactual target)
-        def _eq_tol(expr_l, expr_r, scale_ref: float):
+        def _eq_tol(expr_l, expr_r, scale_ref: float, terms: tuple[str, ...] = ()):
             if exact_eq:
                 s.add(expr_l == expr_r)
             else:
-                eps = max(10.0, rel_tol * max(abs(scale_ref), 1.0))
+                base_eps = max(10.0, rel_tol * max(abs(scale_ref), 1.0))
+                if (
+                    integer_tol is not None
+                    and abs(scale_ref) >= 100_000.0
+                    and terms
+                    and all(abs(present[t] - round(present[t])) < 1e-6 for t in terms if t in present)
+                ):
+                    eps = min(base_eps, float(integer_tol))
+                else:
+                    eps = base_eps
                 s.add(expr_l - expr_r <= eps)
                 s.add(expr_r - expr_l <= eps)
 
         if all(k in vmap for k in ("total_assets", "total_liabilities", "equity")):
-            _eq_tol(vmap["total_assets"], vmap["total_liabilities"] + vmap["equity"], present["total_assets"])
+            _eq_tol(vmap["total_assets"], vmap["total_liabilities"] + vmap["equity"], present["total_assets"], ("total_assets", "total_liabilities", "equity"))
         if all(k in vmap for k in ("total_assets", "non_current_assets", "current_assets")):
-            _eq_tol(vmap["total_assets"], vmap["non_current_assets"] + vmap["current_assets"], present["total_assets"])
+            _eq_tol(vmap["total_assets"], vmap["non_current_assets"] + vmap["current_assets"], present["total_assets"], ("total_assets", "non_current_assets", "current_assets"))
         if all(k in vmap for k in ("total_liabilities", "non_current_liabilities", "current_liabilities")):
-            _eq_tol(vmap["total_liabilities"], vmap["non_current_liabilities"] + vmap["current_liabilities"], present["total_liabilities"])
+            _eq_tol(vmap["total_liabilities"], vmap["non_current_liabilities"] + vmap["current_liabilities"], present["total_liabilities"], ("total_liabilities", "non_current_liabilities", "current_liabilities"))
         if all(k in vmap for k in ("inventory", "accounts_receivable", "cash", "current_assets")):
             eps = max(10.0, rel_tol * max(abs(present["current_assets"]), 1.0))
             s.add(vmap["inventory"] + vmap["accounts_receivable"] + vmap["cash"] <= vmap["current_assets"] + eps)
@@ -336,14 +386,20 @@ def _diagnose_with_z3(
             eps = max(10.0, rel_tol * max(abs(present["total_liabilities"]), 1.0))
             s.add(vmap["total_debt"] <= vmap["total_liabilities"] + eps)
         if all(k in vmap for k in ("revenue", "cost_of_revenue", "gross_profit")):
-            # cost_of_revenue may be negative-printed (-|COGS|) or magnitude-printed (+|COGS|)
             cogs_var = vmap["cost_of_revenue"]
             cogs_mag = z3.If(cogs_var < 0, -cogs_var, cogs_var)
-            _eq_tol(vmap["revenue"] - cogs_mag, vmap["gross_profit"], present["revenue"])
+            _eq_tol(vmap["revenue"] - cogs_mag, vmap["gross_profit"], present["revenue"], ("revenue", "cost_of_revenue", "gross_profit"))
+        act_f = "net_activity_profit" if "net_activity_profit" in vmap else ("operating_income" if "operating_income" in vmap else None)
+        if act_f and all(k in vmap for k in ("dividends_from_subsidiaries", "interest_expense", "pretax_income")):
+            fin_v = vmap["interest_expense"]
+            fin_mag = z3.If(fin_v < 0, -fin_v, fin_v)
+            fi_expr = z3.If(vmap["finance_income"] < 0, -vmap["finance_income"], vmap["finance_income"]) if "finance_income" in vmap else 0
+            fx_expr = vmap["fx_gain_loss"] if "fx_gain_loss" in vmap else 0
+            a6b_terms = tuple(k for k in (act_f, "finance_income", "interest_expense", "fx_gain_loss", "dividends_from_subsidiaries", "pretax_income") if k in present)
+            _eq_tol(vmap[act_f] + fi_expr - fin_mag + fx_expr + vmap["dividends_from_subsidiaries"], vmap["pretax_income"], max(abs(present["pretax_income"]), abs(present[act_f])), a6b_terms)
         if all(k in vmap for k in ("pretax_income", "income_tax_expense", "net_income")):
-            # Preserve printed tax sign (negative = expense, positive = tax benefit)
             _eq_tol(vmap["pretax_income"] + vmap["income_tax_expense"], vmap["net_income"],
-                    max(abs(present["pretax_income"]), abs(present["net_income"])))
+                    max(abs(present["pretax_income"]), abs(present["net_income"])), ("pretax_income", "income_tax_expense", "net_income"))
         # Non-negativity of balance-sheet stocks
         for stock in ("total_assets", "current_assets", "current_liabilities",
                       "inventory", "accounts_receivable", "accounts_payable", "cash"):
@@ -439,6 +495,7 @@ def verify_financial_statements(
     years: list[int] | None = None,
     tolerance: float = 0.005,
     include_policy_theorems: bool = True,
+    integer_tol: float | None = None,
 ) -> ProofCertificate:
     """Run the formal EAS/IFRS Certificate Checker over extracted financial data."""
     if years is None:
@@ -486,6 +543,7 @@ def verify_financial_statements(
             "Total Assets = Total Liabilities + Equity",
             ta, (tl + eq) if (tl is not None and eq is not None) else None,
             ["total_assets", "total_liabilities", "equity"], tolerance,
+            integer_tol=integer_tol,
         ))
 
         # A2: Assets Decomposition (Total Assets = Non-Current + Current)
@@ -495,6 +553,7 @@ def verify_financial_statements(
             "Total Assets = Non-Current Assets + Current Assets",
             ta, (nca + ca) if (nca is not None and ca is not None) else None,
             ["total_assets", "non_current_assets", "current_assets"], tolerance,
+            integer_tol=integer_tol,
         ))
 
         # A3: Liabilities Decomposition (Total Liabilities = Non-Current + Current)
@@ -504,6 +563,7 @@ def verify_financial_statements(
             "Total Liabilities = Non-Current Liabilities + Current Liabilities",
             tl, (ncl + cl) if (ncl is not None and cl is not None) else None,
             ["total_liabilities", "non_current_liabilities", "current_liabilities"], tolerance,
+            integer_tol=integer_tol,
         ))
 
         # A4a: Current Assets Working-Capital Stock Bound (Inv + AR + Cash <= CA)
@@ -553,6 +613,7 @@ def verify_financial_statements(
             "Gross Profit = Revenue − |Cost of Revenue|",
             gp, (rev - abs(cogs)) if (rev is not None and cogs is not None) else None,
             ["gross_profit", "revenue", "cost_of_revenue"], tolerance,
+            integer_tol=integer_tol,
         ))
 
         # A5b: Operating Income Bridge Sanity (GP - |OpEx| ≈ Operating Income within other-op-income band)
@@ -599,6 +660,37 @@ def verify_financial_statements(
                 "Net Income = Pretax Income + Income Tax",
                 ni, best_rhs,
                 ["net_income", "pretax_income", "income_tax_expense"], tolerance,
+                integer_tol=integer_tol,
+            ))
+
+        # A6b: Activity-to-Pretax Bridge when subsidiary dividends are directly captured
+        net_act = _val(values, "net_activity_profit", y)
+        act_key = "net_activity_profit" if net_act is not None else ("operating_income" if op_inc is not None else None)
+        act_val = net_act if net_act is not None else op_inc
+        fin_exp = _val(values, "interest_expense", y)
+        div_sub = _val(values, "dividends_from_subsidiaries", y)
+        if None not in (act_val, fin_exp, div_sub, pretax):
+            fin_inc = _val(values, "finance_income", y)
+            fx_gl = _val(values, "fx_gain_loss", y)
+            lhs_a6b = (
+                act_val
+                + (abs(fin_inc) if fin_inc is not None else 0.0)
+                - abs(fin_exp)
+                + (fx_gl if fx_gl is not None else 0.0)
+                + div_sub
+            )
+            a6b_fields = [act_key, "interest_expense", "dividends_from_subsidiaries", "pretax_income"]
+            if fin_inc is not None:
+                a6b_fields.append("finance_income")
+            if fx_gl is not None:
+                a6b_fields.append("fx_gain_loss")
+            year_axioms.append(_check_equality(
+                "A6b_ACTIVITY_BRIDGE", y,
+                "جسر النشاط إلى الربح قبل الضريبة", "Activity-to-Pretax Bridge",
+                "Activity Profit + Finance Net + FX + Subsidiary Dividends = Pretax Income",
+                lhs_a6b, pretax,
+                a6b_fields, tolerance,
+                integer_tol=integer_tol,
             ))
 
         # A7: Debt Bound (Total Debt <= Total Liabilities)
@@ -650,7 +742,7 @@ def verify_financial_statements(
         axioms.extend(year_axioms)
         violated_y = [ax for ax in year_axioms if ax.status == "VIOLATED"]
         if violated_y:
-            diagnoses.extend(_diagnose_with_z3(y, values, violated_y, tolerance))
+            diagnoses.extend(_diagnose_with_z3(y, values, violated_y, tolerance, integer_tol=integer_tol))
 
     # A9: Cross-Year Cash Flow Bridge (OCF + ICF + FCF ≈ ΔCash within FX/overdraft tolerance)
     if len(years) >= 2:
@@ -994,8 +1086,9 @@ def _is_eligible_for_z3_attestation(data, field: str, year: int) -> bool:
 def apply_z3_algebraic_attestation(
     data,
     notes: list[str] | None = None,
-    strict_rel_tol: float = 0.002,
+    strict_rel_tol: float = 1e-5,
     cf_rel_tol: float = 0.05,
+    integer_tol: float | None = 5.0,
 ) -> list[tuple[str, int, str]]:
     """Attest directly captured cells participating in PROVEN closed accounting
     equalities as an independent deterministic mathematical layer (`z3_math`).
@@ -1005,7 +1098,8 @@ def apply_z3_algebraic_attestation(
         captured from the document (none synthetically derived by Python).
       - Zero conflict suppression: conflicted cells (`CONFLICT`) are never promoted.
       - Strict algebraic checksum: ≤ 0.2% residual for Balance Sheet / Income
-        identities (A1, A2, A3, A5, A6) and ≤ 5% for the 5-term Cash Flow bridge (A9).
+        identities (A1, A2, A3, A5, A6) — tightened to ±5 units when all terms are
+        exact whole-currency integers ≥ 100k — and ≤ 5% for the Cash Flow bridge (A9).
 
     Returns list of newly attested `(field, year, axiom_id)` triples.
     """
@@ -1013,7 +1107,9 @@ def apply_z3_algebraic_attestation(
     if not values:
         return []
 
-    cert = verify_financial_statements(values, tolerance=strict_rel_tol)
+    cert = verify_financial_statements(
+        values, tolerance=strict_rel_tol, integer_tol=integer_tol,
+    )
     to_attest: dict[tuple[str, int], str] = {}
 
     # 1. Core closed multi-term accounting equalities (A1, A2, A3, A5, A6)
@@ -1022,8 +1118,7 @@ def apply_z3_algebraic_attestation(
             continue
         if ax.lhs is None or ax.rhs is None or ax.residual is None:
             continue
-        scale = max(abs(ax.lhs), abs(ax.rhs), 1.0)
-        if abs(ax.residual) > max(10.0, strict_rel_tol * scale):
+        if abs(ax.residual) > _whole_currency_tol(ax.lhs, ax.rhs, strict_rel_tol, integer_tol=integer_tol):
             continue
         if len(ax.fields) < 3:
             continue
@@ -1045,8 +1140,7 @@ def apply_z3_algebraic_attestation(
                 + float(values["non_current_liabilities"][y])
                 + float(values["current_liabilities"][y])
             )
-            scale4 = max(abs(ta), abs(rhs4), 1.0)
-            if abs(ta - rhs4) <= max(10.0, strict_rel_tol * scale4):
+            if abs(ta - rhs4) <= _whole_currency_tol(ta, rhs4, strict_rel_tol, integer_tol=integer_tol):
                 for f in bs4:
                     to_attest.setdefault((f, y), "A1b_BS_4TERM")
 
@@ -1081,7 +1175,7 @@ def apply_z3_algebraic_attestation(
             comp_f = [f for f in _DEBT_COMPONENT_FIELDS if _is_eligible_for_z3_attestation(data, f, y)]
             if len(comp_f) >= 2:
                 comp_sum = sum(abs(float(values[f][y])) for f in comp_f)
-                if abs(abs(td) - comp_sum) <= max(10.0, strict_rel_tol * max(abs(td), comp_sum, 1.0)):
+                if abs(abs(td) - comp_sum) <= _whole_currency_tol(abs(td), comp_sum, strict_rel_tol, integer_tol=integer_tol):
                     to_attest.setdefault(("total_debt", y), "A10_DEBT_SUM")
                     for f in comp_f:
                         to_attest.setdefault((f, y), "A10_DEBT_SUM")
@@ -1092,31 +1186,88 @@ def apply_z3_algebraic_attestation(
             comp_f = [f for f in _OPEX_COMPONENT_FIELDS if _is_eligible_for_z3_attestation(data, f, y)]
             if len(comp_f) >= 2:
                 comp_sum = sum(abs(float(values[f][y])) for f in comp_f)
-                if abs(opex - comp_sum) <= max(10.0, strict_rel_tol * max(opex, comp_sum, 1.0)):
+                if abs(opex - comp_sum) <= _whole_currency_tol(opex, comp_sum, strict_rel_tol, integer_tol=integer_tol):
                     to_attest.setdefault(("operating_expenses", y), "A11_OPEX_SUM")
                     for f in comp_f:
                         to_attest.setdefault((f, y), "A11_OPEX_SUM")
 
         # A6b: Egyptian EAS Income Statement Activity-to-Pretax Bridge
-        # pretax_income == net_activity_profit - |interest_expense| + dividends_from_subsidiaries
-        act_fields = (
-            "pretax_income",
-            "net_activity_profit",
-            "interest_expense",
-            "dividends_from_subsidiaries",
+        # Supports both compact bridge (act - |fin| + div == pretax) and full bridge
+        # (act + finance_income - |interest_expense| + fx_gain_loss + [dividends] == pretax).
+        act_f = (
+            "net_activity_profit"
+            if _is_eligible_for_z3_attestation(data, "net_activity_profit", y)
+            else ("operating_income" if _is_eligible_for_z3_attestation(data, "operating_income", y) else None)
         )
-        if all(_is_eligible_for_z3_attestation(data, f, y) for f in act_fields):
+        if act_f and _is_eligible_for_z3_attestation(data, "pretax_income", y) and _is_eligible_for_z3_attestation(data, "interest_expense", y):
             pt_v = float(values["pretax_income"][y])
-            act_v = float(values["net_activity_profit"][y])
+            act_v = float(values[act_f][y])
             fin_v = float(values["interest_expense"][y])
-            div_v = float(values["dividends_from_subsidiaries"][y])
-            rhs_signed = act_v + fin_v + div_v
-            rhs_sub = act_v - abs(fin_v) + div_v
-            best_act_rhs = rhs_signed if abs(pt_v - rhs_signed) <= abs(pt_v - rhs_sub) else rhs_sub
-            scale_act = max(abs(pt_v), abs(best_act_rhs), 1.0)
-            if abs(pt_v - best_act_rhs) <= max(10.0, strict_rel_tol * scale_act):
-                for f in act_fields:
-                    to_attest.setdefault((f, y), "A6b_ACTIVITY_BRIDGE")
+            has_fi = _is_eligible_for_z3_attestation(data, "finance_income", y)
+            has_fx = _is_eligible_for_z3_attestation(data, "fx_gain_loss", y)
+            has_div = _is_eligible_for_z3_attestation(data, "dividends_from_subsidiaries", y)
+            fi_v = abs(float(values["finance_income"][y])) if has_fi else 0.0
+            fx_v = float(values["fx_gain_loss"][y]) if has_fx else 0.0
+            div_v = float(values["dividends_from_subsidiaries"][y]) if has_div else 0.0
+            rhs_compact = act_v + fin_v + div_v
+            rhs_compact_sub = act_v - abs(fin_v) + div_v
+            rhs_full = act_v + fi_v - abs(fin_v) + fx_v + div_v
+            best_full_err = abs(pt_v - rhs_full)
+            used_a6b: list[str] = [act_f, "pretax_income", "interest_expense"]
+            if has_fi or has_fx:
+                if best_full_err <= _whole_currency_tol(pt_v, rhs_full, strict_rel_tol, integer_tol=integer_tol):
+                    if has_fi:
+                        used_a6b.append("finance_income")
+                    if has_fx:
+                        used_a6b.append("fx_gain_loss")
+                    if has_div:
+                        used_a6b.append("dividends_from_subsidiaries")
+                    for f in used_a6b:
+                        to_attest.setdefault((f, y), "A6b_ACTIVITY_BRIDGE")
+            if act_f and not any((f, y) in to_attest for f in ("finance_income", "fx_gain_loss")):
+                best_comp = rhs_compact if abs(pt_v - rhs_compact) <= abs(pt_v - rhs_compact_sub) else rhs_compact_sub
+                if abs(pt_v - best_comp) <= _whole_currency_tol(pt_v, best_comp, strict_rel_tol, integer_tol=integer_tol):
+                    for f in ([act_f, "pretax_income", "interest_expense"] + (["dividends_from_subsidiaries"] if has_div else [])):
+                        to_attest.setdefault((f, y), "A6b_ACTIVITY_BRIDGE")
+
+        # A1c: Exact Equity Component Sum (capital + treasury_shares + reserves + asset_revaluation_reserve + retained_earnings == equity)
+        if (
+            _is_eligible_for_z3_attestation(data, "equity", y)
+            and _is_eligible_for_z3_attestation(data, "capital", y)
+            and _is_eligible_for_z3_attestation(data, "retained_earnings", y)
+        ):
+            eq_v = float(values["equity"][y])
+            eq_opt = ("treasury_shares", "reserves", "asset_revaluation_reserve")
+            present_opt = [f for f in eq_opt if _is_eligible_for_z3_attestation(data, f, y)]
+            if present_opt:
+                eq_parts = ["capital", "retained_earnings"] + present_opt
+                eq_sum = (
+                    abs(float(values["capital"][y]))
+                    + float(values["retained_earnings"][y])
+                    + (-abs(float(values["treasury_shares"][y])) if "treasury_shares" in present_opt else 0.0)
+                    + (abs(float(values["reserves"][y])) if "reserves" in present_opt else 0.0)
+                    + (float(values["asset_revaluation_reserve"][y]) if "asset_revaluation_reserve" in present_opt else 0.0)
+                )
+                if abs(eq_v - eq_sum) <= _whole_currency_tol(eq_v, eq_sum, strict_rel_tol, integer_tol=integer_tol):
+                    to_attest.setdefault(("equity", y), "A1c_EQUITY_SUM")
+                    for f in eq_parts:
+                        to_attest.setdefault((f, y), "A1c_EQUITY_SUM")
+
+        # A2b: Non-Current Assets Balance-Sheet Sum (fixed + CWIP + subsidiaries + other_inv + DTA == non_current_assets)
+        nca_v = float(values["non_current_assets"][y]) if _is_eligible_for_z3_attestation(data, "non_current_assets", y) else None
+        if nca_v is not None and _is_eligible_for_z3_attestation(data, "fixed_assets", y):
+            nca_parts_f = (
+                "fixed_assets", "projects_under_construction",
+                "investments_in_subsidiaries", "other_investments", "deferred_tax_assets",
+            )
+            present_nca = [f for f in nca_parts_f if _is_eligible_for_z3_attestation(data, f, y)]
+            if len(present_nca) >= 3:
+                nca_sum = sum(abs(float(values[f][y])) for f in present_nca)
+                nca_tol = _whole_currency_tol(nca_v, nca_sum, strict_rel_tol, integer_tol=integer_tol)
+                if abs(nca_v - nca_sum) <= nca_tol:
+                    to_attest.setdefault(("non_current_assets", y), "A2b_NCA_SUM")
+                    for f in present_nca:
+                        to_attest.setdefault((f, y), "A2b_NCA_SUM")
 
         # A5c: Exact Gross-to-Operating Profit Bridge when OpEx components (+ optional Other Operating Income) are directly captured
         op_field = "operating_income" if _is_eligible_for_z3_attestation(data, "operating_income", y) else (
@@ -1130,21 +1281,30 @@ def apply_z3_algebraic_attestation(
                 gp_v = float(values["gross_profit"][y])
                 op_v = float(values[op_field][y])
                 op_sum = sum(abs(float(values[f][y])) for f in op_comps)
-                scale_op = max(abs(gp_v), abs(op_v), op_sum, 1.0)
-                # Check both with and without other_operating_income (when present)
                 lhs_with_inc = gp_v - op_sum + other_inc_v
                 lhs_no_inc = gp_v - op_sum
-                if has_other_inc and abs(lhs_with_inc - op_v) <= max(10.0, strict_rel_tol * scale_op):
+                if has_other_inc and abs(lhs_with_inc - op_v) <= _whole_currency_tol(lhs_with_inc, op_v, strict_rel_tol, integer_tol=integer_tol):
                     to_attest.setdefault(("gross_profit", y), "A5c_OP_EXACT")
                     to_attest.setdefault((op_field, y), "A5c_OP_EXACT")
                     to_attest.setdefault(("other_operating_income", y), "A5c_OP_EXACT")
                     for f in op_comps:
                         to_attest.setdefault((f, y), "A5c_OP_EXACT")
-                elif abs(lhs_no_inc - op_v) <= max(10.0, strict_rel_tol * scale_op):
+                elif abs(lhs_no_inc - op_v) <= _whole_currency_tol(lhs_no_inc, op_v, strict_rel_tol, integer_tol=integer_tol):
                     to_attest.setdefault(("gross_profit", y), "A5c_OP_EXACT")
                     to_attest.setdefault((op_field, y), "A5c_OP_EXACT")
                     for f in op_comps:
                         to_attest.setdefault((f, y), "A5c_OP_EXACT")
+
+    # Formal soundness guard: never grant `z3_math` attestation to any (field, year)
+    # participating in a VIOLATED axiom (e.g. TA=CA+NCA passing while TA!=TL+E fails).
+    violated_fy = {
+        (f, ax.year)
+        for ax in cert.axioms
+        if ax.status == "VIOLATED"
+        for f in ax.fields
+    }
+    if violated_fy:
+        to_attest = {k: v for k, v in to_attest.items() if k not in violated_fy}
 
     if not to_attest:
         recheck_derived_certainty(data)

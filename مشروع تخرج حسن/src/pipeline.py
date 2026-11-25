@@ -370,7 +370,8 @@ def run_pipeline(file_name: str, raw: bytes, company: str, progress_cb=None, pag
     )
 
     formal_cert = verify_financial_statements(
-        data.values, years=years_sorted, include_policy_theorems=True,
+        data.values, years=years_sorted, tolerance=1e-5, include_policy_theorems=True,
+        integer_tol=5.0,
     )
     raw_repairs = getattr(data, "formal_repairs", None) or (
         cached.get("formal_repairs") if cached else []

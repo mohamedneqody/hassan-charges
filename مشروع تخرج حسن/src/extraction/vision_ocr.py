@@ -2878,11 +2878,13 @@ def _render_z3_repair_images(
     fallback_png: bytes,
     target_fields: list[str],
     statement_hint: str = "balance_sheet",
+    focus_fields: list[str] | None = None,
 ) -> list[bytes]:
     """Render a 5x (360 DPI) row-band zoom crop (with column headers stitched on top)
     plus a high-DPI table crop directly from `raw_pdf` so small Arabic-Indic digit
     strokes (٥/٠, ٢/٧, ٦/٤) are never crushed by 144-DPI full-page scaling.
-    Gracefully falls back to `fallback_png` in synthetic unit tests."""
+    When `focus_fields` (unverified suspects) is non-empty, zooms tightly onto
+    those specific row(s) first while Image 2 still supplies the full 5x table."""
     if not (isinstance(raw_pdf, (bytes, bytearray)) and bytes(raw_pdf[:4]) == b"%PDF"):
         return [
             preprocess_image(fallback_png, max_side=3000, denoise=False),
@@ -2915,7 +2917,7 @@ def _render_z3_repair_images(
         full_table_pil.save(buf_full, format="PNG")
         full_table_bytes = buf_full.getvalue()
 
-        # Try locating exact y-band of target_fields via Indra OCR segment geometry
+        # Try locating exact y-band of focus_fields (unverified suspects) first, then target_fields
         hdr_y0_norm, hdr_y1_norm = 0.035, 0.155
         matched_ys: list[tuple[float, float]] = []
         try:
@@ -2926,15 +2928,20 @@ def _render_z3_repair_images(
                 indra_available,
             )
 
-            target_norms: set[str] = set()
-            for tf in target_fields:
-                for al in FIELD_ALIASES.get(tf, ()):
-                    na = normalize_label(al)
-                    if len(na) >= 4:
-                        target_norms.add(na)
-                nar = normalize_label(_FIELD_AR.get(tf, ""))
-                if len(nar) >= 4:
-                    target_norms.add(nar)
+            def _norms_for(flist: list[str]) -> set[str]:
+                out_s: set[str] = set()
+                for tf in flist:
+                    for al in FIELD_ALIASES.get(tf, ()):
+                        na = normalize_label(al)
+                        if len(na) >= 4:
+                            out_s.add(na)
+                    nar = normalize_label(_FIELD_AR.get(tf, ""))
+                    if len(nar) >= 4:
+                        out_s.add(nar)
+                return out_s
+
+            focus_norms = _norms_for(focus_fields or [])
+            target_norms = _norms_for(target_fields)
 
             if indra_available() and target_norms:
                 conv = get_shared_converter()
@@ -2942,6 +2949,8 @@ def _render_z3_repair_images(
                     w_fb, h_fb, segs = _SC.read_page_lines(conv, fallback_png)
                 if w_fb > 0 and h_fb > 0 and segs:
                     hdr_cands: list[float] = []
+                    focus_ys: list[tuple[float, float]] = []
+                    all_ys: list[tuple[float, float]] = []
                     for sg in segs:
                         bx = list(sg.box) if hasattr(sg, "box") else [sg.x0, sg.y0, sg.x1, sg.y1]
                         txt = (sg.text or "").strip()
@@ -2957,10 +2966,16 @@ def _render_z3_repair_images(
                         nt = normalize_label(txt)
                         if not nt or nt.replace(" ", "").isdigit():
                             continue
+                        if focus_norms and any(al == nt or (len(al) >= 5 and al in nt) for al in focus_norms):
+                            focus_ys.append((y0n, y1n))
                         if any(al == nt or (len(al) >= 5 and al in nt) for al in target_norms):
-                            matched_ys.append((y0n, y1n))
+                            all_ys.append((y0n, y1n))
                     if hdr_cands:
                         hdr_y1_norm = min(0.24, max(hdr_cands) + 0.015)
+                    if focus_ys and (max(b for _, b in focus_ys) - min(a for a, _ in focus_ys)) <= 0.35:
+                        matched_ys = focus_ys
+                    else:
+                        matched_ys = all_ys
         except Exception:
             matched_ys = []
 
@@ -3178,12 +3193,14 @@ def _z3_feedback_repair_loop(
 
         try:
             src_png = pages_png[selected.index(page_number)]
+            focus_f = [f for f in target_fields if not _is_verified_cell(f)]
             repair_imgs = _render_z3_repair_images(
                 raw_pdf=raw,
                 page_number=page_number,
                 fallback_png=src_png,
                 target_fields=target_fields,
                 statement_hint=diag.statement_hint,
+                focus_fields=focus_f,
             )
             if caller is not None:
                 raw_text = caller("k", "m", prompt, repair_imgs)
@@ -3228,8 +3245,10 @@ def _z3_feedback_repair_loop(
             if y != diag.year:
                 continue
             old_v = data.get(f, y)
-            # Align negative-convention P&L expenses when Vision transcribes parenthesized amount as positive
-            if f in ("cost_of_revenue", "selling_expenses", "admin_expenses", "other_operating_expenses", "interest_expense") and old_v is not None and old_v < 0 and new_v > 0:
+            # Align negative-convention P&L expenses & contra-equity treasury_shares when transcribed positive
+            if f == "treasury_shares" and new_v > 0:
+                new_v = -abs(new_v)
+            elif f in ("cost_of_revenue", "selling_expenses", "admin_expenses", "other_operating_expenses", "interest_expense") and old_v is not None and old_v < 0 and new_v > 0:
                 new_v = -abs(new_v)
             old_is_frac = old_v is not None and 0.005 < abs(old_v - round(old_v)) < 0.995
             new_is_int = abs(new_v - round(new_v)) < 1e-4

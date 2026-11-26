@@ -363,7 +363,7 @@ def _diagnose_with_z3(
         "bank_overdraft", "short_term_credit_facilities", "current_portion_lt_debt",
         "current_lease_liabilities", "long_term_debt", "long_term_notes_payable",
         "non_current_lease_liabilities", "deferred_tax_liabilities",
-        "equity",
+        "equity", "capital", "treasury_shares", "reserves", "asset_revaluation_reserve", "retained_earnings",
         "revenue", "cost_of_revenue", "gross_profit",
         "other_operating_income", "selling_expenses", "admin_expenses", "other_operating_expenses",
         "net_activity_profit", "operating_income", "finance_income",
@@ -392,15 +392,16 @@ def _diagnose_with_z3(
         vmap = {f: z3.Real(f) for f in present}
 
         # Hard accounting axioms (encoded over Z3 Reals; exact for counterfactual target)
-        def _eq_tol(expr_l, expr_r, scale_ref: float, terms: tuple[str, ...] = ()):
+        def _eq_tol(expr_l, expr_r, scale_ref: float, terms: tuple[str, ...] = (), custom_int_tol: float | None = None):
             if exact_eq:
                 s.add(expr_l == expr_r)
             else:
+                eff_int_tol = custom_int_tol if custom_int_tol is not None else integer_tol
                 base_eps = max(10.0, rel_tol * max(abs(scale_ref), 1.0))
                 present_terms = [present[t] for t in terms if t in present]
                 int_count = sum(1 for tv in present_terms if abs(tv - round(tv)) < 1e-6)
                 if (
-                    integer_tol is not None
+                    eff_int_tol is not None
                     and abs(scale_ref) >= 100_000.0
                     and present_terms
                     and (
@@ -408,7 +409,7 @@ def _diagnose_with_z3(
                         or (abs(scale_ref) >= 10_000_000.0 and int_count >= max(2, len(present_terms) - 1))
                     )
                 ):
-                    eps = min(base_eps, float(integer_tol))
+                    eps = min(base_eps, float(eff_int_tol))
                 else:
                     eps = base_eps
                 s.add(expr_l - expr_r <= eps)
@@ -416,6 +417,13 @@ def _diagnose_with_z3(
 
         if _want("A1_BS_BALANCE") and all(k in vmap for k in ("total_assets", "total_liabilities", "equity")):
             _eq_tol(vmap["total_assets"], vmap["total_liabilities"] + vmap["equity"], present["total_assets"], ("total_assets", "total_liabilities", "equity"))
+        if _want("A1c_EQUITY_SUM") and "A1c_EQUITY_SUM" in violated_ids and all(k in vmap for k in ("equity", "capital", "retained_earnings")):
+            cap_mag = z3.If(vmap["capital"] < 0, -vmap["capital"], vmap["capital"])
+            ts_mag = z3.If(vmap["treasury_shares"] < 0, -vmap["treasury_shares"], vmap["treasury_shares"]) if "treasury_shares" in vmap else 0
+            res_mag = z3.If(vmap["reserves"] < 0, -vmap["reserves"], vmap["reserves"]) if "reserves" in vmap else 0
+            rev_r = vmap["asset_revaluation_reserve"] if "asset_revaluation_reserve" in vmap else 0
+            eq_terms = tuple(k for k in ("equity", "capital", "treasury_shares", "reserves", "asset_revaluation_reserve", "retained_earnings") if k in present)
+            _eq_tol(vmap["equity"], cap_mag - ts_mag + res_mag + rev_r + vmap["retained_earnings"], present["equity"], eq_terms)
         if _want("A2_ASSETS_SUM") and all(k in vmap for k in ("total_assets", "non_current_assets", "current_assets")):
             _eq_tol(vmap["total_assets"], vmap["non_current_assets"] + vmap["current_assets"], present["total_assets"], ("total_assets", "non_current_assets", "current_assets"))
         if _want("A3_LIAB_SUM") and all(k in vmap for k in ("total_liabilities", "non_current_liabilities", "current_liabilities")):
@@ -457,7 +465,7 @@ def _diagnose_with_z3(
             v is not None for v in values["dividends_from_subsidiaries"].values()
         )
         if _want("A6b_ACTIVITY_BRIDGE") and act_f and all(k in vmap for k in ("interest_expense", "pretax_income")) and (
-            "dividends_from_subsidiaries" in vmap or has_div_disclosed
+            "dividends_from_subsidiaries" in vmap or has_div_disclosed or "A6b_ACTIVITY_BRIDGE" in violated_ids
         ):
             fin_v = vmap["interest_expense"]
             fin_mag = z3.If(fin_v < 0, -fin_v, fin_v)
@@ -467,8 +475,9 @@ def _diagnose_with_z3(
             a6b_terms = tuple(k for k in (act_f, "finance_income", "interest_expense", "fx_gain_loss", "dividends_from_subsidiaries", "pretax_income") if k in present)
             _eq_tol(vmap[act_f] + fi_expr - fin_mag + fx_expr + div_expr, vmap["pretax_income"], max(abs(present["pretax_income"]), abs(present[act_f])), a6b_terms)
         if _want("A6_NI_BRIDGE") and all(k in vmap for k in ("pretax_income", "income_tax_expense", "net_income")):
+            ni_tol_c = min(float(integer_tol), 1.5) if integer_tol is not None else None
             _eq_tol(vmap["pretax_income"] + vmap["income_tax_expense"], vmap["net_income"],
-                    max(abs(present["pretax_income"]), abs(present["net_income"])), ("pretax_income", "income_tax_expense", "net_income"))
+                    max(abs(present["pretax_income"]), abs(present["net_income"])), ("pretax_income", "income_tax_expense", "net_income"), custom_int_tol=ni_tol_c)
         # Non-negativity of balance-sheet stocks
         for stock in ("total_assets", "current_assets", "current_liabilities",
                       "inventory", "accounts_receivable", "accounts_payable", "cash"):
@@ -841,28 +850,34 @@ def verify_financial_statements(
             rhs_signed = pretax + tax
             rhs_sub = pretax - abs(tax)
             best_rhs = rhs_signed if abs(ni - rhs_signed) <= abs(ni - rhs_sub) else rhs_sub
+            ni_int_tol = min(float(integer_tol), 1.5) if integer_tol is not None else None
             year_axioms.append(_check_equality(
                 "A6_NI_BRIDGE", y,
                 "جسر صافي الربح والضريبة", "Net Income Tax Bridge",
                 "Net Income = Pretax Income + Income Tax",
                 ni, best_rhs,
                 ["net_income", "pretax_income", "income_tax_expense"], tolerance,
-                integer_tol=integer_tol,
+                integer_tol=ni_int_tol,
             ))
 
-        # A6b: Activity-to-Pretax Bridge when subsidiary dividends are disclosed (any year in statement)
+        # A6b: Activity-to-Pretax Bridge when subsidiary dividends are disclosed OR 4-term finance bridge holds closely
         net_act = _val(values, "net_activity_profit", y)
         act_key = "net_activity_profit" if net_act is not None else ("operating_income" if op_inc is not None else None)
         act_val = net_act if net_act is not None else op_inc
         fin_exp = _val(values, "interest_expense", y)
+        fin_inc = _val(values, "finance_income", y)
+        fx_gl = _val(values, "fx_gain_loss", y)
         div_sub = _val(values, "dividends_from_subsidiaries", y)
         div_disclosed = isinstance(values.get("dividends_from_subsidiaries"), dict) and any(
             v is not None for v in values["dividends_from_subsidiaries"].values()
         )
-        if None not in (act_val, fin_exp, pretax) and (div_sub is not None or div_disclosed):
+        _a6b_zero_div_ok = (
+            None not in (act_val, fin_inc, fin_exp, fx_gl, pretax)
+            and abs((act_val + abs(fin_inc) - abs(fin_exp) + fx_gl) - pretax)
+            <= 0.02 * max(abs(pretax), abs(act_val), 1.0)
+        )
+        if None not in (act_val, fin_exp, pretax) and (div_sub is not None or div_disclosed or _a6b_zero_div_ok):
             div_eff = div_sub if div_sub is not None else 0.0
-            fin_inc = _val(values, "finance_income", y)
-            fx_gl = _val(values, "fx_gain_loss", y)
             lhs_a6b = (
                 act_val
                 + (abs(fin_inc) if fin_inc is not None else 0.0)
@@ -885,6 +900,52 @@ def verify_financial_statements(
                 a6b_fields, tolerance,
                 integer_tol=integer_tol,
             ))
+
+        # A1c: Standalone Equity Component Sum (Capital - |Treasury Shares| + Reserves + Revaluation + Retained == Equity)
+        _cap_v = _val(values, "capital", y)
+        _re_v = _val(values, "retained_earnings", y)
+        _eq_opt = ("treasury_shares", "reserves", "asset_revaluation_reserve")
+        _pres_eq = [f for f in _eq_opt if _val(values, f, y) is not None]
+        if (
+            eq is not None
+            and _cap_v is not None
+            and _re_v is not None
+            and len(_pres_eq) >= 2
+            and _val(values, "minority_interest", y) is None
+        ):
+            def _calc_eq_sum(_yr_e: int) -> tuple[float | None, float | None]:
+                _eq_e = _val(values, "equity", _yr_e)
+                _cp_e = _val(values, "capital", _yr_e)
+                _re_e = _val(values, "retained_earnings", _yr_e)
+                if None in (_eq_e, _cp_e, _re_e):
+                    return None, None
+                _ts_e = _val(values, "treasury_shares", _yr_e)
+                _rs_e = _val(values, "reserves", _yr_e)
+                _rv_e = _val(values, "asset_revaluation_reserve", _yr_e)
+                _s_e = (
+                    abs(_cp_e)
+                    + _re_e
+                    + (-abs(_ts_e) if _ts_e is not None else 0.0)
+                    + (abs(_rs_e) if _rs_e is not None else 0.0)
+                    + (_rv_e if _rv_e is not None else 0.0)
+                )
+                return _eq_e, _s_e
+
+            _, _eq_sum = _calc_eq_sum(y)
+            _eq_template = any(
+                _ee is not None and _se is not None and abs(_ee - _se) <= 0.005 * max(abs(_ee), 1.0)
+                for _yr_e in years
+                for _ee, _se in [_calc_eq_sum(_yr_e)]
+            )
+            if _eq_sum is not None and (_eq_template or abs(_eq_sum - eq) <= 0.03 * max(abs(eq), 1.0)):
+                year_axioms.append(_check_equality(
+                    "A1c_EQUITY_SUM", y,
+                    "تطابق مكونات حقوق الملكية", "Equity Component Sum",
+                    "Equity = Capital − |Treasury Shares| + Reserves + Revaluation Reserve + Retained Earnings",
+                    eq, _eq_sum,
+                    ["equity", "capital", "retained_earnings"] + _pres_eq, tolerance,
+                    integer_tol=integer_tol,
+                ))
 
         # A2c: Itemized Current Assets Sum (only when itemized CA lines like other_receivables exist)
         _ca_fields = ("inventory", "accounts_receivable", "other_receivables", "supplier_advances", "cash")
@@ -1293,6 +1354,7 @@ def verify_policy_invariants_z3() -> tuple[PolicyTheorem, ...]:
 
 _STRICT_EQUALITY_AXIOMS = frozenset({
     "A1_BS_BALANCE",
+    "A1c_EQUITY_SUM",
     "A2_ASSETS_SUM",
     "A2b_NCA_SUM",
     "A2c_CA_SUM",

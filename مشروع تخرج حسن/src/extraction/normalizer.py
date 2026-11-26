@@ -620,6 +620,7 @@ def parse_table_full(
     year_cols = set(year_cols_map)
 
     result: dict[int, dict[str, float]] = {}
+    explicit_totals: set[tuple[int, str]] = set()
     body = df if header_idx == -1 else df.iloc[header_idx + 1:]
     for row_pos, row in body.iterrows():
         label = _row_label(row, year_cols)
@@ -645,6 +646,10 @@ def parse_table_full(
                         "values": gap_vals,
                     })
             continue
+        norm_lbl = normalize_label(label)
+        is_explicit_total = any(
+            tw in norm_lbl for tw in ("اجمالي", "مجموع", "total")
+        )
         for col_pos, year in year_cols_map.items():
             raw_cell = row.iloc[col_pos] if col_pos < len(row) else None
             # Percentage cells are ratios, not absolute amounts — skip them.
@@ -653,7 +658,20 @@ def parse_table_full(
             value = parse_number(raw_cell)
             if value is None:
                 continue
-            result.setdefault(year, {}).setdefault(canonical, value)
+            yr_map = result.setdefault(year, {})
+            if canonical not in yr_map:
+                yr_map[canonical] = value
+                if is_explicit_total:
+                    explicit_totals.add((year, canonical))
+            elif (
+                canonical in ("income_tax_expense", "operating_expenses", "total_debt")
+                and is_explicit_total
+                and (year, canonical) not in explicit_totals
+            ):
+                # Explicit printed total row (e.g. «إجمالي ضريبة الدخل عن العام»)
+                # supersedes an earlier partial sub-row («ضريبة الدخل») in the same table.
+                yr_map[canonical] = value
+                explicit_totals.add((year, canonical))
             raw_cell = str(raw_cell) if raw_cell is not None else ""
             negative_print = raw_cell.strip().startswith("(")                 and raw_cell.strip().endswith(")")                 or raw_cell.strip().startswith("-")
             captures.append({

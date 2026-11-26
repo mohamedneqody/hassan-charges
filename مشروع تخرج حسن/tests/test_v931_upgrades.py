@@ -1249,6 +1249,46 @@ def test_v935_a5c_exact_bridge_and_whole_unit_decimal_guard_and_5x_crop():
             tmp_c.rmdir()
 
 
+def test_v936_explicit_tax_total_and_a1c_equity_sum_and_3egp_ni_bridge():
+    """Verify (1) explicit «إجمالي ضريبة الدخل» beats partial «ضريبة الدخل», (2) A6 catches 3 EGP NI slip, and (3) A1c catches treasury_shares slip."""
+    import pandas as pd
+    from src.analysis.formal_verifier import verify_financial_statements
+    from src.extraction.normalizer import parse_table
+
+    df = pd.DataFrame([
+        ["البيان", "2022", "2021"],
+        ["ضريبة الدخل", "(167,901,733)", "--"],
+        ["الضريبة على توزيعات الأرباح", "(37,500,000)", "--"],
+        ["الضريبة المؤجلة", "25,775,606", "(103,480,837)"],
+        ["إجمالي ضريبة الدخل عن العام", "(179,626,127)", "(103,480,837)"],
+    ])
+    parsed = parse_table(df)
+    assert parsed[2022]["income_tax_expense"] == pytest.approx(-179_626_127.0)
+    assert parsed[2021]["income_tax_expense"] == pytest.approx(-103_480_837.0)
+
+    vals = {
+        "equity": {2021: 6_363_686_325.0, 2022: 6_938_330_481.0},
+        "capital": {2021: 2_716_325_135.0, 2022: 2_716_325_135.0},
+        "treasury_shares": {2021: -10_380_884.0, 2022: 100_380_888.0},  # true -10,380,884
+        "reserves": {2021: 2_855_380_202.0, 2022: 2_855_380_202.0},
+        "asset_revaluation_reserve": {2021: 27_075_312.0, 2022: 23_617_561.0},
+        "retained_earnings": {2021: 775_286_560.0, 2022: 1_353_388_467.0},
+        "pretax_income": {2022: 1_236_363_213.0},
+        "income_tax_expense": {2022: -179_626_127.0},
+        "net_income": {2022: 1_056_737_089.0},  # 3 EGP ٦->٩ slip vs true ...086
+    }
+    cert = verify_financial_statements(
+        vals, years=[2021, 2022], tolerance=1e-5, include_policy_theorems=False, integer_tol=5.0,
+    )
+    v22 = {ax.axiom_id for ax in cert.axioms if ax.year == 2022 and ax.status == "VIOLATED"}
+    assert "A1c_EQUITY_SUM" in v22
+    assert "A6_NI_BRIDGE" in v22
+    by_f = {d.suspect_field: d for d in cert.fault_diagnoses if d.year == 2022}
+    assert by_f["treasury_shares"].z3_implied_value == pytest.approx(10_380_884.0, abs=1.0)
+    assert by_f["net_income"].z3_implied_value == pytest.approx(1_056_737_086.0, abs=1.0)
+
+
+
 
 
 

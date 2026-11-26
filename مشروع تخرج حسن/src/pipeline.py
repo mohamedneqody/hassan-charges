@@ -432,6 +432,15 @@ def run_pipeline(file_name: str, raw: bytes, company: str, progress_cb=None, pag
         "document_sha256_16": hashlib.sha256(raw).hexdigest()[:16],
         "formal_certificate": formal_cert.to_dict(),
         "quota_interrupted": bool(getattr(data, "extraction_quota_interrupted", False)),
+        "raw_values": {
+            f: {
+                int(y): float(v)
+                for y, v in by_y.items()
+                if v is not None and str(y).lstrip("-").isdigit()
+            }
+            for f, by_y in (data.values or {}).items()
+            if isinstance(by_y, dict)
+        },
     }
 
 

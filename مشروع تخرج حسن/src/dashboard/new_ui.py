@@ -1936,14 +1936,18 @@ def sec_reports(vm: dict, results: dict, analysis) -> None:
         )
     with c2:
         from src.ai.gemini_agent import AIAnalysis
+        from src.analysis.narrative import build_fallback_narrative
 
-        safe_analysis = (
-            analysis if analysis is not None else AIAnalysis(ok=False, error="")
-        )
+        if analysis is not None:
+            safe_analysis = analysis
+        else:
+            safe_analysis = build_fallback_narrative(
+                results, AIAnalysis(ok=False, error="")
+            )
         html_key = (
             f"html|{bool(getattr(analysis, 'ok', False))}|{len(getattr(analysis, 'ratio_comments', []) or [])}"
             if analysis is not None
-            else "html_deferred"
+            else f"html_fallback|{len(getattr(safe_analysis, 'ratio_comments', []) or [])}"
         )
         html_doc = report_memo(
             results,
@@ -2184,50 +2188,193 @@ def _build_live_queue(
 
 def _apply_human_approval_to_results(
     results: dict, field: str, year: int, approved_value: float, rec: dict
-) -> None:
-    """Promote a human-attested cell inside session `results` and recompute
-    metrics/rows if the reviewer corrected the value."""
+) -> dict:
+    """Promote a human-attested cell inside session `results` and cascade-update
+    governance gates, all-year metrics, comparison/growth rows, missing report,
+    and the formal Z3 SMT certificate."""
     from src.analysis.calculator import compute_year_metrics
-    from src.analysis.comparison import build_comparison, growth_metrics
+    from src.analysis.comparison import (
+        build_comparison,
+        growth_metrics,
+        missing_data_report,
+    )
+    from src.analysis.financial_gate import decide, verification_labels
+    from src.analysis.formal_verifier import (
+        RepairAttempt,
+        verify_financial_statements,
+    )
 
     val_f = float(approved_value)
     yr_i = int(year)
     changed_val = False
-    for entry in results.get("decision_log") or []:
+    old_v: float | None = None
+    entry_pages: list[int] = []
+    matched = False
+    dec_log = results.setdefault("decision_log", [])
+    reason_txt = (
+        f"إقرار بشري موثق — المراجع {rec.get('reviewer')} في {rec.get('timestamp')} "
+        f"(seq={rec.get('seq')} · HMAC-SHA256)"
+    )
+    for entry in dec_log:
         if entry.get("field") == field and str(entry.get("year")) == str(yr_i):
-            old_v = entry.get("final")
-            if old_v is None or abs(float(old_v) - val_f) > 1.0:
+            matched = True
+            prev_raw = entry.get("final")
+            old_v = float(prev_raw) if prev_raw is not None else None
+            if old_v is None or abs(old_v - val_f) > 1e-6:
                 changed_val = True
+            entry_pages = [
+                int(p) for p in (entry.get("pages") or []) if str(p).isdigit()
+            ]
             entry["status"] = rec.get("status", "VERIFIED_HUMAN")
             entry["final"] = val_f
-            entry["reason"] = (
-                f"إقرار بشري موثق — المراجع {rec.get('reviewer')} في {rec.get('timestamp')} "
-                f"(seq={rec.get('seq')} · HMAC-SHA256)"
-            )
+            entry["reason"] = reason_txt
+    if not matched:
+        changed_val = True
+        dec_log.append({
+            "field": field,
+            "year": yr_i,
+            "pages": [],
+            "candidates": [f"{val_f:,.0f}"],
+            "final": val_f,
+            "distinct_reads": 1,
+            "confidence": 1,
+            "identity_ok": True,
+            "source": "HUMAN_VERIFIED",
+            "winner_layers": ["human"],
+            "status": rec.get("status", "VERIFIED_HUMAN"),
+            "reason": reason_txt,
+        })
+
     hr = results.setdefault("human_reviews", {})
     hr[f"{field}|{yr_i}"] = dict(rec)
 
-    if changed_val:
-        prev_y = results.get("prev_year")
-        curr_y = results.get("curr_year")
-        vals_map: dict[str, dict[int, float]] = {}
-        for entry in results.get("decision_log") or []:
-            f_e = entry.get("field")
-            y_e = entry.get("year")
-            v_e = entry.get("final")
-            if f_e and y_e is not None and v_e is not None:
-                vals_map.setdefault(f_e, {})[int(y_e)] = float(v_e)
-        vals_map.setdefault(field, {})[yr_i] = val_f
-        if prev_y is not None and curr_y is not None:
-            pm = compute_year_metrics(int(prev_y), vals_map, prev_year=None)
-            cm = compute_year_metrics(int(curr_y), vals_map, prev_year=int(prev_y))
-            rows = build_comparison(pm, cm)
-            g_rows = growth_metrics(pm, cm)
-            results["prev_metrics"] = pm
-            results["curr_metrics"] = cm
-            results["rows"] = rows
-            results["growth_rows"] = g_rows
-            results["rows_by_key"] = {x.key: x for x in rows}
+    # Always refresh governance / verification metadata after human attestation
+    curr_y = results.get("curr_year")
+    prev_y = results.get("prev_year")
+    results["verification_status"] = verification_labels(dec_log)
+    results["blocked_fields"] = sorted({
+        e["field"]
+        for e in dec_log
+        if e.get("field")
+        and decide(e.get("status", "MISSING")) not in ("use", "use_disclosed")
+        and (
+            curr_y is None
+            or e.get("year") in (None, curr_y)
+            or str(e.get("year")) == str(curr_y)
+        )
+    })
+    if results.get("pending_critical_review"):
+        results["pending_critical_review"] = [
+            p
+            for p in results["pending_critical_review"]
+            if not (p.get("field") == field and str(p.get("year")) == str(yr_i))
+        ]
+
+    # Build full numeric map from preserved raw_values + decision_log + approved cell
+    vals_map: dict[str, dict[int, float]] = {}
+    for f_r, by_y in (results.get("raw_values") or {}).items():
+        if isinstance(by_y, dict):
+            for y_r, v_r in by_y.items():
+                if v_r is not None and str(y_r).lstrip("-").isdigit():
+                    vals_map.setdefault(f_r, {})[int(y_r)] = float(v_r)
+    for entry in dec_log:
+        f_e = entry.get("field")
+        y_e = entry.get("year")
+        v_e = entry.get("final")
+        if f_e and y_e is not None and v_e is not None and str(y_e).lstrip("-").isdigit():
+            vals_map.setdefault(f_e, {})[int(y_e)] = float(v_e)
+    vals_map.setdefault(field, {})[yr_i] = val_f
+    results["raw_values"] = vals_map
+
+    years_set: set[int] = {
+        int(y)
+        for y in (results.get("metric_years_available") or [])
+        if str(y).lstrip("-").isdigit()
+    }
+    for by_y in vals_map.values():
+        years_set.update(by_y.keys())
+    if prev_y is not None and str(prev_y).lstrip("-").isdigit():
+        years_set.add(int(prev_y))
+    if curr_y is not None and str(curr_y).lstrip("-").isdigit():
+        years_set.add(int(curr_y))
+    years_sorted = sorted(years_set)
+
+    if changed_val and prev_y is not None and curr_y is not None:
+        all_year_metrics = {
+            y: compute_year_metrics(
+                y,
+                vals_map,
+                prev_year=(years_sorted[i - 1] if i else None),
+            )
+            for i, y in enumerate(years_sorted)
+        }
+        pm = all_year_metrics.get(int(prev_y)) or compute_year_metrics(
+            int(prev_y), vals_map, prev_year=None
+        )
+        cm = all_year_metrics.get(int(curr_y)) or compute_year_metrics(
+            int(curr_y), vals_map, prev_year=int(prev_y)
+        )
+        rows = build_comparison(pm, cm)
+        g_rows = growth_metrics(pm, cm)
+        results["prev_metrics"] = pm
+        results["curr_metrics"] = cm
+        results["all_year_metrics"] = all_year_metrics
+        results["rows"] = rows
+        results["growth_rows"] = g_rows
+        results["rows_by_key"] = {x.key: x for x in rows}
+        results["missing"] = missing_data_report(
+            rows + g_rows,
+            metrics_by_year=all_year_metrics,
+        )
+
+    z3_recomputed = False
+    if (changed_val or results.get("formal_certificate") is None) and vals_map and years_sorted:
+        prev_cert = results.get("formal_certificate") or {}
+        prev_failed = int(prev_cert.get("failed_axioms") or 0)
+        prior_repairs = list(prev_cert.get("repair_history") or [])
+        formal_cert = verify_financial_statements(
+            vals_map,
+            years=years_sorted,
+            tolerance=1e-5,
+            include_policy_theorems=True,
+            integer_tol=5.0,
+        )
+        for rp in prior_repairs:
+            if isinstance(rp, RepairAttempt):
+                formal_cert.repair_history.append(rp)
+            elif isinstance(rp, dict):
+                try:
+                    formal_cert.repair_history.append(RepairAttempt(**rp))
+                except Exception:
+                    pass
+        if changed_val:
+            formal_cert.repair_history.append(
+                RepairAttempt(
+                    round_no=len(formal_cert.repair_history) + 1,
+                    year=yr_i,
+                    target_fields=[field],
+                    page_number=(entry_pages[0] if entry_pages else None),
+                    broken_axioms_before=prev_failed,
+                    broken_axioms_after=formal_cert.failed_axioms,
+                    proposed_values={field: val_f},
+                    previous_values={field: old_v},
+                    accepted=True,
+                    reason_ar=(
+                        f"تصحيح واعتماد بشري موثق ({rec.get('reviewer') or 'مراجع'} · "
+                        f"seq={rec.get('seq')}) — تحديث شهادة Z3 "
+                        f"({prev_failed} → {formal_cert.failed_axioms} خرق)"
+                    ),
+                )
+            )
+        results["formal_certificate"] = formal_cert.to_dict()
+        z3_recomputed = True
+
+    return {
+        "changed_val": changed_val,
+        "old_value": old_v,
+        "new_value": val_f,
+        "z3_recomputed": z3_recomputed,
+    }
 
 
 def sec_review(vm: dict, results: dict, raw: bytes | None) -> None:
@@ -2242,6 +2389,8 @@ def sec_review(vm: dict, results: dict, raw: bytes | None) -> None:
     lang = _lang()
     is_ar = lang != "en"
     st.subheader(_T["review"][lang])
+    if _flash := st.session_state.pop("review_flash", None):
+        st.success(_flash)
     if not (os.environ.get("REVIEWERS_FILE") or os.environ.get("REVIEWERS")) and not os.environ.get("PYTEST_CURRENT_TEST"):
         _def_rf = Path(__file__).resolve().parents[2] / "data" / "default_reviewers.json"
         if _def_rf.exists():
@@ -2515,7 +2664,7 @@ def sec_review(vm: dict, results: dict, raw: bytes | None) -> None:
                                 }
                             except Exception:
                                 pass
-                        _apply_human_approval_to_results(
+                        cascade = _apply_human_approval_to_results(
                             results, pkt["field"], int(pkt["year"]), float(parsed_v), rec
                         )
                         try:
@@ -2527,11 +2676,26 @@ def sec_review(vm: dict, results: dict, raw: bytes | None) -> None:
                         st.session_state.pop("live_queue", None)
                         st.session_state.pop("live_queue_key", None)
                         st.session_state.pop("_report_memo", None)
-                        st.success(
-                            f"✅ تم اعتماد {_REV_LBL.get(pkt['field'], pkt['field'])} ({pkt['year']}) رسميًا في السلسلة الموقعة (رقم={rec.get('seq')})."
-                            if is_ar
-                            else f"✅ Approved {pkt['field']} ({pkt['year']}) in signed chain (seq={rec.get('seq')})."
-                        )
+                        # Invalidate prior Gemini commentary so newly unlocked / corrected
+                        # metrics are included cleanly on next Insights generation.
+                        st.session_state.pop("analysis", None)
+                        _fld_lbl = _REV_LBL.get(pkt["field"], pkt["field"])
+                        if cascade.get("changed_val"):
+                            st.session_state["review_flash"] = (
+                                f"✅ تم اعتماد وتحديث {_fld_lbl} ({pkt['year']}) رسميًا (رقم={rec.get('seq')}) "
+                                "— وأُعيد تلقائيًا حساب النسب والمقارنات والدرجة الصحية وشهادة Z3 والتقارير."
+                                if is_ar
+                                else f"✅ Approved & updated {pkt['field']} ({pkt['year']}) (seq={rec.get('seq')}) "
+                                "— ratios, Health Score, Z3 certificate, and reports were automatically recalculated."
+                            )
+                        else:
+                            st.session_state["review_flash"] = (
+                                f"✅ تم اعتماد {_fld_lbl} ({pkt['year']}) رسميًا في السلسلة الموقعة (رقم={rec.get('seq')}) "
+                                "— ودخل رسميًا في التغطية الموثقة والدرجة الصحية والتقارير."
+                                if is_ar
+                                else f"✅ Approved {pkt['field']} ({pkt['year']}) in signed chain (seq={rec.get('seq')}) "
+                                "— now formally active across verification coverage, Health Score, and reports."
+                            )
                         st.rerun()
                     except Exception as exc:
                         st.error(f"رفض السلسلة: {exc}" if is_ar else f"Chain refused: {exc}")

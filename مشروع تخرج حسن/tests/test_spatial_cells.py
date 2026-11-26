@@ -66,7 +66,10 @@ def test_overdraft_row_never_bank_facilities():
 def test_deferred_tax_never_income_tax_and_other_revenue_never_sales():
     assert match_field("ضريبة الدخل المؤجلة") is None
     assert match_field("ضريبة الدخل") == "income_tax_expense"
-    assert match_field("إيرادات التشغيل الأخرى") is None
+    # v9.34: «إيرادات التشغيل الأخرى» became its own canonical field
+    # (other_operating_income) for A5c_OP_EXACT — still must NEVER feed revenue.
+    assert match_field("إيرادات التشغيل الأخرى") == "other_operating_income"
+    assert match_field("إيرادات التشغيل الأخرى") != "revenue"
     assert match_field("المبيعات (بالصافي)") == "revenue"
 
 

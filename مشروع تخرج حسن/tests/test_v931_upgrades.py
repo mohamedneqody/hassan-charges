@@ -1288,6 +1288,140 @@ def test_v936_explicit_tax_total_and_a1c_equity_sum_and_3egp_ni_bridge():
     assert by_f["net_income"].z3_implied_value == pytest.approx(1_056_737_086.0, abs=1.0)
 
 
+def test_v937_human_approval_cascades_metrics_z3_gates_and_gemini_payload():
+    """Human approval must cascade to metrics, all_year_metrics, Z3 certificate,
+    verification_status, blocked_fields, pending_critical_review, and Gemini payload."""
+    from src.analysis.calculator import compute_year_metrics
+    from src.analysis.comparison import build_comparison, growth_metrics
+    from src.analysis.formal_verifier import RepairAttempt, verify_financial_statements
+    from src.dashboard.new_ui import _apply_human_approval_to_results
+    from src.pipeline import build_gemini_payload
+
+    vals = {
+        "revenue": {2020: 1_000_000.0, 2021: 1_200_000.0},
+        "operating_income": {2020: 200_000.0, 2021: 240_000.0},
+        "interest_expense": {2020: -40_000.0, 2021: -60_000.0},
+        "pretax_income": {2020: 160_000.0, 2021: 180_000.0},
+        "income_tax_expense": {2020: -30_000.0, 2021: -36_000.0},
+        "net_income": {2020: 130_000.0, 2021: 144_000.0},
+        "total_assets": {2020: 2_000_000.0, 2021: 2_500_000.0},
+        "total_liabilities": {2020: 1_200_000.0, 2021: 1_500_000.0},
+        # 2021 equity deliberately off by 100,000 so A1_ACCOUNTING_EQ fails before review
+        "equity": {2020: 800_000.0, 2021: 900_000.0},
+    }
+    pm = compute_year_metrics(2020, vals, prev_year=None)
+    cm = compute_year_metrics(2021, vals, prev_year=2020)
+    rows = build_comparison(pm, cm)
+    g_rows = growth_metrics(pm, cm)
+
+    init_cert = verify_financial_statements(
+        vals, years=[2020, 2021], tolerance=1e-5, include_policy_theorems=True, integer_tol=5.0
+    )
+    init_cert.repair_history.append(
+        RepairAttempt(
+            round_no=1,
+            year=2021,
+            target_fields=["revenue"],
+            page_number=4,
+            broken_axioms_before=2,
+            broken_axioms_after=1,
+            accepted=True,
+            reason_ar="prior AI repair",
+        )
+    )
+    assert init_cert.status == "VIOLATIONS_DETECTED"
+    assert init_cert.failed_axioms >= 1
+
+    decision_log = []
+    for f, by_y in vals.items():
+        for y, v in by_y.items():
+            st = "VERIFIED_EXACT"
+            if f == "interest_expense" and y == 2021:
+                st = "CONFLICT"
+            elif f == "equity" and y == 2021:
+                st = "UNVERIFIED"
+            decision_log.append({
+                "field": f,
+                "year": y,
+                "pages": [4],
+                "final": v,
+                "status": st,
+                "reason": "test",
+            })
+
+    results = {
+        "company": "Test Co",
+        "prev_year": 2020,
+        "curr_year": 2021,
+        "prev_metrics": pm,
+        "curr_metrics": cm,
+        "all_year_metrics": {2020: pm, 2021: cm},
+        "rows": rows,
+        "growth_rows": g_rows,
+        "rows_by_key": {r.key: r for r in rows},
+        "decision_log": decision_log,
+        "pending_critical_review": [{"field": "equity", "year": 2021, "status": "UNVERIFIED"}],
+        "metric_years_available": [2020, 2021],
+        "formal_certificate": init_cert.to_dict(),
+        "raw_values": {f: dict(by_y) for f, by_y in vals.items()},
+        "unit_scale": 1,
+    }
+
+    # Before approval, interest_coverage is blocked from Gemini payload
+    from src.analysis.comparison import LABELS_AR
+    from src.analysis.financial_gate import verification_labels
+
+    ic_name = LABELS_AR["interest_coverage"]
+    results["verification_status"] = verification_labels(decision_log)
+    assert results["verification_status"]["interest_coverage"] == "تعارض — محجوب"
+    pre_names = {m["metric"] for m in build_gemini_payload(results, "ج.م")["metrics"]}
+    assert ic_name not in pre_names and "Interest Coverage" not in pre_names
+
+    # 1) Approve interest_expense 2021 with SAME value (resolving CONFLICT without changing number)
+    rec_same = {
+        "status": "VERIFIED_HUMAN",
+        "reviewer": "hassan",
+        "timestamp": "2026-11-26T18:45:00Z",
+        "seq": 1,
+    }
+    res1 = _apply_human_approval_to_results(results, "interest_expense", 2021, -60_000.0, rec_same)
+    assert res1["changed_val"] is False
+    assert "interest_expense" not in results["blocked_fields"]
+    ie_21 = [e for e in results["decision_log"] if e["field"] == "interest_expense" and e["year"] == 2021][0]
+    assert ie_21["status"] == "VERIFIED_HUMAN"
+    assert results["verification_status"]["interest_expense"].startswith("موثق")
+    assert results["verification_status"]["interest_coverage"].startswith("موثق")
+    payload = build_gemini_payload(results, "ج.م")
+    payload_names = {m["metric"] for m in payload["metrics"]}
+    assert ic_name in payload_names or "Interest Coverage" in payload_names
+
+    # 2) Approve equity 2021 with CORRECTED value (900,000 -> 1,000,000)
+    rec_fix = {
+        "status": "VERIFIED_HUMAN",
+        "reviewer": "hassan",
+        "timestamp": "2026-11-26T18:46:00Z",
+        "seq": 2,
+    }
+    res2 = _apply_human_approval_to_results(results, "equity", 2021, 1_000_000.0, rec_fix)
+    assert res2["changed_val"] is True
+    assert res2["z3_recomputed"] is True
+    assert results["blocked_fields"] == []
+    assert results["pending_critical_review"] == []
+    assert results["curr_metrics"].equity == pytest.approx(1_000_000.0)
+    assert results["all_year_metrics"][2021].equity == pytest.approx(1_000_000.0)
+    # ROE uses avg(800k, 1M) = 900k -> 144k / 900k * 100 = 16.0% (down from 16.94%)
+    assert results["curr_metrics"].roe == pytest.approx(16.0, abs=0.05)
+    assert results["rows_by_key"]["roe"].current == pytest.approx(16.0, abs=0.05)
+    # Z3 certificate must re-solve to PROVEN_CONSISTENT and keep prior repair + append human repair
+    new_cert = results["formal_certificate"]
+    assert new_cert["status"] == "PROVEN_CONSISTENT"
+    assert new_cert["failed_axioms"] == 0
+    assert len(new_cert["repair_history"]) == 2
+    assert new_cert["repair_history"][0]["reason_ar"] == "prior AI repair"
+    assert new_cert["repair_history"][1]["target_fields"] == ["equity"]
+    assert new_cert["repair_history"][1]["broken_axioms_after"] == 0
+
+
 
 
 

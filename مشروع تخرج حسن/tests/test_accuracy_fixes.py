@@ -293,7 +293,10 @@ def test_accounts_payable_and_long_term_debt_vetoes():
     """2023 audit regressions: BS AP matches without ال, ECL/advances vetoed, CF loan repayments vetoed."""
     assert match_field("موردون وأوراق دفع") == "accounts_payable"
     assert match_field("إجمالي موردون و أوراق دفع") == "accounts_payable"
-    assert match_field("موردون - دفعات مقدمة") is None
+    # v9.34: «موردون - دفعات مقدمة» maps to dedicated Current Asset field supplier_advances
+    # (never accounts_payable!)
+    assert match_field("موردون - دفعات مقدمة") == "supplier_advances"
+    assert match_field("موردون - دفعات مقدمة") != "accounts_payable"
     assert match_field("الخسائر الإئتمانية المتوقعة من الموردين - دفعات مقدمة") is None
     assert match_field("(مدفوعات) لسداد قروض طويلة الأجل") is None
     assert match_field("الاضمحلال في قيمة المدينون") is None

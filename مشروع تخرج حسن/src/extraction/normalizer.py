@@ -140,6 +140,7 @@ _FIELD_NEGATIVE_PATTERNS: dict[str, tuple[str, ...]] = {
         "مستحقه السداد خلال عام", "المستحقه السداد خلال عام",
         "مدفوعات", "المدفوع",
     ),
+    "long_term_notes_payable": ("موردون", "موردين", "مقاولون"),
     # «ضريبة الدخل المؤجلة» is not the period's income-tax expense.
     # (normalize_label unifies ؤ→و: المؤجلة → الموجله)
     # AbuQir root-cause fix (2026-11-05): the income-tax NOTE carries

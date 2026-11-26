@@ -672,7 +672,7 @@ def _verify_core_fields(
     core = [
         f for f in (
             "total_assets", "total_liabilities", "current_liabilities", "equity",
-            "revenue", "net_income", "pretax_income", "gross_profit",
+            "revenue", "cost_of_revenue", "net_income", "pretax_income", "gross_profit",
             # detail balances: a real run shipped inventory/AR from CF change
             # rows because the BS detail rows were never verified — same page,
             # same call, zero extra quota.
@@ -776,6 +776,35 @@ def _verify_core_fields(
             for year, value in by_year.items():
                 captured = data.get(field, year)
                 if captured is None:
+                    # Recover a dropped comparative/current year column on a page where
+                    # the sibling year of the SAME field was already captured in sweep.
+                    if (
+                        year in data.years
+                        and page_number in field_sources.get(field, [])
+                        and not (float(value).is_integer() and 0 <= value <= 3)
+                    ):
+                        sib_vals = [
+                            data.get(field, y2) for y2 in data.years
+                            if data.get(field, y2) is not None
+                        ]
+                        if field in ("cost_of_revenue", "capex") and sib_vals and sib_vals[0] < 0:
+                            rec_v = -abs(value)
+                        elif field not in ("net_income", "pretax_income"):
+                            rec_v = abs(value)
+                        else:
+                            rec_v = value
+                        parts.append({year: {field: rec_v}})
+                        data.values.setdefault(field, {})[year] = rec_v
+                        if local_reads:
+                            from src.extraction.local_ocr import confirms as _conf_rec
+
+                            if _conf_rec(local_reads, page_number, rec_v):
+                                conf[(field, year)] = max(conf.get((field, year), 0), 2)
+                        if notes is not None:
+                            notes.append(
+                                f"✓ Recovered missing year column by focused verify (p{page_number}): "
+                                f"{field} in {year} → {rec_v:,.0f}."
+                            )
                     continue
                 if field == "capex":
                     # Preserve outflow sign convention (align sign with captured)
@@ -1926,6 +1955,7 @@ def extract_via_vision(
             notes=notes,
             progress_cb=progress_cb,
             deadline=deadline,
+            raw=raw,
         )
     if _unified_cm_hits:
         _cm_unified_models: set[str] = set()
@@ -2788,20 +2818,32 @@ def _absorb_batch(
                 }
                 _all_f = {f for ym in parsed.values() for f in ym}
                 _has_full_bs = _bs_anchor.issubset(_all_f)
+                _has_full_pl = {"revenue", "net_income"}.issubset(_all_f)
                 _is_note_subtable = (chunk[0] >= 11) and not _has_full_bs
                 _existing_bs = {
                     bf for bf in _bs_strip
                     if any(bf in ym for p in parts for ym in p.values())
                 }
+                _pl_primary_strip = {
+                    "revenue", "cost_of_revenue", "gross_profit",
+                    "operating_income", "net_activity_profit",
+                    "pretax_income", "net_income",
+                }
+                _has_prior_pl = any(
+                    pf in ym for p in parts for ym in p.values()
+                    for pf in ("revenue", "net_income")
+                )
                 if (_all_f & _cf_k) and not _has_full_bs:
                     for ym in parsed.values():
                         for bf in list(ym.keys()):
                             if bf in _bs_strip:
                                 ym.pop(bf, None)
-                elif _is_note_subtable and _existing_bs:
+                elif _is_note_subtable and (_existing_bs or (_has_prior_pl and not _has_full_pl)):
                     for ym in parsed.values():
                         for bf in list(ym.keys()):
-                            if bf in _existing_bs:
+                            if bf in _existing_bs or (
+                                _has_prior_pl and not _has_full_pl and bf in _pl_primary_strip
+                            ):
                                 ym.pop(bf, None)
                 # Drop trailing page numbers when trailing chunks carry nothing new after filtering
                 if any(ym for ym in parsed.values()):
@@ -2825,8 +2867,134 @@ for EACH year column shown (parentheses = negative; copy exact printed digits, N
 Return ONLY JSON:
 {{"years": [{years_hint}], "values": {{{json_template}}}}}
 Use null if a field is NOT printed on this page or is printed as a dash ("---" / "—", NEVER 0).
-Inspect BOTH attached high-resolution images digit-by-digit — watch Arabic digits ٦ vs ١, ٢ vs ٧, ٠ vs ٥, and exact zero count (e.g. hundreds of millions vs tens of millions).
+Image 1 is a 5x zoomed close-up of the column headers + target rows; Image 2 is the full high-resolution table.
+Inspect the 5x close-up first digit-by-digit (and check Image 2 if any target row is outside Image 1) — watch Arabic-Indic digits ٦ vs ١, ٢ vs ٧, ٦ vs ٤, ٠ vs ٥, exact zero count, and thousands separators (e.g. `,088` is three integer digits `088`, NEVER a decimal `.88` on whole-currency statements).
 """
+
+
+def _render_z3_repair_images(
+    raw_pdf: bytes | None,
+    page_number: int,
+    fallback_png: bytes,
+    target_fields: list[str],
+    statement_hint: str = "balance_sheet",
+) -> list[bytes]:
+    """Render a 5x (360 DPI) row-band zoom crop (with column headers stitched on top)
+    plus a high-DPI table crop directly from `raw_pdf` so small Arabic-Indic digit
+    strokes (٥/٠, ٢/٧, ٦/٤) are never crushed by 144-DPI full-page scaling.
+    Gracefully falls back to `fallback_png` in synthetic unit tests."""
+    if not (isinstance(raw_pdf, (bytes, bytearray)) and bytes(raw_pdf[:4]) == b"%PDF"):
+        return [
+            preprocess_image(fallback_png, max_side=3000, denoise=False),
+            preprocess_image(fallback_png, max_side=2400, binarize=True, denoise=False),
+        ]
+    try:
+        import pypdfium2 as pdfium
+        from PIL import Image
+        from src.analysis.formal_verifier import _FIELD_AR
+        from src.config import FIELD_ALIASES
+        from src.extraction.normalizer import normalize_label
+
+        pdf = pdfium.PdfDocument(io.BytesIO(raw_pdf))
+        try:
+            if page_number < 1 or page_number > len(pdf):
+                return [
+                    preprocess_image(fallback_png, max_side=3000, denoise=False),
+                    preprocess_image(fallback_png, max_side=2400, binarize=True, denoise=False),
+                ]
+            pil_5x = pdf[page_number - 1].render(scale=5.0).to_pil().convert("RGB")
+        finally:
+            pdf.close()
+
+        W5, H5 = pil_5x.size
+        # Full table crop (trim bottom signatures/stamps to preserve max pixel density)
+        full_top = int(H5 * 0.03)
+        full_bot = int(H5 * (0.72 if statement_hint == "income_statement" else 0.87))
+        full_table_pil = pil_5x.crop((0, full_top, W5, max(full_top + 100, full_bot)))
+        buf_full = io.BytesIO()
+        full_table_pil.save(buf_full, format="PNG")
+        full_table_bytes = buf_full.getvalue()
+
+        # Try locating exact y-band of target_fields via Indra OCR segment geometry
+        hdr_y0_norm, hdr_y1_norm = 0.035, 0.155
+        matched_ys: list[tuple[float, float]] = []
+        try:
+            from src.extraction import spatial_cells as _SC
+            from src.extraction.local_ocr import (
+                _SHARED_CONV_LOCK,
+                get_shared_converter,
+                indra_available,
+            )
+
+            target_norms: set[str] = set()
+            for tf in target_fields:
+                for al in FIELD_ALIASES.get(tf, ()):
+                    na = normalize_label(al)
+                    if len(na) >= 4:
+                        target_norms.add(na)
+                nar = normalize_label(_FIELD_AR.get(tf, ""))
+                if len(nar) >= 4:
+                    target_norms.add(nar)
+
+            if indra_available() and target_norms:
+                conv = get_shared_converter()
+                with _SHARED_CONV_LOCK:
+                    w_fb, h_fb, segs = _SC.read_page_lines(conv, fallback_png)
+                if w_fb > 0 and h_fb > 0 and segs:
+                    hdr_cands: list[float] = []
+                    for sg in segs:
+                        bx = list(sg.box) if hasattr(sg, "box") else [sg.x0, sg.y0, sg.x1, sg.y1]
+                        txt = (sg.text or "").strip()
+                        if not txt:
+                            continue
+                        y0n, y1n = bx[1] / h_fb, bx[3] / h_fb
+                        if y1n <= 0.27 and any(
+                            hw in txt for hw in ("٢٠٢", "202", "جنيه", "جنیه", "مصري", "مصرى", "إيضاح")
+                        ):
+                            hdr_cands.append(y1n)
+                        if y1n < 0.11:
+                            continue
+                        nt = normalize_label(txt)
+                        if not nt or nt.replace(" ", "").isdigit():
+                            continue
+                        if any(al == nt or (len(al) >= 5 and al in nt) for al in target_norms):
+                            matched_ys.append((y0n, y1n))
+                    if hdr_cands:
+                        hdr_y1_norm = min(0.24, max(hdr_cands) + 0.015)
+        except Exception:
+            matched_ys = []
+
+        if matched_ys:
+            ry0 = min(a for a, _ in matched_ys)
+            ry1 = max(b for _, b in matched_ys)
+            if (ry1 - ry0) <= 0.62:
+                hy0 = int(H5 * hdr_y0_norm)
+                hy1 = int(H5 * hdr_y1_norm)
+                by0 = max(hy1, int(H5 * max(0.0, ry0 - 0.065)))
+                by1 = min(int(H5 * 0.92), int(H5 * min(1.0, ry1 + 0.065)))
+                if by1 > by0 + 40 and hy1 > hy0 + 20:
+                    hdr_pil = pil_5x.crop((0, hy0, W5, hy1))
+                    band_pil = pil_5x.crop((0, by0, W5, by1))
+                    sep_h = 4
+                    stitched = Image.new("RGB", (W5, hdr_pil.height + sep_h + band_pil.height), (80, 80, 80))
+                    stitched.paste(hdr_pil, (0, 0))
+                    stitched.paste(band_pil, (0, hdr_pil.height + sep_h))
+                    buf_zoom = io.BytesIO()
+                    stitched.save(buf_zoom, format="PNG")
+                    return [
+                        preprocess_image(buf_zoom.getvalue(), max_side=3400, denoise=False),
+                        preprocess_image(full_table_bytes, max_side=3200, denoise=False),
+                    ]
+
+        return [
+            preprocess_image(full_table_bytes, max_side=3400, denoise=False),
+            preprocess_image(full_table_bytes, max_side=2800, binarize=True, denoise=False),
+        ]
+    except Exception:
+        return [
+            preprocess_image(fallback_png, max_side=3000, denoise=False),
+            preprocess_image(fallback_png, max_side=2400, binarize=True, denoise=False),
+        ]
 
 
 def _z3_feedback_repair_loop(
@@ -2840,6 +3008,7 @@ def _z3_feedback_repair_loop(
     progress_cb=None,
     deadline: float | None = None,
     max_rounds: int = 6,
+    raw: bytes | None = None,
 ) -> list[dict]:
     """Deterministic Guardrail -> AI Repair Feedback Loop (Certificate-Checked).
 
@@ -2913,14 +3082,24 @@ def _z3_feedback_repair_loop(
             lyrs_v = set((data.candidate_layers.get(fld, {}) or {}).get(diag.year, []) or [])
             return conf_v >= 2 or len(lyrs_v) >= 2
 
+        vy_ids = {ax.axiom_id for ax in violated_y}
         stmt_suspects: list[str] = []
+        diag_ax_count: dict[str, int] = {}
         for d in cert.fault_diagnoses:
             if d.year == diag.year and d.statement_hint == diag.statement_hint:
+                d_axs = set(d.violated_axioms or [])
+                if vy_ids and d_axs and not (d_axs & vy_ids):
+                    continue
+                diag_ax_count[d.suspect_field] = max(
+                    diag_ax_count.get(d.suspect_field, 0),
+                    len(d_axs),
+                )
                 if d.suspect_field not in stmt_suspects:
                     stmt_suspects.append(d.suspect_field)
-        # Prioritize unverified/conflicting fields first, both in counterfactual suspects and axiom peers
-        stmt_suspects.sort(key=lambda fld: (1 if _is_verified_cell(fld) else 0,))
-        target_fields: list[str] = stmt_suspects[:6]
+        # Prioritize multi-axiom root causes first (e.g. TA breaking A1+A2 or CL breaking A3+A3b),
+        # then unverified/conflicting cells ahead of already-verified cells.
+        stmt_suspects.sort(key=lambda fld: (-diag_ax_count.get(fld, 0), 1 if _is_verified_cell(fld) else 0))
+        target_fields: list[str] = stmt_suspects[:9]
         unverified_cand: list[str] = []
         verified_cand: list[str] = []
         for ax in violated_y:
@@ -2932,16 +3111,31 @@ def _z3_feedback_repair_loop(
                 else:
                     unverified_cand.append(f)
         for f in unverified_cand + verified_cand:
-            if len(target_fields) >= 6:
+            if len(target_fields) >= 9:
                 break
             target_fields.append(f)
         # Balance-sheet axioms A1 (TL+E=TA) and A2 (CA+NCA=TA) are coupled on the same page:
         # include coupled totals so a paired single-digit slip (e.g. CA & TA both off by 10 EGP)
-        # can be repaired together in one 2400px read without trading an A1 error for an A2 error.
+        # can be repaired together in one read without trading an A1 error for an A2 error.
         if diag.statement_hint == "balance_sheet" and "total_assets" in target_fields:
             for bf in ("current_assets", "non_current_assets", "current_liabilities", "non_current_liabilities"):
-                if bf in data.values and diag.year in data.values[bf] and bf not in target_fields and len(target_fields) < 7:
+                if bf in data.values and diag.year in data.values[bf] and bf not in target_fields and len(target_fields) < 9:
                     target_fields.append(bf)
+        # Income-statement coupling: paired shifts across Revenue / COGS / Gross Profit (A5 + A5c + A8b)
+        if diag.statement_hint == "income_statement" and (
+            any(gf in target_fields for gf in ("gross_profit", "revenue", "cost_of_revenue"))
+            or any(ax.axiom_id in ("A5_GROSS_PROFIT", "A5c_OP_EXACT") for ax in violated_y)
+        ):
+            for gf in ("cost_of_revenue", "gross_profit", "revenue"):
+                if gf in data.values and diag.year in data.values[gf] and gf not in target_fields and len(target_fields) < 9:
+                    target_fields.append(gf)
+        # Activity-to-Pretax bridge coupling: include FX / finance_income / dividends even when missed (None) in sweep
+        if diag.statement_hint == "income_statement" and any(
+            ax.axiom_id == "A6b_ACTIVITY_BRIDGE" for ax in violated_y
+        ):
+            for af in ("fx_gain_loss", "finance_income", "dividends_from_subsidiaries", "interest_expense"):
+                if af not in target_fields and len(target_fields) < 9:
+                    target_fields.append(af)
         if not target_fields:
             break
 
@@ -2984,12 +3178,17 @@ def _z3_feedback_repair_loop(
 
         try:
             src_png = pages_png[selected.index(page_number)]
-            img = preprocess_image(src_png, max_side=3000, denoise=False)
-            img_bin = preprocess_image(src_png, max_side=2400, binarize=True, denoise=False)
+            repair_imgs = _render_z3_repair_images(
+                raw_pdf=raw,
+                page_number=page_number,
+                fallback_png=src_png,
+                target_fields=target_fields,
+                statement_hint=diag.statement_hint,
+            )
             if caller is not None:
-                raw_text = caller("k", "m", prompt, [img, img_bin])
+                raw_text = caller("k", "m", prompt, repair_imgs)
             else:
-                raw_text = _call_with_rotation(pool, prompt, [img, img_bin])
+                raw_text = _call_with_rotation(pool, prompt, repair_imgs)
             parsed_json = _loads_relaxed(raw_text)
         except Exception as exc:
             notes.append(f"Z3 repair round {round_no} (page {page_number}) skipped: {exc}")
@@ -3029,11 +3228,24 @@ def _z3_feedback_repair_loop(
             if y != diag.year:
                 continue
             old_v = data.get(f, y)
-            if old_v is not None and abs(new_v - old_v) < 1.0:
+            # Align negative-convention P&L expenses when Vision transcribes parenthesized amount as positive
+            if f in ("cost_of_revenue", "selling_expenses", "admin_expenses", "other_operating_expenses", "interest_expense") and old_v is not None and old_v < 0 and new_v > 0:
+                new_v = -abs(new_v)
+            old_is_frac = old_v is not None and 0.005 < abs(old_v - round(old_v)) < 0.995
+            new_is_int = abs(new_v - round(new_v)) < 1e-4
+            if old_v is not None and abs(new_v - old_v) < 1.0 and not (old_is_frac and new_is_int):
                 continue
             prev_snap[f] = old_v
             prop_snap[f] = new_v
             cand_values.setdefault(f, {})[y] = new_v
+            # Sync twin EAS operating-profit alias when both came from the same row
+            for _a, _b in (("operating_income", "net_activity_profit"), ("net_activity_profit", "operating_income")):
+                if f == _a and _b not in proposed:
+                    _twin_old = data.get(_b, y)
+                    if _twin_old is not None and old_v is not None and abs(_twin_old - old_v) < 1.0:
+                        prev_snap[_b] = _twin_old
+                        prop_snap[_b] = new_v
+                        cand_values.setdefault(_b, {})[y] = new_v
 
         if not prop_snap:
             notes.append(
@@ -3043,11 +3255,11 @@ def _z3_feedback_repair_loop(
             continue
 
         # Evaluate full bundle AND minimal subsets (sizes 1..3) so one noisy sibling
-        # read in the same JSON reply never forces Z3 to reject an exact 2400px fix
-        # (e.g. TA + CA exact while equity had a 1-digit slip in the same call).
+        # read in the same JSON reply never forces Z3 to reject an exact fix
         import itertools as _it
 
         old_res_sum = sum(abs(ax.residual or 0.0) for ax in cert.axioms if ax.status == "VIOLATED")
+        old_year_res = sum(abs(ax.residual or 0.0) for ax in cert.axioms if ax.year == diag.year and ax.status == "VIOLATED")
         prop_keys = list(prop_snap.keys())
         candidate_subsets: list[tuple[str, ...]] = [tuple(prop_keys)]
         if len(prop_keys) > 1:
@@ -3073,12 +3285,15 @@ def _z3_feedback_repair_loop(
                     integer_tol=5.0,
                 )
             sub_res = sum(abs(ax.residual or 0.0) for ax in sub_cert.axioms if ax.status == "VIOLATED")
+            sub_year_res = sum(abs(ax.residual or 0.0) for ax in sub_cert.axioms if ax.year == diag.year and ax.status == "VIOLATED")
             sub_ok = (
                 sub_cert.failed_axioms < cert.failed_axioms
                 or (
                     sub_cert.failed_axioms == cert.failed_axioms
-                    and old_res_sum > 0
-                    and sub_res < 0.2 * old_res_sum
+                    and (
+                        (old_res_sum > 0 and sub_res < 0.2 * old_res_sum)
+                        or (old_year_res > 0 and sub_year_res < 0.2 * old_year_res and sub_res <= old_res_sum)
+                    )
                 )
             )
             if sub_ok:

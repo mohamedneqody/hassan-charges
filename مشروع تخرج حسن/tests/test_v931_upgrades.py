@@ -1167,5 +1167,89 @@ def test_v934_z3_catches_decimal_typo_and_zero_dividend_sibling_year():
     assert by_f21["finance_income"].z3_implied_value == pytest.approx(13_205_294.0, abs=1.0)
 
 
+def test_v935_a5c_exact_bridge_and_whole_unit_decimal_guard_and_5x_crop():
+    """Verify (1) 5x PDF Z3 repair crop helper, (2) A5c exact P&L bridge catches coupled 1M COGS+GP shift, and (3) A8b catches .88 decimal glitches."""
+    import io
+    from pathlib import Path
+    from PIL import Image
+    from src.analysis.formal_verifier import verify_financial_statements
+    from src.extraction.vision_ocr import _render_z3_repair_images
+
+    # 1) A5c catches coupled 1,000,000 shift across COGS + Gross Profit in 2022 when 2023 proves 6-term template
+    vals = {
+        "revenue": {2022: 16_665_919_878.0, 2023: 27_634_502_413.0},
+        "cost_of_revenue": {2022: -15_034_776_899.0, 2023: -22_221_441_055.0},  # 2022 shifted -1M
+        "gross_profit": {2022: 1_631_142_979.0, 2023: 5_413_061_358.0},        # 2022 shifted -1M
+        "other_operating_income": {2022: 82_788_593.0, 2023: 117_863_406.0},
+        "selling_expenses": {2022: -48_052_831.0, 2023: -143_174_697.0},
+        "admin_expenses": {2022: -383_519_092.0, 2023: -518_594_427.0},
+        "other_operating_expenses": {2022: -25_399_046.0, 2023: -43_611_943.0},
+        "net_activity_profit": {2022: 1_257_960_603.0, 2023: 4_825_543_697.0},
+        "total_assets": {2022: 15_965_646_460.0, 2023: 16_989_543_370.0},
+    }
+    cert = verify_financial_statements(
+        vals, years=[2022, 2023], tolerance=1e-5, include_policy_theorems=False, integer_tol=5.0,
+    )
+    violated_22 = {ax.axiom_id: ax for ax in cert.axioms if ax.year == 2022 and ax.status == "VIOLATED"}
+    assert "A5c_OP_EXACT" in violated_22
+    assert violated_22["A5c_OP_EXACT"].residual == pytest.approx(-1_000_000.0, abs=1.0)
+
+    # 2) A8b catches paired .88 comma-to-dot slips even when revenue - |cogs| == gp holds!
+    vals_dot = dict(vals)
+    vals_dot["revenue"] = {2022: 13_169_656_088.88, 2023: 27_634_502_413.0}
+    vals_dot["cost_of_revenue"] = {2022: -11_972_033_980.0, 2023: -22_221_441_055.0}
+    vals_dot["gross_profit"] = {2022: 1_197_622_108.88, 2023: 5_413_061_358.0}
+    vals_dot["other_operating_income"] = {2022: 65_197_252.0, 2023: 117_863_406.0}
+    vals_dot["selling_expenses"] = {2022: -42_121_403.0, 2023: -143_174_697.0}
+    vals_dot["admin_expenses"] = {2022: -299_648_555.0, 2023: -518_594_427.0}
+    vals_dot["other_operating_expenses"] = {2022: -45_816_473.0, 2023: -43_611_943.0}
+    vals_dot["net_activity_profit"] = {2022: 875_232_929.88, 2023: 4_825_543_697.0}
+    cert_dot = verify_financial_statements(
+        vals_dot, years=[2022, 2023], tolerance=1e-5, include_policy_theorems=False, integer_tol=5.0,
+    )
+    violated_dot = {ax.axiom_id: ax for ax in cert_dot.axioms if ax.year == 2022 and ax.status == "VIOLATED"}
+    assert "A8b_INTEGER_PRECISION" in violated_dot
+    diag_fields = {d.suspect_field for d in cert_dot.fault_diagnoses if d.year == 2022}
+    assert {"revenue", "gross_profit"} <= diag_fields
+
+    # 3) _render_z3_repair_images works on both synthetic fallback PNG and real PDF if present
+    buf = io.BytesIO()
+    Image.new("RGB", (200, 300), color="white").save(buf, format="PNG")
+    fb_imgs = _render_z3_repair_images(None, 5, buf.getvalue(), ["provisions"], "balance_sheet")
+    assert len(fb_imgs) == 2 and all(isinstance(b, bytes) and len(b) > 0 for b in fb_imgs)
+    pdf_22 = Path(__file__).resolve().parents[1] / "القوائم المالية المستقلة 2022.pdf"
+    if pdf_22.exists():
+        hi_imgs = _render_z3_repair_images(pdf_22.read_bytes(), 5, buf.getvalue(), ["deferred_tax_liabilities"], "balance_sheet")
+        assert len(hi_imgs) == 2 and all(len(b) > 5_000 for b in hi_imgs)
+
+    # 4) Cache guard rejects truncated 1-year Balance Sheet when 2-year P&L is present
+    from src import pipeline
+    from src.extraction import result_cache
+    from src.extraction.normalizer import FinancialData
+
+    tmp_c = pdf_22.parent / "cache" / "_tmp_bs_guard_test"
+    try:
+        stored_bs = {"n": 0}
+        orig_store = result_cache.store_extraction
+        orig_load = pipeline.load_financial_data
+        result_cache.store_extraction = lambda *_a, **_kw: stored_bs.__setitem__("n", stored_bs["n"] + 1)
+        pipeline.load_financial_data = lambda *_a, **_kw: FinancialData(
+            values={
+                "revenue": {2021: 1000.0, 2022: 1200.0},
+                "net_income": {2021: 100.0, 2022: 150.0},
+                "total_assets": {2021: 5000.0},  # 2022 BS column dropped!
+            }
+        )
+        pipeline.run_pipeline("dropped_bs_col_test.pdf", b"%PDF-1.4 dropped-bs", "")
+        assert stored_bs["n"] == 0
+    finally:
+        result_cache.store_extraction = orig_store
+        pipeline.load_financial_data = orig_load
+        if tmp_c.exists():
+            tmp_c.rmdir()
+
+
+
+
 
 

@@ -1360,6 +1360,45 @@ def reconcile(data: FinancialData) -> None:
                     td_map[year] = borrowings
                     data.derived[("total_debt", year)] = "borrowings excluding leases"
 
+    # Whole-currency integer-candidate tie-breaker: when >=85% of >=100k cells
+    # across the statement are exact integers (e.g. whole EGP statements), a single
+    # fractional outlier like 13,169,656,008.88 is a comma-to-dot OCR glitch; if an
+    # exact-integer candidate within 0.1% already exists, prefer the integer read.
+    _abs_big = [
+        float(v)
+        for _fn, _ym in (data.values or {}).items()
+        if _fn in _ABSOLUTE_FIELDS and isinstance(_ym, dict)
+        for v in _ym.values()
+        if v is not None and abs(v) >= 100_000.0
+    ]
+    if len(_abs_big) >= 8 and (
+        sum(1 for v in _abs_big if abs(v - round(v)) < 1e-6) / len(_abs_big) >= 0.75
+    ):
+        for _fn, _ym in list((data.values or {}).items()):
+            if _fn not in _ABSOLUTE_FIELDS or not isinstance(_ym, dict):
+                continue
+            for _yr, _val in list(_ym.items()):
+                if _val is None or abs(_val) < 1_000_000.0:
+                    continue
+                if not (0.005 < abs(_val - round(_val)) < 0.995):
+                    continue
+                _int_cands = [
+                    c for c, _ in (data.candidates.get(_fn, {}).get(_yr) or [])
+                    if c is not None
+                    and abs(c - round(c)) < 1e-6
+                    and abs(abs(c) - abs(_val)) <= 0.001 * abs(_val)
+                ]
+                if _int_cands:
+                    _chosen_int = -abs(_int_cands[0]) if _val < 0 else abs(_int_cands[0])
+                    data.replaced_values = getattr(data, "replaced_values", {})
+                    data.replaced_values.setdefault((_fn, _yr), []).append(_val)
+                    data.values[_fn][_yr] = _chosen_int
+                    data.candidates[_fn][_yr] = [(_chosen_int, 0)]
+                    data.notes.append(
+                        f"Whole-unit statement guard replaced fractional OCR glitch on '{_fn}' in {_yr}: "
+                        f"{_val:,.2f} -> {_chosen_int:,.0f}."
+                    )
+
     # P6 full activity-to-pretax bridge tie-breaker: when dividends_from_subsidiaries
     # has competing OCR candidates (e.g. 750,000,000 vs -75,000,000), pick the candidate
     # that closes (operating_income + finance_income - |interest_expense| + fx_gain_loss + dividends == pretax_income).

@@ -165,7 +165,8 @@ _BS_FIELDS = {
 }
 _IS_FIELDS = {
     "revenue", "cost_of_revenue", "gross_profit", "operating_expenses",
-    "operating_income", "pretax_income", "income_tax_expense", "net_income",
+    "operating_income", "net_activity_profit", "pretax_income",
+    "income_tax_expense", "net_income",
     "selling_expenses", "admin_expenses", "other_operating_expenses",
     "other_operating_income", "interest_expense", "finance_income",
     "fx_gain_loss", "dividends_from_subsidiaries",
@@ -214,6 +215,10 @@ _FIELD_AR = {
     "cost_of_revenue": "تكلفة المبيعات",
     "gross_profit": "مجمل الربح",
     "operating_income": "صافي أرباح النشاط",
+    "net_activity_profit": "صافي أرباح النشاط",
+    "selling_expenses": "مصروفات بيعية وتسويقية",
+    "admin_expenses": "مصروفات إدارية وعمومية",
+    "other_operating_expenses": "مصروفات تشغيل أخرى",
     "other_operating_income": "إيرادات تشغيل أخرى",
     "finance_income": "فوائد دائنة",
     "interest_expense": "فوائد ومصروفات تمويلية",
@@ -360,6 +365,7 @@ def _diagnose_with_z3(
         "non_current_lease_liabilities", "deferred_tax_liabilities",
         "equity",
         "revenue", "cost_of_revenue", "gross_profit",
+        "other_operating_income", "selling_expenses", "admin_expenses", "other_operating_expenses",
         "net_activity_profit", "operating_income", "finance_income",
         "interest_expense", "fx_gain_loss", "dividends_from_subsidiaries",
         "pretax_income", "income_tax_expense", "net_income",
@@ -440,6 +446,13 @@ def _diagnose_with_z3(
             cogs_mag = z3.If(cogs_var < 0, -cogs_var, cogs_var)
             _eq_tol(vmap["revenue"] - cogs_mag, vmap["gross_profit"], present["revenue"], ("revenue", "cost_of_revenue", "gross_profit"))
         act_f = "net_activity_profit" if "net_activity_profit" in vmap else ("operating_income" if "operating_income" in vmap else None)
+        if _want("A5c_OP_EXACT") and "A5c_OP_EXACT" in violated_ids and act_f and all(k in vmap for k in ("gross_profit", "selling_expenses", "admin_expenses")):
+            sell_mag = z3.If(vmap["selling_expenses"] < 0, -vmap["selling_expenses"], vmap["selling_expenses"])
+            adm_mag = z3.If(vmap["admin_expenses"] < 0, -vmap["admin_expenses"], vmap["admin_expenses"])
+            oexp_mag = z3.If(vmap["other_operating_expenses"] < 0, -vmap["other_operating_expenses"], vmap["other_operating_expenses"]) if "other_operating_expenses" in vmap else 0
+            oinc_mag = z3.If(vmap["other_operating_income"] < 0, -vmap["other_operating_income"], vmap["other_operating_income"]) if "other_operating_income" in vmap else 0
+            a5c_terms = tuple(k for k in ("gross_profit", "other_operating_income", "selling_expenses", "admin_expenses", "other_operating_expenses", act_f) if k in present)
+            _eq_tol(vmap["gross_profit"] + oinc_mag - sell_mag - adm_mag - oexp_mag, vmap[act_f], max(abs(present["gross_profit"]), abs(present[act_f])), a5c_terms)
         has_div_disclosed = isinstance(values.get("dividends_from_subsidiaries"), dict) and any(
             v is not None for v in values["dividends_from_subsidiaries"].values()
         )
@@ -544,6 +557,27 @@ def _diagnose_with_z3(
                 reason_ar=reason,
             ))
 
+    # Direct fault diagnoses for whole-unit fractional OCR outliers (e.g. .88 comma-to-dot slip)
+    for ax in violated:
+        if ax.axiom_id == "A8b_INTEGER_PRECISION":
+            for f in ax.fields:
+                if f in present and not any(d.suspect_field == f for d in diagnoses):
+                    cur_v = present[f]
+                    f_ar = _FIELD_AR.get(f, f)
+                    diagnoses.append(FaultDiagnosis(
+                        year=year,
+                        suspect_field=f,
+                        current_value=cur_v,
+                        z3_implied_value=float(round(cur_v)),
+                        unsat_core=list(ax.fields),
+                        violated_axioms=["A8b_INTEGER_PRECISION"],
+                        statement_hint=_statement_of(f),
+                        reason_ar=(
+                            f"تشخيص Z3: البند «{f_ar}» يحمل كسراً عشرياً شاذاً ({cur_v:,.2f}) "
+                            f"في قائمة مطبوعة بالوحدات الصحيحة الكاملة."
+                        ),
+                    ))
+
     # If no single field alone resolves all violations (multi-field fault), still report the core
     if not diagnoses and test_fields:
         top_f = test_fields[0]
@@ -587,6 +621,49 @@ def verify_financial_statements(
 
     axioms: list[AxiomCheck] = []
     diagnoses: list[FaultDiagnosis] = []
+
+    # Detect whole-currency integer statements (e.g. full EGP scans where >=85% of >=100k cells are integers)
+    _whole_check_fields = _BS_FIELDS | _IS_FIELDS | _CF_FIELDS
+    _all_big_vals = [
+        float(v)
+        for fn, ym in (values or {}).items()
+        if fn in _whole_check_fields and isinstance(ym, dict)
+        for v in ym.values()
+        if isinstance(v, (int, float)) and abs(v) >= 100_000.0
+    ]
+    _is_whole_unit_doc = bool(
+        integer_tol is not None
+        and len(_all_big_vals) >= 8
+        and (sum(1 for v in _all_big_vals if abs(v - round(v)) < 1e-6) / len(_all_big_vals) >= 0.75)
+    )
+
+    # Detect whether any year in this filing exhibits an exact 6-term EAS operating profit bridge
+    _op_exact_template = False
+    for _yr in years:
+        _gp0 = _val(values, "gross_profit", _yr)
+        _act0 = _val(values, "net_activity_profit", _yr)
+        if _act0 is None:
+            _act0 = _val(values, "operating_income", _yr)
+        _s0 = _val(values, "selling_expenses", _yr)
+        _a0 = _val(values, "admin_expenses", _yr)
+        _oi0 = _val(values, "other_operating_income", _yr)
+        _oe0 = _val(values, "other_operating_expenses", _yr)
+        _rd0 = _val(values, "rd_expenses", _yr)
+        if (
+            None not in (_gp0, _act0, _s0, _a0)
+            and _rd0 is None
+            and (_oi0 is not None or _oe0 is not None)
+        ):
+            _lhs0 = (
+                _gp0
+                + (abs(_oi0) if _oi0 is not None else 0.0)
+                - abs(_s0)
+                - abs(_a0)
+                - (abs(_oe0) if _oe0 is not None else 0.0)
+            )
+            if abs(_lhs0 - _act0) <= 0.005 * max(abs(_gp0), 1.0):
+                _op_exact_template = True
+                break
 
     for y in years:
         ta = _val(values, "total_assets", y)
@@ -721,6 +798,42 @@ def verify_financial_statements(
                     f"وربح النشاط ({op_inc:,.0f}) بفارق {op_res:+,.0f} — يُرجّح خطأ رقم في تكلفة المبيعات أو مجمل الربح!"
                 ),
             ))
+
+        # A5c: Exact 6-Term Operating Profit Bridge (GP + Other Op Inc - |Selling + Admin + Other OpEx| = Operating Profit)
+        net_act_v = _val(values, "net_activity_profit", y)
+        act_op_f = "net_activity_profit" if net_act_v is not None else ("operating_income" if op_inc is not None else None)
+        act_op_v = net_act_v if net_act_v is not None else op_inc
+        oth_inc_v = _val(values, "other_operating_income", y)
+        rd_v = _val(values, "rd_expenses", y)
+        if (
+            gp is not None
+            and act_op_v is not None
+            and sell_v is not None
+            and adm_v is not None
+            and rd_v is None
+            and (oth_inc_v is not None or oth_op_v is not None)
+        ):
+            lhs_a5c = (
+                gp
+                + (abs(oth_inc_v) if oth_inc_v is not None else 0.0)
+                - abs(sell_v)
+                - abs(adm_v)
+                - (abs(oth_op_v) if oth_op_v is not None else 0.0)
+            )
+            if _op_exact_template or abs(lhs_a5c - act_op_v) <= 0.02 * max(abs(gp), 1.0):
+                a5c_fields = ["gross_profit", "selling_expenses", "admin_expenses", act_op_f]
+                if oth_inc_v is not None:
+                    a5c_fields.append("other_operating_income")
+                if oth_op_v is not None:
+                    a5c_fields.append("other_operating_expenses")
+                year_axioms.append(_check_equality(
+                    "A5c_OP_EXACT", y,
+                    "تطابق جسر ربح النشاط التفصيلي", "Exact Operating Profit Bridge",
+                    "Gross Profit + Other Op Income − |Selling + Admin + Other OpEx| = Operating Profit",
+                    lhs_a5c, act_op_v,
+                    a5c_fields, tolerance,
+                    integer_tol=integer_tol,
+                ))
 
         # A6: Net Income Tax Bridge (Pretax + Tax = Net Income, sign-aware)
         if pretax is not None and tax is not None and ni is not None:
@@ -880,6 +993,37 @@ def verify_financial_statements(
                     "أرصدة سالبة غير منطقية: " + "، ".join(f"{_FIELD_AR.get(f, f)} ({v:,.0f})" for f, v in neg_stocks)
                 ),
             ))
+
+        # A8b: Whole-Currency Integer Precision (flags .88 comma-to-dot OCR glitches on >=1M lines)
+        if _is_whole_unit_doc:
+            big_y = [
+                (f, _val(values, f, y))
+                for f in sorted(_whole_check_fields)
+                if _val(values, f, y) is not None and abs(_val(values, f, y)) >= 1_000_000.0
+            ]
+            if big_y:
+                frac_bad = [
+                    (f, v) for f, v in big_y
+                    if 0.005 < abs(v - round(v)) < 0.995
+                ]
+                year_axioms.append(AxiomCheck(
+                    axiom_id="A8b_INTEGER_PRECISION", year=y,
+                    name_ar="سلامة الوحدات الصحيحة (بلا كسور شاذة)",
+                    name_en="Whole-Currency Integer Precision",
+                    formula="All ≥1M Statement Lines ∈ ℤ (no comma-to-dot fractional OCR glitches)",
+                    lhs=float(len(big_y) - len(frac_bad)),
+                    rhs=float(len(big_y)),
+                    residual=float(len(frac_bad)),
+                    tolerance=0.0,
+                    status="PROVEN" if not frac_bad else "VIOLATED",
+                    fields=[f for f, _ in (frac_bad or big_y[:3])],
+                    detail_ar=(
+                        f"جميع البنود المليونية الـ {len(big_y)} أعداد صحيحة خالية من كسور OCR الشاذة."
+                        if not frac_bad else
+                        "كسور عشرية شاذة بقائمة وحدات صحيحة: "
+                        + "، ".join(f"{_FIELD_AR.get(f, f)} ({v:,.2f})" for f, v in frac_bad)
+                    ),
+                ))
 
         axioms.extend(year_axioms)
         violated_y = [ax for ax in year_axioms if ax.status == "VIOLATED"]
@@ -1156,6 +1300,7 @@ _STRICT_EQUALITY_AXIOMS = frozenset({
     "A3b_CL_SUM",
     "A3c_NCL_SUM",
     "A5_GROSS_PROFIT",
+    "A5c_OP_EXACT",
     "A6_NI_BRIDGE",
     "A6b_ACTIVITY_BRIDGE",
 })

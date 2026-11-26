@@ -100,14 +100,24 @@ def run_pipeline(file_name: str, raw: bytes, company: str, progress_cb=None, pag
     key = extraction_key(file_name, raw, page_range, fast_mode)
 
     def _values_have_core(values: dict | None) -> bool:
-        """True when revenue OR net income carries at least two fiscal years.
-        A result without it is a degraded/failed extraction and must never be
-        cached (it would replay the same failure for every later upload)."""
-        for fld in ("revenue", "net_income"):
-            by_year = (values or {}).get(fld) or {}
-            if sum(1 for v in by_year.values() if v is not None) >= 2:
-                return True
-        return False
+        """True when revenue OR net income carries at least two fiscal years,
+        AND if a Balance Sheet is present (`total_assets` / `equity`), it also
+        carries at least two fiscal years (never cache a dropped BS column)."""
+        vals = values or {}
+        has_pl = any(
+            sum(1 for v in (vals.get(fld) or {}).values() if v is not None) >= 2
+            for fld in ("revenue", "net_income")
+        )
+        if not has_pl:
+            return False
+        if any((vals.get(bf) or {}) for bf in ("total_assets", "equity")):
+            has_bs = any(
+                sum(1 for v in (vals.get(bf) or {}).values() if v is not None) >= 2
+                for bf in ("total_assets", "equity")
+            )
+            if not has_bs:
+                return False
+        return True
 
     # v5: قرار البوابة المخزون (كاش) — None في المسار الحي
     _cached_log = None

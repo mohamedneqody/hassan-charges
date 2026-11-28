@@ -104,6 +104,10 @@ def test_two_way_registry_vs_engine_coverage(metrics):
         "equity", "retained_earnings", "operating_cash_flow",
         "investing_cash_flow", "financing_cash_flow", "capex", "ebitda",
         "free_cash_flow", "working_capital", "operating_working_capital",
+        "shares_outstanding", "dividends_paid_shareholders",
+        "income_taxes_paid", "total_wages", "wages_cogs",
+        "related_party_payables", "related_party_receivables",
+        "share_price", "employee_count",
         "year", "notes",
     }
     orphan = sorted(f for f in computed_fields if f not in documented)
@@ -207,9 +211,9 @@ def test_negative_policy_per_registry():
 
 def test_registry_validation_status_split():
     """The registry's own honesty: every entry declares validated vs
-    documented, and the split is reported (61 entries)."""
+    documented, and the split is reported (76 entries)."""
     from src.analysis.metric_registry import registry_stats
 
     st = registry_stats()
-    assert st["total"] == 61
-    assert st["validated"] + st["documented"] == 61
+    assert st["total"] == 76
+    assert st["validated"] + st["documented"] == 76

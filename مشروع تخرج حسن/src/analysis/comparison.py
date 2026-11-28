@@ -12,7 +12,7 @@ from src.config import STABLE_TREND_THRESHOLD
 IMPROVING, DECLINING, STABLE, NOT_AVAILABLE = "Improving", "Declining", "Stable", "N/A"
 POSITIVE, NEGATIVE, NEUTRAL = "Positive", "Negative", "Neutral"
 
-CURRENCY, PERCENT, RATIO, DAYS = "currency", "percent", "ratio", "days"
+CURRENCY, PERCENT, RATIO, DAYS, PER_SHARE = "currency", "percent", "ratio", "days", "per_share"
 
 
 @dataclass
@@ -287,6 +287,31 @@ LABELS_AR: dict[str, str] = {
     "interest_pct": "التكاليف التمويلية الصافية إلى الإيرادات",
     "da_pct": "الإهلاك إلى الإيرادات",
     "tax_rate": "نسبة الضريبة الفعلية",
+    # Extended Per-Share, Valuation, Compliance & Governance (v10.0)
+    "eps": "ربحية السهم (EPS)",
+    "bvps": "القيمة الدفترية للسهم (BVPS)",
+    "dps": "توزيعات السهم النقدية (DPS)",
+    "payout_ratio": "نسبة توزيع الأرباح",
+    "net_debt": "صافي الدين (Net Debt)",
+    "net_debt_to_ebitda": "صافي الدين / EBITDA",
+    "tax_cash_to_ocf": "سداد الضرائب / النقد التشغيلي",
+    "value_added_ratio": "نسبة القيمة المضافة للإيرادات",
+    "related_party_ap_pct": "تركز موردي الأطراف ذات العلاقة",
+    "pe_ratio": "مضاعف الربحية (P/E)",
+    "pb_ratio": "مضاعف القيمة الدفترية (P/B)",
+    "dividend_yield": "عائد التوزيعات (Dividend Yield)",
+    "ev_to_ebitda": "قيمة المنشأة / EBITDA (EV/EBITDA)",
+    "peg_ratio": "نسبة PEG",
+    "employee_productivity": "إنتاجية الموظف",
+    "shares_outstanding": "متوسط الأسهم القائمة",
+    "dividends_paid_shareholders": "توزيعات الأرباح للمساهمين",
+    "income_taxes_paid": "ضريبة الدخل المدفوعة نقداً",
+    "total_wages": "إجمالي الأجور والمرتبات",
+    "wages_cogs": "أجور تكلفة المبيعات",
+    "related_party_payables": "موردون — أطراف ذات علاقة",
+    "related_party_receivables": "عملاء — أطراف ذات علاقة",
+    "share_price": "سعر السهم السوقي (مدخل اختياري)",
+    "employee_count": "عدد الموظفين (مدخل اختياري)",
 }
 
 CATEGORY_AR = {
@@ -299,6 +324,9 @@ CATEGORY_AR = {
     "Working Capital": "رأس المال العامل",
     "Cash Flow": "التدفق النقدي",
     "Cost Structure": "هيكل التكاليف",
+    "Per-Share & Valuation": "الأسهم والتقييم",
+    "Taxation & Compliance": "الامتثال الضريبي",
+    "Governance & Concentration": "الحوكمة والتركّز",
 }
 
 STATUS_AR = {"Positive": "إيجابي", "Negative": "سلبي", "Neutral": "محايد", "N/A": "غير متاح"}
@@ -461,3 +489,80 @@ def missing_data_report(
         seen.add(line)
         report.append(line)
     return report
+
+
+_EXTENDED_METRIC_SPECS = [
+    # Per-Share & Valuation (accounting-only + optional market price)
+    ("eps", "Earnings Per Share (EPS)", "Per-Share & Valuation", PER_SHARE, True, lambda m: m.eps),
+    ("bvps", "Book Value Per Share (BVPS)", "Per-Share & Valuation", PER_SHARE, True, lambda m: m.bvps),
+    ("dps", "Dividends Per Share (DPS)", "Per-Share & Valuation", PER_SHARE, True, lambda m: m.dps),
+    ("payout_ratio", "Dividend Payout Ratio", "Per-Share & Valuation", PERCENT, None, lambda m: m.payout_ratio),
+    ("net_debt", "Net Debt", "Per-Share & Valuation", CURRENCY, False, lambda m: m.net_debt),
+    ("net_debt_to_ebitda", "Net Debt / EBITDA", "Per-Share & Valuation", RATIO, False, lambda m: m.net_debt_to_ebitda),
+    ("pe_ratio", "Price / Earnings (P/E)", "Per-Share & Valuation", RATIO, False, lambda m: m.pe_ratio),
+    ("pb_ratio", "Price / Book (P/B)", "Per-Share & Valuation", RATIO, False, lambda m: m.pb_ratio),
+    ("dividend_yield", "Dividend Yield", "Per-Share & Valuation", PERCENT, True, lambda m: m.dividend_yield),
+    ("ev_to_ebitda", "EV / EBITDA", "Per-Share & Valuation", RATIO, False, lambda m: m.ev_to_ebitda),
+    ("peg_ratio", "PEG Ratio", "Per-Share & Valuation", RATIO, False, lambda m: m.peg_ratio),
+    # Taxation & Compliance (Section 6.8)
+    ("tax_rate", "Effective Tax Rate (ETR)", "Taxation & Compliance", PERCENT, None, lambda m: m.tax_rate),
+    ("tax_cash_to_ocf", "Cash Taxes Paid / Operating Cash Flow", "Taxation & Compliance", PERCENT, None, lambda m: m.tax_cash_to_ocf),
+    ("value_added_ratio", "Value Added / Revenue", "Taxation & Compliance", PERCENT, True, lambda m: m.value_added_ratio),
+    # Governance & Concentration (Section 6.9)
+    ("related_party_ap_pct", "Related-Party Payables Concentration", "Governance & Concentration", PERCENT, False, lambda m: m.related_party_ap_pct),
+    ("employee_productivity", "Revenue per Employee", "Governance & Concentration", CURRENCY, True, lambda m: m.employee_productivity),
+]
+
+
+def build_extended_metrics(prev: YearMetrics, curr: YearMetrics) -> list[MetricRow]:
+    """Build valuation, per-share, taxation, and governance metric rows without altering core 60-metric contract."""
+    rows = [
+        _row(key, label, category, kind, hib, prev, curr, getter)
+        for key, label, category, kind, hib, getter in _EXTENDED_METRIC_SPECS
+    ]
+    for r in rows:
+        if r.current is None:
+            if r.key in ("pe_ratio", "pb_ratio", "dividend_yield", "ev_to_ebitda"):
+                if getattr(curr, "share_price", None) is None:
+                    r.reason = "يتطلب إدخال سعر السهم السوقي (اختياري في لوحة التحكم)."
+            elif r.key == "peg_ratio":
+                r.reason = (
+                    "يتطلب سعر السهم ومعدل نمو EPS موجب (لا يُحسب عند النمو السالب أو غياب السعر)."
+                )
+            elif r.key == "employee_productivity":
+                r.reason = "عدد الموظفين غير مذكور في القوائم المالية — أدخله اختيارياً في لوحة التحكم."
+            elif r.key == "tax_cash_to_ocf":
+                if getattr(curr, "operating_cash_flow", None) is not None and curr.operating_cash_flow <= 0:
+                    r.reason = "ممنوع بقاعدة الحماية (التدفق التشغيلي ≤ صفر في السنة الحالية)."
+                elif getattr(curr, "income_taxes_paid", None) is None:
+                    r.reason = "لا يوجد بند ضريبة دخل مدفوعة نقداً في تدفقات هذه السنة."
+            elif r.key == "value_added_ratio":
+                r.reason = "إجمالي الأجور الكامل عبر كل مصاريف النشاط غير مكتمل/غير متوفر."
+    return rows
+
+
+def recompute_extended_metrics(
+    results: dict,
+    *,
+    share_price: float | None = None,
+    employee_count: int | None = None,
+) -> list[MetricRow]:
+    """Recompute extended valuation/compliance rows with optional user-entered market inputs."""
+    sp = float(share_price) if (share_price is not None and share_price > 0) else None
+    emp = int(employee_count) if (employee_count is not None and employee_count > 0) else None
+    if sp is None and emp is None and results.get("extended_rows"):
+        return list(results["extended_rows"])
+    raw_vals = results.get("raw_values")
+    prev_y = results.get("prev_year")
+    curr_y = results.get("curr_year")
+    if raw_vals and prev_y is not None and curr_y is not None:
+        from src.analysis.calculator import compute_year_metrics
+
+        pm = compute_year_metrics(int(prev_y), raw_vals, prev_year=None, share_price=sp, employee_count=emp)
+        cm = compute_year_metrics(int(curr_y), raw_vals, prev_year=int(prev_y), share_price=sp, employee_count=emp)
+        return build_extended_metrics(pm, cm)
+    pm0 = results.get("prev_metrics")
+    cm0 = results.get("curr_metrics")
+    if pm0 is not None and cm0 is not None:
+        return build_extended_metrics(pm0, cm0)
+    return list(results.get("extended_rows") or [])

@@ -103,8 +103,8 @@
    "formula": "-4.84 + 0.920·DSRI + 0.528·GMI + 0.404·AQI + 0.892·SGI + 0.115·DEPI − 0.172·SGAI + 4.679·TATA − 0.327·LVGI",
    "input_values": {
     "LVGI": {
-     "before": 21.4715,
-     "after": 0.9953
+     "before": 0.0466,
+     "after": 1.0048
     }
    },
    "input_sources": {

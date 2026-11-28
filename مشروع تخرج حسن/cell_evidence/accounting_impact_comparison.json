@@ -10,7 +10,7 @@
   "health_coverage": 0.25,
   "debt_ratio": 0.026317103396226414,
   "debt_to_equity": 0.6850283218840579,
-  "beneish_m_score": -9.218,
+  "beneish_m_score": -2.135,
   "beneish_inputs_note": "computed from non-decisive captures — disclosed, never decisive",
   "dupont_roe_pct": 16.01116796969697
  },
@@ -20,7 +20,7 @@
   "health_coverage": 1.0,
   "debt_ratio": 0.5677557219496855,
   "debt_to_equity": 0.6850283218840579,
-  "beneish_m_score": -2.522,
+  "beneish_m_score": -2.449,
   "dupont_roe_pct": 16.01116796969697
  },
  "reviews": [

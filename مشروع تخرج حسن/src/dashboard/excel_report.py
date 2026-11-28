@@ -26,7 +26,7 @@ _POS_FILL = PatternFill("solid", fgColor="E2EFDA")
 _NEG_FILL = PatternFill("solid", fgColor="FCE4E4")
 _GREY_FILL = PatternFill("solid", fgColor="EDEDED")
 
-_NUM_FMT = {"currency": "#,##0", "percent": "0.00", "ratio": "0.00"}
+_NUM_FMT = {"currency": "#,##0", "percent": "0.00", "ratio": "0.00", "per_share": "0.00"}
 
 
 def safe_file_name(name: str) -> str:
@@ -86,7 +86,7 @@ def build_excel_report(results: dict) -> bytes:
     verif = results.get("verification_status") or {}
     for row in list(results.get("growth_rows") or []) + list(results.get("rows") or []):
         label = row.label_ar or row.label
-        unit = {"currency": "عملة", "percent": "%", "ratio": "x"}.get(row.kind, "")
+        unit = {"currency": "عملة", "percent": "%", "ratio": "x", "per_share": "عملة/سهم"}.get(row.kind, "")
         change_pct = f"{row.change_pct:+.2f}%" if row.change_pct is not None else "—"
         # currency cells carry the ACTUAL amount (printed value × the
         # statement's printed-unit scale) so Excel filtering/sorting and
@@ -121,6 +121,26 @@ def build_excel_report(results: dict) -> bytes:
             elif row.status == "Negative" and cell.column in (3, 4):
                 cell.fill = _NEG_FILL
     ws.auto_filter.ref = f"A1:I{ws.max_row}"
+
+    ext_rows = list(results.get("extended_rows") or [])
+    if ext_rows:
+        ws_ext = wb.create_sheet("الأسهم والتقييم والحوكمة")
+        _header(ws_ext, ["الفئة", "المؤشر", "الوحدة", "السنة السابقة", "السنة الحالية", "التغير %", "السبب / الإفصاح"])
+        for row in ext_rows:
+            unit_e = {"currency": "عملة", "percent": "%", "ratio": "x", "per_share": "عملة/سهم"}.get(row.kind, "")
+            def _num_e(v):
+                if v is None:
+                    return "—"
+                return v * unit_scale if (row.kind == "currency" and unit_scale != 1) else v
+            ws_ext.append([
+                row.category,
+                row.label_ar or row.label,
+                unit_e,
+                _num_e(row.previous),
+                _num_e(row.current),
+                f"{row.change_pct:+.2f}%" if row.change_pct is not None else "—",
+                row.reason or "—",
+            ])
 
     # --- النماذج الأكاديمية ---
     ws = wb.create_sheet("النماذج الأكاديمية")

@@ -4,7 +4,7 @@ from __future__ import annotations
 import plotly.graph_objects as go
 import pandas as pd
 
-from src.analysis.comparison import CURRENCY, DAYS, PERCENT, RATIO, MetricRow
+from src.analysis.comparison import CURRENCY, DAYS, PER_SHARE, PERCENT, RATIO, MetricRow
 from src.dashboard.design_system import (
     DANGER,
     DANGER_SOFT,
@@ -102,6 +102,10 @@ def fmt_signed_ar(value: float | None, kind: str, currency: str = "$",
 def fmt_value(value: float | None, kind: str, currency: str = "$") -> str:
     if value is None:
         return "غير متوفر"
+    if kind == PER_SHARE:
+        if value < 0:
+            return f"-{currency}{abs(value):,.2f}"
+        return f"{currency}{value:,.2f}"
     if kind == CURRENCY:
         if value < 0:
             return f"-{currency}{humanize(abs(value))}"
@@ -119,6 +123,10 @@ def fmt_signed(value: float | None, kind: str, currency: str = "$") -> str:
     if value is None:
         return "غير متوفر"
     sign = "+" if value > 0 else ""
+    if kind == PER_SHARE:
+        if value < 0:
+            return f"-{currency}{abs(value):,.2f}"
+        return f"{sign}{currency}{value:,.2f}"
     if kind == CURRENCY:
         return f"{sign}{currency}{humanize(value)}"
     if kind == PERCENT:

@@ -126,6 +126,32 @@ class YearMetrics:
     interest_pct: float | None = None
     da_pct: float | None = None
     tax_rate: float | None = None
+    # Supplemental extracted / user-optional inputs & extended analytics (v10.0)
+    shares_outstanding: float | None = None
+    dividends_paid_shareholders: float | None = None
+    income_taxes_paid: float | None = None
+    total_wages: float | None = None
+    wages_cogs: float | None = None
+    related_party_payables: float | None = None
+    related_party_receivables: float | None = None
+    share_price: float | None = None
+    employee_count: float | None = None
+    # Extended Per-Share, Market Valuation, Tax Compliance & Governance metrics
+    eps: float | None = None
+    bvps: float | None = None
+    dps: float | None = None
+    payout_ratio: float | None = None
+    net_debt: float | None = None
+    net_debt_to_ebitda: float | None = None
+    tax_cash_to_ocf: float | None = None
+    value_added_ratio: float | None = None
+    related_party_ap_pct: float | None = None
+    pe_ratio: float | None = None
+    pb_ratio: float | None = None
+    dividend_yield: float | None = None
+    ev_to_ebitda: float | None = None
+    peg_ratio: float | None = None
+    employee_productivity: float | None = None
     # Metadata: notes like "ROA used current-year assets only"
     notes: dict[str, str] = field(default_factory=dict)
 
@@ -134,6 +160,9 @@ def compute_year_metrics(
     year: int,
     data: dict[str, dict[int, float]],
     prev_year: int | None = None,
+    *,
+    share_price: float | None = None,
+    employee_count: float | None = None,
 ) -> YearMetrics:
     """Compute all metrics for `year` from canonical values.
 
@@ -202,6 +231,15 @@ def compute_year_metrics(
     m.investing_cash_flow = get("investing_cash_flow")
     m.financing_cash_flow = get("financing_cash_flow")
     m.capex = get("capex")
+    m.shares_outstanding = get("shares_outstanding")
+    m.dividends_paid_shareholders = get("dividends_paid_shareholders")
+    m.income_taxes_paid = get("income_taxes_paid")
+    m.total_wages = get("total_wages")
+    m.wages_cogs = get("wages_cogs")
+    m.related_party_payables = get("related_party_payables")
+    m.related_party_receivables = get("related_party_receivables")
+    m.share_price = float(share_price) if (share_price is not None and share_price > 0) else get("share_price")
+    m.employee_count = float(employee_count) if (employee_count is not None and employee_count > 0) else get("employee_count")
 
     # --- Derived absolutes (only when not stated in the source) ---
     # Expenses are sometimes stored as negatives in the source — use magnitudes.
@@ -392,4 +430,76 @@ def compute_year_metrics(
                 "(credit), not an expense.")
         else:
             m.notes["tax_rate"] = "Effective tax expense rate."
+
+    # --- Extended Per-Share, Market Valuation, Taxation & Governance (v10.0) ---
+    printed_eps = get("eps")
+    if printed_eps is not None:
+        m.eps = printed_eps
+    elif m.net_income is not None and m.shares_outstanding and m.shares_outstanding > 0:
+        m.eps = safe_div(m.net_income, m.shares_outstanding)
+        m.notes["eps"] = "Derived as Net Income / Shares Outstanding."
+
+    if m.equity is not None and m.shares_outstanding and m.shares_outstanding > 0:
+        m.bvps = safe_div(m.equity, m.shares_outstanding)
+
+    if m.dividends_paid_shareholders is not None and m.shares_outstanding and m.shares_outstanding > 0:
+        m.dps = safe_div(abs(m.dividends_paid_shareholders), m.shares_outstanding)
+
+    if m.dividends_paid_shareholders is not None and m.net_income is not None and m.net_income > 0:
+        m.payout_ratio = _pct(abs(m.dividends_paid_shareholders), m.net_income)
+
+    if m.total_debt is not None and m.cash is not None:
+        m.net_debt = m.total_debt - m.cash
+        if m.ebitda is not None and m.ebitda > 0:
+            m.net_debt_to_ebitda = safe_div(m.net_debt, m.ebitda)
+
+    # Tax cash paid vs Operating Cash Flow (reject non-positive OCF per Lean 4 guard)
+    if m.income_taxes_paid is not None and m.operating_cash_flow is not None and m.operating_cash_flow > 0:
+        m.tax_cash_to_ocf = _pct(abs(m.income_taxes_paid), m.operating_cash_flow)
+
+    # Gross Value Added / Revenue (only when verified full wages exist)
+    if m.total_wages is not None and m.pretax_income is not None and m.revenue and m.revenue > 0:
+        gva = (
+            abs(m.total_wages)
+            + m.pretax_income
+            + abs(m.interest_expense or 0.0)
+            + abs(m.depreciation_amortization or 0.0)
+        )
+        m.value_added_ratio = _pct(gva, m.revenue)
+
+    if m.related_party_payables is not None and m.accounts_payable and m.accounts_payable != 0:
+        m.related_party_ap_pct = _pct(abs(m.related_party_payables), abs(m.accounts_payable))
+
+    # Optional market-price & HR-dependent metrics (NEVER guessed when inputs absent)
+    sp = m.share_price
+    if sp is not None and sp > 0:
+        if m.eps is not None and m.eps > 0:
+            m.pe_ratio = safe_div(sp, m.eps)
+        if m.bvps is not None and m.bvps > 0:
+            m.pb_ratio = safe_div(sp, m.bvps)
+        if m.dps is not None:
+            m.dividend_yield = _pct(m.dps, sp)
+        if (
+            m.shares_outstanding and m.shares_outstanding > 0
+            and m.net_debt is not None
+            and m.ebitda is not None and m.ebitda > 0
+        ):
+            mcap = sp * m.shares_outstanding
+            ev = mcap + m.net_debt
+            m.ev_to_ebitda = safe_div(ev, m.ebitda)
+            m.notes["ev_to_ebitda"] = "Standalone EV/EBITDA note: market cap reflects consolidated entity when parent holds subsidiaries."
+        if prev_year is not None and m.pe_ratio is not None and m.eps is not None:
+            prev_eps = get("eps", prev_year)
+            if prev_eps is None:
+                p_ni = get("net_income", prev_year)
+                p_sh = get("shares_outstanding", prev_year)
+                if p_ni is not None and p_sh and p_sh > 0:
+                    prev_eps = p_ni / p_sh
+            eps_g = growth_pct(prev_eps, m.eps)
+            if eps_g is not None and eps_g > 0:
+                m.peg_ratio = safe_div(m.pe_ratio, eps_g)
+
+    ec = m.employee_count
+    if ec is not None and ec > 0 and m.revenue is not None:
+        m.employee_productivity = safe_div(m.revenue, ec)
     return m

@@ -10,6 +10,7 @@ from src.analysis.comparison import (
     IMPROVING,
     STABLE,
     build_comparison,
+    build_extended_metrics,
     growth_metrics,
     missing_data_report,
 )
@@ -140,6 +141,8 @@ def run_pipeline(file_name: str, raw: bytes, company: str, progress_cb=None, pag
             notes_text={int(k): v for k, v in (cached.get("notes_text") or {}).items()},
         )
         data.field_sources = cached.get("field_sources") or {}
+        if hasattr(data, "unmapped_labels"):
+            data.unmapped_labels = list(cached.get("unmapped_labels") or [])
         # v5: استعادة وحدة الطباعة المخزنة — الكاش يحفظها لكن إعادة البناء
         # كانت تتركها 1 فتعرض TE «مليون» بدل «مليار» (كشفه اختبار الرحلة)
         data.unit_scale = int(cached.get("unit_scale") or 1)
@@ -198,6 +201,15 @@ def run_pipeline(file_name: str, raw: bytes, company: str, progress_cb=None, pag
     # study needs the real company identity: شركة … as the disclosure prints it).
     if getattr(data, "company_hint", None):
         company = data.company_hint
+
+    from src.analysis.protection_layer import enrich_supplemental_fields, evaluate_protection_gate
+
+    supplemental_meta = enrich_supplemental_fields(
+        values=data.values,
+        unmapped_labels=getattr(data, "unmapped_labels", None),
+        notes_text=getattr(data, "notes_text", None),
+        notes=data.notes,
+    )
 
     years_pair = data.latest_two_years()
     if years_pair is None:
@@ -353,6 +365,7 @@ def run_pipeline(file_name: str, raw: bytes, company: str, progress_cb=None, pag
                     "⚠ القيم المستردة تحتاج تأكيداً بشرياً.")
 
     rows = build_comparison(prev_metrics, curr_metrics)
+    extended_rows = build_extended_metrics(prev_metrics, curr_metrics)
     growth_rows = growth_metrics(prev_metrics, curr_metrics)
 
     # v5 (دمج الواجهة الجديدة): مفاتيح قراءة فقط لواجهة Streamlit الجديدة —
@@ -397,7 +410,7 @@ def run_pipeline(file_name: str, raw: bytes, company: str, progress_cb=None, pag
             except Exception:
                 pass
 
-    return {
+    out_dict = {
         "company": company,
         "file_name": file_name,
         "prev_year": prev_year,
@@ -406,8 +419,11 @@ def run_pipeline(file_name: str, raw: bytes, company: str, progress_cb=None, pag
         "curr_metrics": curr_metrics,
         "all_year_metrics": all_year_metrics,
         "rows": rows,
+        "extended_rows": extended_rows,
         "growth_rows": growth_rows,
         "rows_by_key": {r.key: r for r in rows},
+        "disclosure_checklist": supplemental_meta.get("disclosure_checklist"),
+        "free_float_info": supplemental_meta.get("free_float_info"),
         "missing": missing_data_report(
             rows + growth_rows,
             metrics_by_year={y: all_year_metrics[y]
@@ -442,6 +458,9 @@ def run_pipeline(file_name: str, raw: bytes, company: str, progress_cb=None, pag
             if isinstance(by_y, dict)
         },
     }
+    prot_verdict = evaluate_protection_gate(out_dict)
+    out_dict["protection_verdict"] = prot_verdict.to_dict()
+    return out_dict
 
 
 def build_gemini_payload(results: dict, currency: str = "$") -> dict:

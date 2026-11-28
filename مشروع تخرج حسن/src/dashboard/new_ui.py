@@ -55,6 +55,7 @@ _T = {
     "statements": {"ar": "القوائم والخانات", "en": "Statements & Cells"},
     "metrics": {"ar": "المؤشرات المالية", "en": "Financial Metrics"},
     "health": {"ar": "الدرجة الصحية", "en": "Health Score"},
+    "optimize": {"ar": "محرك التحسين وLean 4", "en": "Optimize & Lean 4"},
     "insights": {"ar": "رؤى Gemini", "en": "AI Insights"},
     "chat": {"ar": "محادثة المستند", "en": "Document Chat"},
     "review": {"ar": "مراجعة بشرية", "en": "Human Review"},
@@ -1471,6 +1472,94 @@ def sec_metrics(vm: dict, results: dict | None = None) -> None:
                     else "🟢 No early-warning red flags detected between the two years."
                 )
 
+        # ── v10.0 Extended Section: Per-Share / Valuation / Taxation (6.8) / Governance (6.9) ──
+        from src.analysis.comparison import CATEGORY_AR, recompute_extended_metrics
+        from src.dashboard.charts import fmt_signed as _fmt_s, fmt_signed_pct as _fmt_sp, fmt_value as _fmt_v
+
+        _sp_in = st.session_state.get("opt_share_price") or None
+        _emp_in = st.session_state.get("opt_employee_count") or None
+        ext_rows = recompute_extended_metrics(res_obj, share_price=_sp_in, employee_count=_emp_in)
+        if ext_rows:
+            st.divider()
+            _sec_banner(
+                "💎 " + ("الأسهم والتقييم والامتثال الضريبي والحوكمة" if is_ar else "Per-Share, Valuation, Taxation & Governance"),
+                (
+                    "مؤشرات السهم والتقييم (مع فصل مضاعفات السوق الاختيارية) والامتثال الضريبي (6.8) والحوكمة والتركز (6.9)"
+                    if is_ar
+                    else "Per-share & market multiples (optional share price), Taxation & Compliance (6.8), and EGX Governance (6.9)"
+                ),
+            )
+            _cur_sym = vm.get("currency", "$")
+            _ext_trs: list[str] = []
+            for er in ext_rows:
+                _e_lbl = (er.label_ar or er.label) if is_ar else er.label
+                _p_s = _fmt_v(er.previous, er.kind, _cur_sym)
+                _c_s = _fmt_v(er.current, er.kind, _cur_sym)
+                _d_s = _fmt_s(er.change, er.kind, _cur_sym)
+                _dp_s = _fmt_sp(er.change_pct)
+                _reason_txt = str(getattr(er, "reason", "") or "").strip()
+                if er.current is not None:
+                    _st_html = f"<span class='fs-pill ok'>{'محسوب' if is_ar else 'Computed'}</span>"
+                elif _reason_txt:
+                    _st_html = f"<span class='fs-pill pend'>{esc(_reason_txt)}</span>"
+                else:
+                    _st_html = f"<span class='fs-pill miss'>{'غير متوفر' if is_ar else 'N/A'}</span>"
+                _ext_trs.append(
+                    "<tr>"
+                    f"<td style='white-space:normal;'><b>{esc(_e_lbl)}</b><div class='fs-sub'>{esc(CATEGORY_AR.get(er.category, er.category) if is_ar else er.category)}</div></td>"
+                    f"<td class='num' dir='ltr'>{esc(_p_s)}</td>"
+                    f"<td class='num' dir='ltr'><b>{esc(_c_s)}</b></td>"
+                    f"<td class='num' dir='ltr'>{esc(_d_s)}</td>"
+                    f"<td class='num' dir='ltr'>{esc(_dp_s)}</td>"
+                    f"<td style='white-space:normal;'>{_st_html}</td>"
+                    "</tr>"
+                )
+            _hdr_ext = (
+                ["المؤشر والفئة", str(vm.get("prev_year") or "السابق"), str(vm.get("curr_year") or "الحالي"), "التغير", "% التغير", "الحالة / الإفصاح"]
+                if is_ar
+                else ["Metric & Category", str(vm.get("prev_year") or "Prev"), str(vm.get("curr_year") or "Curr"), "Change", "Change %", "Status / Note"]
+            )
+            st.markdown(theme.fin_table(_hdr_ext, _ext_trs), unsafe_allow_html=True)
+
+        _ff_info = res_obj.get("free_float_info") or {}
+        _disc_chk = res_obj.get("disclosure_checklist") or {}
+        if _ff_info or _disc_chk:
+            _gc1, _gc2 = st.columns(2)
+            with _gc1:
+                if _ff_info and _ff_info.get("approx_other_pct") is not None:
+                    st.info(
+                        f"**📊 التقدير التقريبي لنسبة «آخرون» (هيكل المساهمين):** "
+                        f"<bdi dir='ltr'>{_ff_info['approx_other_pct']:.2f}%</bdi>\n\n"
+                        f"{esc(_ff_info.get('note_ar') or '')}"
+                        if is_ar
+                        else f"**📊 Minority 'Other' Slice Approx.:** {_ff_info['approx_other_pct']:.2f}%\n\n"
+                        f"{esc(_ff_info.get('note_en') or '')}"
+                    )
+                else:
+                    st.caption(
+                        esc((_ff_info or {}).get("note_ar") or "نسبة التداول الحر تتطلب سجل البورصة/جدول المساهمين.")
+                        if is_ar
+                        else esc((_ff_info or {}).get("note_en") or "Free float requires EGX/shareholder disclosure.")
+                    )
+            with _gc2:
+                if _disc_chk:
+                    _items = _disc_chk.get("items") or []
+                    _present_n = int(_disc_chk.get("present_count") or 0)
+                    _tot_n = int(_disc_chk.get("total_count") or len(_items))
+                    _chk_lines = [
+                        f"{'✅' if it.get('present') else '⚠️'} {it.get('name_ar') if is_ar else it.get('name_en')}"
+                        for it in _items
+                    ]
+                    st.info(
+                        f"**🏛️ مؤشر جاهزية إفصاح القوائم المالية ({_present_n}/{_tot_n}):**\n\n"
+                        + "\n\n".join(_chk_lines)
+                        + f"\n\n_{esc(_disc_chk.get('disclaimer_ar') or '')}_"
+                        if is_ar
+                        else f"**🏛️ Statement Disclosure Readiness ({_present_n}/{_tot_n}):**\n\n"
+                        + "\n\n".join(_chk_lines)
+                        + f"\n\n_{esc(_disc_chk.get('disclaimer_en') or '')}_"
+                    )
+
 
 def _health_blocked_fields(vm: dict, results: dict) -> set[str]:
     """Fields blocked for the current-year Official Health Score."""
@@ -2195,6 +2284,7 @@ def _apply_human_approval_to_results(
     from src.analysis.calculator import compute_year_metrics
     from src.analysis.comparison import (
         build_comparison,
+        build_extended_metrics,
         growth_metrics,
         missing_data_report,
     )
@@ -2203,6 +2293,7 @@ def _apply_human_approval_to_results(
         RepairAttempt,
         verify_financial_statements,
     )
+    from src.analysis.protection_layer import evaluate_protection_gate
 
     val_f = float(approved_value)
     yr_i = int(year)
@@ -2320,6 +2411,7 @@ def _apply_human_approval_to_results(
         results["curr_metrics"] = cm
         results["all_year_metrics"] = all_year_metrics
         results["rows"] = rows
+        results["extended_rows"] = build_extended_metrics(pm, cm)
         results["growth_rows"] = g_rows
         results["rows_by_key"] = {x.key: x for x in rows}
         results["missing"] = missing_data_report(
@@ -2368,6 +2460,8 @@ def _apply_human_approval_to_results(
             )
         results["formal_certificate"] = formal_cert.to_dict()
         z3_recomputed = True
+
+    results["protection_verdict"] = evaluate_protection_gate(results).to_dict()
 
     return {
         "changed_val": changed_val,
@@ -3157,6 +3251,302 @@ def sec_portfolio(vm: dict, results: dict) -> None:
                 )
 
 
+def sec_optimize(vm: dict, results: dict) -> None:
+    """محرك التحسين المقيّد بـ Z3 Optimize + طبقة الحماية المتعددة + الإثبات الصوري Lean 4."""
+    from src.analysis.lean4_verifier import verify_lean4_kernel
+    from src.analysis.optimize_engine import (
+        OBJECTIVES,
+        OptimizationConstraints,
+        optimize_financial_plan,
+    )
+    from src.analysis.protection_layer import evaluate_protection_gate
+    from src.dashboard import theme
+    from src.dashboard.charts import fmt_signed_pct, fmt_value
+
+    lang = _lang()
+    is_ar = lang != "en"
+    st.subheader("🧠 " + _T["optimize"][lang])
+
+    _sec_banner(
+        "🛡️ " + ("طبقة الحماية المتعددة + نواة الإثبات الصوري Lean 4" if is_ar else "Multi-Layer Protection Guard & Lean 4 Proof Kernel"),
+        (
+            "حوكمة صارمة تمنع تسرب الخانات المعلقة أو الميزانيات غير المتزنة، وتتحقق من توازن القيد المزدوج قبل وبعد التحسين."
+            if is_ar
+            else "Neuro-symbolic guard blocking unverified inputs, preserving exact Assets = Liabilities + Equity via Z3 Optimize & Lean 4."
+        ),
+    )
+
+    prot = evaluate_protection_gate(results, allow_exploratory=False)
+    k_rep = verify_lean4_kernel()
+
+    col_guard, col_lean = st.columns(2)
+    with col_guard:
+        if prot.permit_official_score:
+            render_success_state(
+                "بوابة الحماية: مصرح بالتحسين الرسمي" if is_ar else "Protection Gate: Official Permitted",
+                (
+                    "جميع المدخلات الحرجة للميزانية والأرباح في السنة الحالية حاسمة (لا توجد عوائق أو توقف حصة)."
+                    if is_ar
+                    else "All critical Balance Sheet & P&L inputs for the current year are verified."
+                ),
+            )
+        else:
+            st.warning(
+                "🛡️ **بوابة الحماية حجبت التحسين الرسمي المعتمد:**\n\n"
+                + "\n\n".join(f"- {w}" for w in (prot.warnings_ar if is_ar else prot.warnings_en))
+            )
+
+        _ff = results.get("free_float_info") or {}
+        if _ff.get("approx_other_pct") is not None:
+            st.caption(
+                f"📊 {'تقدير آخرون (المساهمين):' if is_ar else 'Minority shareholder slice:'} "
+                f"{_ff['approx_other_pct']:.2f}% — {_ff.get('note_ar' if is_ar else 'note_en', '')}"
+            )
+
+    with col_lean:
+        _mode_lbl = (
+            ("نواة Lean 4 حية" if is_ar else "Live Lean 4 Kernel")
+            if k_rep.runtime_mode == "live_lean4_kernel"
+            else ("بديل سحابي موثق ببصمة النواة" if is_ar else "Cloud Manifest Fallback (SHA-256 Verified)")
+        )
+        _lean_pill_cls = "ok" if k_rep.verified else "pend"
+        _ver_str = k_rep.lean_version if k_rep.lean_binary_available else ("سحابي (بدون ثنائي Lean)" if is_ar else "Cloud host (no Lean binary)")
+        st.markdown(
+            stat_card(
+                "نواة الإثبات الصوري (Lean 4)" if is_ar else "Lean 4 Proof Kernel",
+                f"{k_rep.theorems_count} " + ("مبرهنات مبرهنة آلياً" if is_ar else "Machine-Checked Theorems"),
+                subtext=f"{_mode_lbl} · {_ver_str} · SHA256: {k_rep.kernel_sha256_16}",
+                gate_kind=_lean_pill_cls,
+                gate_label="مُثبت" if (k_rep.verified and is_ar) else ("Verified" if k_rep.verified else "Fallback"),
+            ),
+            unsafe_allow_html=True,
+        )
+
+    with st.expander(
+        f"📐 {'عرض قائمة المبرهنات الرسمية في Lean 4' if is_ar else 'View Lean 4 Formal Theorems'} ({k_rep.theorems_count})",
+        expanded=False,
+    ):
+        _thm_trs = [
+            "<tr>"
+            f"<td dir='ltr'><code>{esc(t.get('theorem_id', ''))}</code></td>"
+            f"<td><b>{esc(t.get('name_ar' if is_ar else 'name_en', ''))}</b></td>"
+            f"<td dir='ltr' style='white-space:normal;'><code>{esc(t.get('statement', ''))}</code></td>"
+            "</tr>"
+            for t in (k_rep.theorems or [])
+        ]
+        st.markdown(
+            theme.fin_table(
+                ["المعرف", "المبرهنة", "الصيغة الرياضية"] if is_ar else ["ID", "Theorem", "Statement"],
+                _thm_trs,
+            ),
+            unsafe_allow_html=True,
+        )
+
+    st.divider()
+    _sec_banner(
+        "⚙️ " + ("محرك التحسين المقيّد (Z3 Optimize Engine)" if is_ar else "Constrained Z3 Optimization Controls"),
+        (
+            "اضبط قيود التشغيل والسيولة لاشتقاق خطة تحسين تحفظ معادلة الميزانية تلقائياً."
+            if is_ar
+            else "Tune operational & covenant bounds to compute an accounting-balanced optimal improvement plan."
+        ),
+    )
+
+    _allow_exp = True
+    if not prot.permit_official_score:
+        _allow_exp = st.checkbox(
+            "🔓 " + (
+                "تشغيل كمعاينة استكشافية غير معتمدة رسمياً (رغم وجود خانات تحتاج مراجعة)"
+                if is_ar
+                else "Run as unapproved Exploratory Preview (despite pending review cells)"
+            ),
+            value=bool(st.session_state.get("opt_allow_exploratory", False)),
+            key="opt_allow_exploratory",
+        )
+
+    _obj_keys = list(OBJECTIVES.keys())
+    _obj_sel = st.selectbox(
+        "هدف التحسين الاستراتيجي" if is_ar else "Optimization Objective",
+        _obj_keys,
+        format_func=lambda k: OBJECTIVES[k]["ar" if is_ar else "en"],
+        key="opt_objective_sel",
+    )
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        _max_rev = st.slider(
+            "حد زيادة الإيرادات (%)" if is_ar else "Max Revenue Boost (%)",
+            0.0, 25.0, 10.0, 1.0, key="opt_max_rev_pct",
+        )
+        _max_cogs = st.slider(
+            "حد خفض التكلفة المباشرة (%)" if is_ar else "Max COGS Cut (%)",
+            0.0, 15.0, 5.0, 0.5, key="opt_max_cogs_pct",
+        )
+    with c2:
+        _max_opex = st.slider(
+            "حد ترشيد المصروفات (%)" if is_ar else "Max OPEX Cut (%)",
+            0.0, 20.0, 10.0, 1.0, key="opt_max_opex_pct",
+        )
+        _max_wc = st.slider(
+            "حد تحرير رأس المال العامل (%)" if is_ar else "Max Working-Capital Release (%)",
+            0.0, 30.0, 15.0, 1.0, key="opt_max_wc_pct",
+        )
+    with c3:
+        _min_cr = st.slider(
+            "أدنى نسبة تداول مطلوبة (x)" if is_ar else "Min Current Ratio (x)",
+            1.0, 3.0, 1.25, 0.05, key="opt_min_cr",
+        )
+        _max_pay = st.slider(
+            "توزيع من صافي الزيادة (%)" if is_ar else "Incremental Payout (%)",
+            0.0, 50.0, 0.0, 5.0, key="opt_max_payout_pct",
+        )
+
+    _sp_opt = st.session_state.get("opt_share_price") or None
+    _emp_opt = st.session_state.get("opt_employee_count") or None
+    _cfg = OptimizationConstraints(
+        objective=_obj_sel,
+        max_revenue_boost_pct=float(_max_rev),
+        max_cogs_cut_pct=float(_max_cogs),
+        max_opex_cut_pct=float(_max_opex),
+        max_wc_release_pct=float(_max_wc),
+        min_current_ratio=float(_min_cr),
+        max_payout_pct=float(_max_pay),
+        allow_exploratory=bool(_allow_exp),
+    )
+    opt_res = optimize_financial_plan(
+        results,
+        _cfg,
+        share_price=_sp_opt,
+        employee_count=_emp_opt,
+    )
+
+    if opt_res.status == "REFUSED_PROTECTION_GATE":
+        st.error("🚫 " + (opt_res.reason_ar if is_ar else opt_res.reason_en))
+        return
+    if opt_res.status == "INFEASIBLE":
+        st.warning("⚠️ " + (opt_res.reason_ar if is_ar else opt_res.reason_en))
+        return
+
+    if not opt_res.is_official:
+        st.warning(
+            "🧪 " + (
+                "وضع استكشافي غير معتمد رسمياً — أتمّ المراجعة البشرية للخانات الحرجة لإصدار خطة معتمدة."
+                if is_ar
+                else "Unofficial Exploratory Preview — approve critical cells in Human Review for official sign-off."
+            )
+        )
+
+    _cur = vm.get("currency", "$")
+    _lv = opt_res.levers or {}
+    _kcols = st.columns(4)
+    _kpi_items = [
+        ("صافي أثر الربح (Δ NI)" if is_ar else "Net Income Gain", fmt_value(_lv.get("net_income_delta"), "currency", _cur)),
+        ("سداد الديون المقترح" if is_ar else "Debt Paydown", fmt_value(_lv.get("debt_repay"), "currency", _cur)),
+        ("السيولة المحررة (WC)" if is_ar else "WC Cash Released", fmt_value(_lv.get("cash_released_wc"), "currency", _cur)),
+        ("وفورات الفوائد" if is_ar else "Interest Saved", fmt_value(_lv.get("interest_saved"), "currency", _cur)),
+    ]
+    for _col, (_k_lbl, _k_val) in zip(_kcols, _kpi_items):
+        with _col:
+            st.markdown(
+                stat_card(_k_lbl, _k_val, gate_kind=("ok" if opt_res.is_official else "pend")),
+                unsafe_allow_html=True,
+            )
+
+    _lp = opt_res.lean4_proof or {}
+    if _lp:
+        _proof_msg = _lp.get("details_ar" if is_ar else "details_en", "")
+        _resid = _lp.get("residual_after", 0.0)
+        _ob_hash = _lp.get("obligation_sha256_16", "")
+        if _lp.get("verified"):
+            st.success(
+                f"✅ **{'شهادة إثبات Lean 4 + القيد المزدوج:' if is_ar else 'Lean 4 Double-Entry Proof:'}** "
+                f"{_proof_msg} · `Δ(TA − TL − E) = {_resid:.2f}` · `SHA256: {_ob_hash}`"
+            )
+        else:
+            st.warning(f"⚠️ {_proof_msg} · `Residual = {_resid:,.2f}`")
+
+    _snap_specs: list[tuple[str, str, str, str]] = [
+        ("revenue", "الإيرادات", "Revenue", "currency"),
+        ("gross_profit", "مجمل الربح", "Gross Profit", "currency"),
+        ("operating_income", "الربح التشغيلي", "Operating Income", "currency"),
+        ("ebitda", "الأرباح قبل الفوائد والضرائب والإهلاك (EBITDA)", "EBITDA", "currency"),
+        ("interest_expense", "مصروف الفوائد", "Interest Expense", "currency"),
+        ("net_income", "صافي الربح", "Net Income", "currency"),
+        ("cash", "النقدية وما في حكمها", "Cash & Equivalents", "currency"),
+        ("total_debt", "إجمالي الديون", "Total Debt", "currency"),
+        ("net_debt", "صافي الدين", "Net Debt", "currency"),
+        ("total_assets", "إجمالي الأصول", "Total Assets", "currency"),
+        ("total_liabilities", "إجمالي الالتزامات", "Total Liabilities", "currency"),
+        ("equity", "حقوق الملكية", "Total Equity", "currency"),
+        ("net_margin", "هامش صافي الربح", "Net Margin", "percent"),
+        ("current_ratio", "نسبة التداول", "Current Ratio", "ratio"),
+        ("debt_to_equity", "نسبة الدين إلى حقوق الملكية", "Debt / Equity", "ratio"),
+        ("net_debt_to_ebitda", "صافي الدين / EBITDA", "Net Debt / EBITDA", "ratio"),
+        ("roe", "العائد على حقوق الملكية (ROE)", "ROE", "percent"),
+        ("roa", "العائد على الأصول (ROA)", "ROA", "percent"),
+        ("eps", "ربحية السهم (EPS)", "EPS", "per_share"),
+        ("bvps", "القيمة الدفترية للسهم (BVPS)", "BVPS", "per_share"),
+        ("dps", "التوزيع النقدي للسهم (DPS)", "DPS", "per_share"),
+    ]
+    if _sp_opt:
+        _snap_specs.extend([
+            ("pe_ratio", "مضاعف الربحية (P/E)", "P/E Ratio", "ratio"),
+            ("pb_ratio", "مضاعف القيمة الدفترية (P/B)", "P/B Ratio", "ratio"),
+            ("ev_to_ebitda", "EV / EBITDA", "EV / EBITDA", "ratio"),
+            ("dividend_yield", "عائد توزيعات الأرباح", "Dividend Yield", "percent"),
+        ])
+    if _emp_opt:
+        _snap_specs.append(("employee_productivity", "إنتاجية الموظف", "Revenue / Employee", "currency"))
+    _snap_specs.append(("health_score", "درجة الصحة المالية (من 100)", "Health Score (/100)", "ratio"))
+
+    _base = opt_res.baseline or {}
+    _optm = opt_res.optimized or {}
+    _dlt = opt_res.deltas or {}
+    _cmp_trs: list[str] = []
+    for _k, _lbl_ar, _lbl_en, _kind in _snap_specs:
+        _b_v = _base.get(_k)
+        _o_v = _optm.get(_k)
+        if _b_v is None and _o_v is None:
+            continue
+        _d_v = _dlt.get(_k)
+        _b_s = f"{_b_v:.1f} / 100" if _k == "health_score" and _b_v is not None else fmt_value(_b_v, _kind, _cur)
+        _o_s = f"{_o_v:.1f} / 100" if _k == "health_score" and _o_v is not None else fmt_value(_o_v, _kind, _cur)
+        if _d_v is None:
+            _d_s = "—"
+        elif _k == "health_score":
+            _d_s = f"{_d_v:+.1f}"
+        elif _kind == "percent":
+            _d_s = fmt_signed_pct(_d_v)
+        elif _kind == "per_share":
+            _d_s = f"{_d_v:+.2f} {_cur}"
+        elif _kind == "ratio":
+            _d_s = f"{_d_v:+.2f}x"
+        else:
+            _d_s = f"{_d_v:+,.0f} {_cur}"
+        _cmp_trs.append(
+            "<tr>"
+            f"<td><b>{esc(_lbl_ar if is_ar else _lbl_en)}</b></td>"
+            f"<td class='num' dir='ltr'>{esc(_b_s)}</td>"
+            f"<td class='num' dir='ltr'><b>{esc(_o_s)}</b></td>"
+            f"<td class='num' dir='ltr'>{esc(_d_s)}</td>"
+            "</tr>"
+        )
+    st.markdown(
+        theme.fin_table(
+            ["المؤشر", "الوضع الحالي (Baseline)", "الخطة المحسّنة (Optimal)", "الأثر (Δ)"]
+            if is_ar
+            else ["Metric", "Baseline", "Optimized", "Delta"],
+            _cmp_trs,
+        ),
+        unsafe_allow_html=True,
+    )
+
+    _recs = opt_res.recommendations_ar if is_ar else opt_res.recommendations_en
+    if _recs:
+        st.markdown("**" + ("التوصيات التنفيذية المحسوبة من النموذج:" if is_ar else "Model-Derived Action Plan:") + "**")
+        for _rc in _recs:
+            st.markdown(f"- {isolate_bidi_html(_rc)}", unsafe_allow_html=True)
+
+
 def render(results: dict, analysis, raw: bytes | None) -> None:
     """نقطة دخول الواجهة — تستدعى من app.py."""
     lang = st.session_state.get("ui_lang", "ar")
@@ -3173,6 +3563,24 @@ def render(results: dict, analysis, raw: bytes | None) -> None:
         )
         st.session_state["currency"] = curr_val.strip() or "$"
         vm["currency"] = st.session_state["currency"]
+
+        _sp_sidebar = st.number_input(
+            "سعر السهم السوقي (اختياري لـ P/E وP/B)" if is_ar else "Share price (optional for P/E, P/B)",
+            min_value=0.0,
+            value=float(st.session_state.get("opt_share_price") or 0.0),
+            step=0.5,
+            format="%.2f",
+            key="opt_share_price_input",
+        )
+        st.session_state["opt_share_price"] = float(_sp_sidebar) if _sp_sidebar and _sp_sidebar > 0 else None
+        _emp_sidebar = st.number_input(
+            "عدد الموظفين (اختياري لإنتاجية الموظف)" if is_ar else "Employee count (optional)",
+            min_value=0,
+            value=int(st.session_state.get("opt_employee_count") or 0),
+            step=10,
+            key="opt_emp_count_input",
+        )
+        st.session_state["opt_employee_count"] = int(_emp_sidebar) if _emp_sidebar and _emp_sidebar > 0 else None
 
         st.caption(f"{vm['file_name']}")
         st.caption(f"{_T['unit'][lang]}: {vm['unit_note'] or '-'}")
@@ -3263,6 +3671,11 @@ def render(results: dict, analysis, raw: bytes | None) -> None:
                 "metrics_search_query",
                 "confirm_clear_cache",
                 "confirm_clear_library",
+                "opt_share_price",
+                "opt_employee_count",
+                "opt_share_price_input",
+                "opt_emp_count_input",
+                "opt_allow_exploratory",
             ):
                 st.session_state.pop(k, None)
             for k in [k for k in st.session_state if str(k).startswith("conf-")]:
@@ -3291,6 +3704,7 @@ def render(results: dict, analysis, raw: bytes | None) -> None:
             _T["statements"][lang],
             _T["metrics"][lang],
             _T["health"][lang],
+            _T["optimize"][lang],
             _T["insights"][lang],
             _T["chat"][lang],
             _T["review"][lang],
@@ -3307,14 +3721,16 @@ def render(results: dict, analysis, raw: bytes | None) -> None:
     with tabs[3]:
         sec_health(vm, results)
     with tabs[4]:
-        sec_insights(vm, analysis)
+        sec_optimize(vm, results)
     with tabs[5]:
+        sec_insights(vm, analysis)
+    with tabs[6]:
         from app import notes_screen
 
         notes_screen(results)
-    with tabs[6]:
-        sec_review(vm, results, raw)
     with tabs[7]:
-        sec_reports(vm, results, analysis)
+        sec_review(vm, results, raw)
     with tabs[8]:
+        sec_reports(vm, results, analysis)
+    with tabs[9]:
         sec_portfolio(vm, results)

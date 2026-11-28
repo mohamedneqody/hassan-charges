@@ -19,7 +19,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-_APP_BUILD_ID = "2026-11-22-v9.15"
+_APP_BUILD_ID = "2026-11-28-v10.0"
 if not __import__("os").environ.get("PYTEST_CURRENT_TEST"):
     if getattr(sys, "_finsight_build_id", None) != _APP_BUILD_ID:
         for _mod_name in [m for m in list(sys.modules) if m == "src" or m.startswith("src.")]:
@@ -27,7 +27,7 @@ if not __import__("os").environ.get("PYTEST_CURRENT_TEST"):
         sys._finsight_build_id = _APP_BUILD_ID
     try:
         if st.session_state.get("_app_build_id") != _APP_BUILD_ID:
-            for _sk in ("results", "analysis", "raw_bytes", "ev_cell", "live_queue", "live_queue_key", "_report_memo"):
+            for _sk in ("results", "analysis", "raw_bytes", "ev_cell", "live_queue", "live_queue_key", "_report_memo", "opt_share_price", "opt_employee_count", "opt_allow_exploratory"):
                 st.session_state.pop(_sk, None)
             st.session_state["_app_build_id"] = _APP_BUILD_ID
     except Exception:

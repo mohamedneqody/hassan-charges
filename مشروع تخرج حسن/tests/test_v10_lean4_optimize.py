@@ -221,6 +221,17 @@ def test_z3_optimize_engine_and_protection_gate():
         assert abs(ta1 - (tl1 + eq1)) < 1e-2
         assert opt.optimized["current_ratio"] >= 1.249
         assert opt.optimized["net_income"] >= opt.baseline["net_income"] - 1e-3
+        # Interest expense must preserve baseline sign and never invert negative when debt falls
+        b_int = opt.baseline.get("interest_expense")
+        o_int = opt.optimized.get("interest_expense")
+        if b_int is not None and o_int is not None and b_int != 0:
+            assert (b_int > 0 and o_int >= 0) or (b_int < 0 and o_int <= 0)
+            assert abs(o_int) <= abs(b_int) + 1.0
+
+    # Entering optional share price must NOT shift baseline ROA
+    opt_no_sp = optimize_financial_plan(res, OptimizationConstraints(objective="maximize_profit_eps"))
+    opt_sp = optimize_financial_plan(res, OptimizationConstraints(objective="maximize_profit_eps"), share_price=20.0)
+    assert opt_sp.baseline["roa"] == opt_no_sp.baseline["roa"]
 
     # Protection Gate refusal when quota interrupted or critical cell blocked
     blocked_res = {**res, "quota_interrupted": True}

@@ -90,32 +90,30 @@ def _snapshot_metrics(
     raw_extra: dict[str, dict[int, float]] | None = None,
 ) -> dict[str, float | None]:
     hs = compute_health_score(m, blocked_fields=blocked_fields)
-    if share_price is not None and share_price > 0 or employee_count is not None and employee_count > 0:
-        data_d: dict[str, dict[int, float]] = {}
-        for f in (
-            "revenue", "cost_of_revenue", "gross_profit", "operating_expenses",
-            "operating_income", "pretax_income", "income_tax_expense", "net_income",
-            "depreciation_amortization", "interest_expense", "total_assets",
-            "current_assets", "inventory", "accounts_receivable", "cash",
-            "fixed_assets", "accounts_payable", "current_liabilities",
-            "total_liabilities", "total_debt", "equity", "retained_earnings",
-            "operating_cash_flow", "capex", "shares_outstanding",
-            "dividends_paid_shareholders", "income_taxes_paid", "total_wages",
-            "related_party_payables",
-        ):
-            v = getattr(m, f, None)
-            if v is not None:
-                data_d[f] = {m.year: float(v)}
-        if raw_extra:
-            for fk, yv in raw_extra.items():
-                data_d.setdefault(fk, {}).update(yv)
-        m = compute_year_metrics(
-            m.year,
-            data_d,
-            prev_year=None,
-            share_price=share_price,
-            employee_count=employee_count,
-        )
+    sp = float(share_price) if (share_price is not None and share_price > 0) else None
+    emp = int(employee_count) if (employee_count is not None and employee_count > 0) else None
+
+    # Compute optional market multiples directly from existing `m` so average-asset
+    # ROA / ROE computed with `prev_year` remain invariant when Share Price is entered.
+    pe_v = m.pe_ratio
+    pb_v = m.pb_ratio
+    dy_v = m.dividend_yield
+    ev_eb_v = m.ev_to_ebitda
+    emp_prod_v = m.employee_productivity
+    if sp is not None:
+        if m.eps is not None and m.eps > 0:
+            pe_v = round(sp / m.eps, 2)
+        if m.bvps is not None and m.bvps > 0:
+            pb_v = round(sp / m.bvps, 2)
+        if m.dps is not None:
+            dy_v = round((m.dps / sp) * 100.0, 2)
+        if m.shares_outstanding is not None and m.shares_outstanding > 0 and m.ebitda is not None and m.ebitda > 0:
+            mcap = sp * m.shares_outstanding
+            nd = m.net_debt if m.net_debt is not None else 0.0
+            ev_eb_v = round((mcap + nd) / m.ebitda, 2)
+    if emp is not None and m.revenue is not None:
+        emp_prod_v = round(m.revenue / emp, 2)
+
     return {
         "revenue": m.revenue,
         "cost_of_revenue": m.cost_of_revenue,
@@ -143,11 +141,11 @@ def _snapshot_metrics(
         "eps": m.eps,
         "bvps": m.bvps,
         "dps": m.dps,
-        "pe_ratio": m.pe_ratio,
-        "pb_ratio": m.pb_ratio,
-        "ev_to_ebitda": m.ev_to_ebitda,
-        "dividend_yield": m.dividend_yield,
-        "employee_productivity": m.employee_productivity,
+        "pe_ratio": pe_v,
+        "pb_ratio": pb_v,
+        "ev_to_ebitda": ev_eb_v,
+        "dividend_yield": dy_v,
+        "employee_productivity": emp_prod_v,
         "health_score": hs.total,
     }
 
@@ -401,16 +399,20 @@ def optimize_financial_plan(
     cash_v = cash0 + dc_v
     debt_v = max(0.0, debt0 - repay_v)
 
+    def _match_sign(orig_val: float | None, magnitude: float) -> float:
+        mag = max(0.0, float(magnitude))
+        return -mag if (orig_val is not None and orig_val < 0) else mag
+
     opt_map: dict[str, dict[int, float]] = {
         "revenue": {curr_m.year: rev_v},
-        "cost_of_revenue": {curr_m.year: -cogs_v},
+        "cost_of_revenue": {curr_m.year: _match_sign(curr_m.cost_of_revenue, cogs_v)},
         "gross_profit": {curr_m.year: gp_v},
-        "operating_expenses": {curr_m.year: -opex_v},
+        "operating_expenses": {curr_m.year: _match_sign(curr_m.operating_expenses, opex_v)},
         "operating_income": {curr_m.year: oi_v},
         "depreciation_amortization": {curr_m.year: da0},
-        "interest_expense": {curr_m.year: -int_v},
+        "interest_expense": {curr_m.year: _match_sign(curr_m.interest_expense, int_v)},
         "pretax_income": {curr_m.year: pretax_v},
-        "income_tax_expense": {curr_m.year: -tax_v},
+        "income_tax_expense": {curr_m.year: _match_sign(curr_m.income_tax_expense, tax_v)},
         "net_income": {curr_m.year: ni_v},
         "total_assets": {curr_m.year: ta_v},
         "current_assets": {curr_m.year: ca_v},
